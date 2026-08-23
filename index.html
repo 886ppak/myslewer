@@ -893,7 +893,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v5.27</span></h1>
+    <h1>MYSLEWER <span class="app-version">v5.28</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -6793,26 +6793,33 @@
     // f is the length one shackle adds to a leg when married bow-to-pin in
     // series with the next one (person's own confirmed rigging practice,
     // e.g. two 25t shackles = +178mm x 2 = +356mm).
+    // weight (kg, each) is G-4163 BN's own catalog value at every size BN
+    // offers (0.5t-85t) - BN is the heavier of the two variants (extra
+    // bolt+nut hardware vs SC's screw collar), so this is the conservative
+    // choice for a figure whose whole purpose is feeding into a crane's
+    // capacity math - it will never UNDERSTATE what the rigging weighs.
+    // 0.33t isn't in BN's table at all (BN starts at 0.5t) so that one row
+    // falls back to G-4161 SC's own weight, the only source that has it.
     const SHACKLE_SIZES = [
-      { wll: 0.33, b: 6,  f: 22 },
-      { wll: 0.5,  b: 8,  f: 29 },
-      { wll: 0.75, b: 10, f: 32 },
-      { wll: 1,    b: 11, f: 36.5 },
-      { wll: 1.5,  b: 13, f: 43 },
-      { wll: 2,    b: 16, f: 51 },
-      { wll: 3.25, b: 19, f: 64 },
-      { wll: 4.75, b: 22, f: 76 },
-      { wll: 6.5,  b: 25, f: 83 },
-      { wll: 8.5,  b: 28, f: 95 },
-      { wll: 9.5,  b: 32, f: 108 },
-      { wll: 12,   b: 35, f: 115 },
-      { wll: 13.5, b: 38, f: 133 },
-      { wll: 17,   b: 42, f: 146 },
-      { wll: 25,   b: 50, f: 178 },
-      { wll: 35,   b: 57, f: 197 },
-      { wll: 42.5, b: 65, f: 222 },
-      { wll: 55,   b: 70, f: 260 },
-      { wll: 85,   b: 83, f: 329 }
+      { wll: 0.33, b: 6,  f: 22,    weight: 0.02 },
+      { wll: 0.5,  b: 8,  f: 29,    weight: 0.06 },
+      { wll: 0.75, b: 10, f: 32,    weight: 0.11 },
+      { wll: 1,    b: 11, f: 36.5,  weight: 0.16 },
+      { wll: 1.5,  b: 13, f: 43,    weight: 0.22 },
+      { wll: 2,    b: 16, f: 51,    weight: 0.42 },
+      { wll: 3.25, b: 19, f: 64,    weight: 0.74 },
+      { wll: 4.75, b: 22, f: 76,    weight: 1.18 },
+      { wll: 6.5,  b: 25, f: 83,    weight: 1.77 },
+      { wll: 8.5,  b: 28, f: 95,    weight: 2.58 },
+      { wll: 9.5,  b: 32, f: 108,   weight: 3.66 },
+      { wll: 12,   b: 35, f: 115,   weight: 4.91 },
+      { wll: 13.5, b: 38, f: 133,   weight: 6.54 },
+      { wll: 17,   b: 42, f: 146,   weight: 8.19 },
+      { wll: 25,   b: 50, f: 178,   weight: 14.22 },
+      { wll: 35,   b: 57, f: 197,   weight: 19.53 },
+      { wll: 42.5, b: 65, f: 222,   weight: 28.33 },
+      { wll: 55,   b: 70, f: 260,   weight: 39.59 },
+      { wll: 85,   b: 83, f: 329,   weight: 62 }
     ];
 
     // 'length' (original: current + desired length) or 'amount' (person's
@@ -6974,10 +6981,10 @@
     // here (simplest rigging, fewest connection points = fewest failure
     // points), not total kg.
     const MAX_COMBO_RESULTS = 5;
-    function bestShackleExtendCombos(target, lugF, tickedSizes, pitch) {
+    function bestShackleExtendCombos(target, lugF, lugWeight, tickedSizes, pitch) {
       const tolerance = pitch / 2;
       const candidates = [];
-      function score(additionalCount, additionalAdded, counts) {
+      function score(additionalCount, additionalAdded, additionalWeight, counts) {
         const rawTotal = lugF + additionalAdded;
         const totalShackles = 1 + additionalCount;
         let linksToRemove = 0;
@@ -6994,21 +7001,27 @@
         // op-count alone - but among candidates that ARE close enough,
         // overTolerance is 0 for all of them and totalOps alone decides.
         const rankScore = totalOps + overTolerance * 1000;
-        candidates.push({ additionalAdded, additionalCount, linksToRemove, rawTotal, finalTotal, diff, rankScore, counts: { ...counts } });
+        // Combo weight is every shackle actually in the leg (lug +
+        // additional) - deliberately NOT reduced by links removed, since
+        // chain per-link mass isn't tracked here and the point of this
+        // column is the rigging weight the person needs to account for
+        // against the crane's chart, not a net delta.
+        const comboWeight = lugWeight + additionalWeight;
+        candidates.push({ additionalAdded, additionalCount, additionalWeight, comboWeight, linksToRemove, rawTotal, finalTotal, diff, rankScore, counts: { ...counts } });
       }
-      score(0, 0, {}); // lug shackle alone, no additional
-      function rec(startIdx, count, added, counts) {
+      score(0, 0, 0, {}); // lug shackle alone, no additional
+      function rec(startIdx, count, added, weight, counts) {
         if (count > MAX_ADDITIONAL_SHACKLES) return;
         for (let i = startIdx; i < tickedSizes.length; i++) {
           const wll = tickedSizes[i].wll;
           counts[wll] = (counts[wll] || 0) + 1;
-          score(count + 1, added + tickedSizes[i].f, counts);
-          rec(i, count + 1, added + tickedSizes[i].f, counts); // i, not i+1 - repeats of the same size allowed
+          score(count + 1, added + tickedSizes[i].f, weight + tickedSizes[i].weight, counts);
+          rec(i, count + 1, added + tickedSizes[i].f, weight + tickedSizes[i].weight, counts); // i, not i+1 - repeats of the same size allowed
           counts[wll] -= 1;
           if (counts[wll] === 0) delete counts[wll];
         }
       }
-      rec(0, 0, 0, {});
+      rec(0, 0, 0, 0, {});
       candidates.sort((a, b) => a.rankScore - b.rankScore || Math.abs(a.diff) - Math.abs(b.diff));
       return candidates.slice(0, MAX_COMBO_RESULTS);
     }
@@ -7035,7 +7048,7 @@
       const tickedWlls = Array.from(document.querySelectorAll('#chain-shackle-available-list input[type=checkbox]:checked')).map(el => parseFloat(el.dataset.wll));
       const tickedSizes = SHACKLE_SIZES.filter(s => tickedWlls.includes(s.wll));
 
-      const combos = bestShackleExtendCombos(target, lug.f, tickedSizes, pitch);
+      const combos = bestShackleExtendCombos(target, lug.f, lug.weight, tickedSizes, pitch);
       const best = combos[0];
 
       // Only worth flagging once the miss is bigger than this calculator's
@@ -7071,6 +7084,7 @@
           <td>${c.linksToRemove}</td>
           <td>${c.finalTotal.toFixed(1)} mm</td>
           <td>${c.diff > 0 ? '+' : ''}${c.diff.toFixed(1)} mm</td>
+          <td>${c.comboWeight.toFixed(2)} kg</td>
         </tr>`;
       }).join('');
 
@@ -7084,14 +7098,14 @@
         </table>
         <table style="margin-top:0.75rem;">
           <thead>
-            <tr><th style="text-align:left;">Combo</th><th style="text-align:left;">Additional Shackles</th><th>Links Removed</th><th>Final Length Added</th><th>Diff from Target</th></tr>
+            <tr><th style="text-align:left;">Combo</th><th style="text-align:left;">Additional Shackles</th><th>Links Removed</th><th>Final Length Added</th><th>Diff from Target</th><th>Combo Weight</th></tr>
           </thead>
           <tbody>
             ${comboRows}
           </tbody>
         </table>
         ${shortfallNote}
-        <div class="disclaimer">Ranked by fewest additional shackles first (simplest rigging), precision breaking ties among combos already close to target. Assumes shackles are married bow-to-pin in series (each contributes its own inside length, "f"), and that every shackle in the chain - not just the attachment one - is rated for the full load weight. Always cross-check WLL and pin fit against the actual gear before rigging.</div>`;
+        <div class="disclaimer">Ranked by fewest additional shackles first (simplest rigging), precision breaking ties among combos already close to target. Combo Weight is every shackle in the leg (attachment + additional), by their own catalog mass - factor this into the crane's load chart alongside the load itself, same as any other rigging gear. Assumes shackles are married bow-to-pin in series (each contributes its own inside length, "f"), and that every shackle in the chain - not just the attachment one - is rated for the full load weight. Always cross-check WLL and pin fit against the actual gear before rigging.</div>`;
     }
 
     // Same formula as the reference spreadsheet, same field names:
