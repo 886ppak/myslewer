@@ -9184,3 +9184,97 @@ cranes get their own subsections as they're built.
   toggle it off, the dim line should project under the crane").
 
   CACHE_VERSION v219->v220, app version v5.24->v5.25.
+
+64. Chain Shortening: "Extend By Shackles" mode - a third alternative to
+    shortening, using shackles married in series instead of the grab
+    hooks, avoiding the need to lower the hook all the way down to reach
+    the shortener claws
+
+  Person's own framing for why: sometimes the extra length needed is
+  small enough that grabbing shackles and building it up is quicker/
+  safer than fully lowering the hook to reach the chain's own shortener
+  hardware.
+
+  Data: Green Pin bow shackle WLL/pin diameter (b)/inside length (f),
+  pulled directly from Green Pin's own official "Chapter 1 - Shackles"
+  catalog (greenpin.com), pages 28-29 - G-4161 (Bow Shackle SC, screw
+  collar pin) and G-4163 (Bow Shackle BN, safety bolt+nut). b and f are
+  identical between the two pin-type variants (only h/i/j/k/weight
+  differ), so this is deliberately ONE combined table (19 sizes, 0.33t
+  to 85t) - the person doesn't need to pick a pin type for this
+  calculation at all, it's irrelevant to it.
+
+  This replaced an earlier text-only shackle chart the person had pasted
+  from elsewhere, which turned out to have real errors once checked
+  against the primary source directly: a, b, c, e, f, g matched exactly,
+  but weight was wrong on every row from 8.5t up (matching neither
+  official variant), h (overall length) was wrong specifically at 35t
+  and 55t, and the 42.5t and 85t rows were missing entirely. None of
+  those wrong figures (h, weight) are used by this feature, but the
+  discrepancy was worth finding before building on top of unverified
+  data - see the person's own diagram (11 lettered dimensions, a-k)
+  which is what surfaced the mismatch when cross-checked.
+
+  f is the length ONE shackle adds to a leg when married bow-to-pin in
+  series with the next (person's own confirmed rigging practice - two
+  25t shackles = +178mm x 2 = +356mm).
+
+  Design, worked out with the person across several rounds rather than
+  assumed:
+  - The attachment-point shackle is mandatory, exactly one, chosen
+    directly by the person (whichever size physically fits the lifting
+    lug's pin hole) - not something the optimiser gets to pick.
+  - Shackles further down the chain, once they're only marrying onto the
+    PREVIOUS shackle's bow rather than threading the lug itself, CAN be
+    a bigger size than the attachment one for fewer total shackles
+    (agreed explicitly - a bow can safely take a range of smaller pins,
+    the other direction can't happen physically).
+  - Rather than the tool auto-picking "best" sizes from the whole table,
+    the person ticks which additional sizes are actually in THEIR kit -
+    the tool only searches combos across ticked sizes, never suggesting
+    gear that wasn't confirmed as on hand.
+  - Every shackle in the chain, not just the attachment one, has to
+    clear the load weight - the dropdown/checklist are both pre-filtered
+    to WLL >= load weight before a person can even see them.
+  - Combining shackle-adds with the SAME per-link rounding math the rest
+    of this tab already has (CHAIN_PITCH_TABLE, nearest-whole-link) -
+    shackles get the length close in coarse increments, a small number
+    of removed links trims the remainder, same "Difference from Target"
+    concept as every other mode here.
+
+  Real bug caught by testing it against the person's own worked example
+  before shipping, not just trusting that "it runs": the very first
+  scoring version picked whichever combo landed closest to the target
+  mm-for-mm, with total shackle count only as a tie-breaker. For load
+  20t, lug 25t, target 348mm, only 25t ticked, it returned 6 additional
+  25t shackles PLUS removing 23 chain links (almost a full metre of
+  chain) to land within 1mm - technically "more accurate" than the
+  obvious 2-shackle/0-link/8mm-over answer, but defeats the entire point
+  of the feature (avoiding heavy chain manipulation). Fixed by scoring
+  on total operation count (shackles + links removed) first, with
+  precision only breaking further ties once a candidate is already
+  within tolerance (half a link's pitch - about as precise as this tab's
+  own rounding claims to be anywhere else); precision only starts
+  dominating again once NO candidate gets that close, so a genuine
+  shortfall still gets flagged rather than masked by a busy rig. Also
+  caught and fixed two related bugs while testing this: the "short of
+  target" warning was firing on completely routine few-mm undershoots
+  (should only fire once the miss exceeds that same tolerance), and its
+  "one more Xt shackle would close this" suggestion could recommend a
+  size that was already ticked and already correctly rejected by the
+  search - now filtered to genuinely un-ticked sizes only.
+
+  Verified via Playwright, both direct function calls and real UI clicks
+  (select/check/fill, not just calling the JS functions): the person's
+  own worked example (load 20t, lug+only-ticked 25t, target 348mm)
+  returns exactly 2x25t/0 links/+8mm, matching their own manual math.
+  Also verified: undershoot reporting when ticked sizes genuinely can't
+  reach target (with the max search bound respected, no infinite/runaway
+  search), a mixed-availability case, the chain diameter select
+  correctly re-running the shackle calc (not the shortening calc) when
+  changed while this mode is active - a real gap caught in testing,
+  since the diameter dropdown's onchange had always called
+  calcChainShortening() directly - and no regression to the two existing
+  modes.
+
+  CACHE_VERSION v220->v221, app version v5.25->v5.26.
