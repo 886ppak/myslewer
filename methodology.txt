@@ -8946,3 +8946,40 @@ cranes get their own subsections as they're built.
   is still respected (never a runaway search).
 
   CACHE_VERSION v221->v222, app version v5.26->v5.27.
+
+66. Extend By Shackles: added a Combo Weight column
+
+  Follow-up request right after 65 shipped: show the actual weight of
+  each combo so the person can factor rigging mass into the crane's own
+  load chart (rigging weight counts against a crane's rated capacity same
+  as the load itself does).
+
+  Needed real per-size mass data that SHACKLE_SIZES didn't carry yet (it
+  only had WLL/pin diameter/inside length). Went back to the same primary
+  source as 64 (Green Pin's own "Chapter 1 - Shackles" catalog) and read
+  the weight column off both G-4161 SC (page 28, printed pg.28) and
+  G-4163 BN (page 29, printed pg.29) directly - not reusing the person's
+  earlier pasted text chart, since 64 already found that one had wrong
+  weights above 8.5t.
+
+  Which variant's weight to use, given the table is still deliberately
+  ONE combined list (not split by pin type, per 64's reasoning): used
+  G-4163 BN's own value at every size BN offers (0.5t-85t) - BN is the
+  heavier of the two variants (extra bolt+nut hardware vs SC's screw
+  collar pin), so it's the conservative choice for a figure whose entire
+  purpose is feeding a capacity calculation - it will never understate
+  what the rigging weighs. BN's table doesn't have a 0.33t row at all
+  (starts at 0.5t), so that one size falls back to G-4161 SC's own weight
+  (0.02kg), the only source that has it.
+
+  Combo Weight = attachment shackle + every additional shackle in that
+  specific combo, by their own catalog mass - deliberately NOT reduced
+  for links removed (chain per-link mass isn't tracked anywhere in this
+  calculator, and reducing it would need that data to stay honest).
+  Verified via Playwright against the same worked example as 64/65 (load
+  20t, lug 25t): #1 (1 additional 25t) computes to 28.44kg = lug 14.22 +
+  additional 14.22, exactly matching G-4163's own printed 25t weight
+  doubled - and every other row in a mixed 25t/35t ticked test reconciled
+  the same way by hand (e.g. 2x35t = 14.22 + 19.53x2 = 53.28kg).
+
+  CACHE_VERSION v222->v223, app version v5.27->v5.28.
