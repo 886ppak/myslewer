@@ -9278,3 +9278,45 @@ cranes get their own subsections as they're built.
   modes.
 
   CACHE_VERSION v220->v221, app version v5.25->v5.26.
+
+65. Extend By Shackles: show ranked assorted combos, not just one "best"
+
+  Follow-up request straight after 64 shipped: the person wanted to see
+  several combos, not just the single winner, and asked directly how to
+  even rank them ("least weight add or less shackle required?"). Weight
+  wasn't actually available to rank by - SHACKLE_SIZES only carries WLL/
+  pin diameter (b)/inside length (f), not physical mass in kg, and adding
+  that would mean a fresh pass through the Green Pin catalog for a column
+  this feature doesn't otherwise need. Asked directly rather than
+  guessing; the person confirmed the real intent was simplest rigging /
+  fewest connection points, i.e. exactly the shackle-count-first
+  principle 64 already scores by - so no new data pull needed.
+
+  bestShackleExtendCombo (singular, returned one winner) became
+  bestShackleExtendCombos (plural) - same search, same rankScore per
+  candidate (totalOps first, |diff| only breaking ties within tolerance,
+  precision-only fallback once nothing clears tolerance), but every
+  candidate is now collected instead of only keeping the running best,
+  sorted by that same rankScore, and the top 5 returned. calcShackleExtend
+  renders them as a second table (Combo / Additional Shackles / Links
+  Removed / Final Length Added / Diff from Target), #1 marked "(best)",
+  rather than the old single-row result block. The shortfall fail-box
+  still keys off combos[0] (the actual best) exactly as before - showing
+  more options underneath doesn't change when the warning fires.
+
+  Verified via Playwright against the same worked example as 64 (load
+  20t, lug 25t, 25t ticked, target 348mm): 5 distinct rows, #1 still the
+  expected 2x25t total/0 links/+8mm, and further rows genuinely different
+  combos (2x/3x/4x/5x additional 25t) not near-duplicates - including one
+  row (5 additional, +30 links) that lands exactly on target (0.0mm diff)
+  but correctly ranks last since it needs far more total operations than
+  #1. Also checked a mixed-size-ticked case (25t + 35t both available) -
+  produces genuinely varied combos (single of each, doubles, one-of-each
+  mix), not just repeats of one size. And the shortfall case (target set
+  far beyond what 8 additional shackles could ever reach): all 5 rows
+  still populate (ranked by which gets relatively closest once nothing
+  clears tolerance, same "precision matters again" fallback from 64), the
+  fail-box still fires correctly, and the max-additional-shackles bound
+  is still respected (never a runaway search).
+
+  CACHE_VERSION v221->v222, app version v5.26->v5.27.
