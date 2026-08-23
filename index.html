@@ -672,6 +672,36 @@
         }
       }
 
+      // Service Fill and Assembly Plans are opt-IN tabs (hidden by default
+      // in the HTML itself - see their style="display:none;" - unlike
+      // every other tab, which is deny-list/default-visible). Shown only
+      // for a uid whose userAccess doc has the matching flag set true.
+      // Used to be two plain hardcoded email arrays living right in this
+      // file's own source - moved here for the same reason section 56
+      // moved GOOGLE_SIGNIN_ALLOWLIST to Firestore: crew email addresses
+      // shouldn't be sitting in the public repo via view-source. Reuses
+      // the SAME userAccess/{uid} doc and security rule the deny-list
+      // hidden-tab restrictions already use (get-own-doc-only, no list)
+      // rather than a third collection - one extra Firestore read isn't
+      // worth it for two more boolean fields on a doc already being
+      // fetched. Caveat inherited from that same design (see its own
+      // comment above applyTabRestrictions/loadTabRestrictions): keyed by
+      // uid, so nobody can be pre-approved before their very first sign-
+      // in reveals it in Authentication -> Users - a real gap versus the
+      // old array (which could name someone who'd never signed in yet),
+      // accepted rather than adding a second, email-keyed collection just
+      // for two tabs nobody's waiting on.
+      function applyFeatureAccess(data) {
+        if (data.serviceFillAccess === true) {
+          const sfBtn = document.getElementById('servicefill-tab-btn');
+          if (sfBtn) sfBtn.style.display = '';
+        }
+        if (data.assemblyPlansAccess === true) {
+          const asmBtn = document.getElementById('assembly-tab-btn');
+          if (asmBtn) asmBtn.style.display = '';
+        }
+      }
+
       // Fetched once per sign-in, not on every tab switch - a person's
       // access doesn't change mid-session, and this way the persistent
       // Firestore cache only needs to be hit once per app load rather
@@ -681,7 +711,11 @@
       // accident of getDoc()'s own not-found behaviour.
       function loadTabRestrictions(uid) {
         getDoc(doc(db, 'userAccess', uid))
-          .then((snap) => applyTabRestrictions((snap.exists() && snap.data().hidden) || {}))
+          .then((snap) => {
+            const data = (snap.exists() && snap.data()) || {};
+            applyFeatureAccess(data);
+            applyTabRestrictions(data.hidden || {});
+          })
           .catch((err) => console.error('Could not load tab restrictions', err))
           // Personal declutter/reorder menu (applyTabOrder/buildTabPrefsMenu
           // /applyTabPrefs, defined in the main app script further down)
@@ -707,26 +741,6 @@
         if (user) {
           gateEl.style.display = 'none';
           loadTabRestrictions(user.uid);
-          // Service Fill is a one-off admin-only tab (not part of the
-          // deny-list userAccess framework, which defaults everyone TO
-          // full access - this one needs the opposite default, hidden
-          // unless it's one of these specific accounts) so it's just a
-          // plain hardcoded allowlist rather than a Firestore-backed
-          // rule.
-          const SERVICE_FILL_ALLOWLIST = ['myslewer@gmail.com', 'dan.darwell@gmail.com', 'cbuttell@gmail.com'];
-          if (user.email && SERVICE_FILL_ALLOWLIST.includes(user.email.toLowerCase())) {
-            const sfBtn = document.getElementById('servicefill-tab-btn');
-            if (sfBtn) sfBtn.style.display = '';
-          }
-          // Assembly Plans (LTM 1650 fixed/luffing jib) is new and still
-          // being validated - restricted to the owner only for now. Widen
-          // this allowlist (or fold it into SERVICE_FILL_ALLOWLIST) once
-          // it's ready for other users.
-          const ASSEMBLY_PLANS_ALLOWLIST = ['myslewer@gmail.com'];
-          if (user.email && ASSEMBLY_PLANS_ALLOWLIST.includes(user.email.toLowerCase())) {
-            const asmBtn = document.getElementById('assembly-tab-btn');
-            if (asmBtn) asmBtn.style.display = '';
-          }
           return;
         }
         // Confirmed signed-out (not just "still checking") - only now is
@@ -893,7 +907,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v5.28</span></h1>
+    <h1>MYSLEWER <span class="app-version">v5.29</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>

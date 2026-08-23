@@ -9357,3 +9357,71 @@ cranes get their own subsections as they're built.
   the same way by hand (e.g. 2x35t = 14.22 + 19.53x2 = 53.28kg).
 
   CACHE_VERSION v222->v223, app version v5.27->v5.28.
+
+67. Moved SERVICE_FILL_ALLOWLIST and ASSEMBLY_PLANS_ALLOWLIST off the
+    public repo, same fix section 56 already did for Google Sign-In
+    [CONVERSATION]
+
+  Person asked, while confirming how to add a Google-only user, whether
+  the Google allowlist emails were exposed on GitHub - they weren't
+  (fixed in 56), but a check turned up two OTHER hardcoded arrays still
+  sitting in plain text in this file's own source: SERVICE_FILL_ALLOWLIST
+  (myslewer@gmail.com, dan.darwell@gmail.com, cbuttell@gmail.com) and
+  ASSEMBLY_PLANS_ALLOWLIST (myslewer@gmail.com), both inside
+  onAuthStateChanged. Confirmed the repo genuinely is public (GitHub
+  Pages' free tier requires it) before raising it - not an assumption.
+  Person confirmed: fix both.
+
+  Chose to fold both into the EXISTING userAccess/{uid} doc/security
+  rule (two new boolean fields, serviceFillAccess/assemblyPlansAccess)
+  rather than a third Firestore collection - one doc already gets fetched
+  per sign-in for the deny-list hidden-tab restrictions (section 56), and
+  these two tabs are opt-IN (hidden by default in the HTML itself, shown
+  only when true) rather than deny-list, but that's just a different
+  field on the same doc, not a reason for separate infrastructure. No
+  firestore.rules change needed either - the existing get-own-uid-only
+  rule already covers any field on that doc, not just `hidden`.
+
+  Real tradeoff surfaced by this choice, not hidden: userAccess is keyed
+  by Firebase Auth uid, which doesn't exist until a person's FIRST sign-
+  in. The old array could name someone who'd never opened the app yet
+  (cbuttell@gmail.com, it turned out, genuinely has no Firebase Auth
+  account at all - confirmed via Admin SDK accounts:lookup, not assumed);
+  the new doc-based version can't pre-approve them the same way. Weighed
+  building a second, email-keyed collection (matching googleAllowlist's
+  own bootstrapping pattern, section 56) purely to preserve that, and
+  decided against it - not proportional for two tabs nobody's currently
+  waiting on, and the SAME limitation is already an accepted, documented
+  tradeoff of userAccess's own deny-list restrictions (see its own
+  comment: "no rush to create one before a person's first sign-in
+  reveals their uid"). Flagged directly to the person rather than
+  silently shipping a gap: cbuttell's Service Fill access needs granting
+  AFTER their first sign-in, once Authentication -> Users shows a uid to
+  attach it to.
+
+  Data migration, using the same service-account JWT-signing approach as
+  section 55's allowlist read (Admin SDK, no npm deps - crypto/https
+  only): looked up Firebase Auth uids for all three emails via
+  identitytoolkit's accounts:lookup, then PATCHed userAccess/{uid} for
+  each with Firestore's updateMask so only the new field was touched -
+  never overwriting an existing doc's `hidden` map, and correctly
+  CREATING the doc from nothing for whoever didn't have one yet (both
+  dan.darwell and myslewer's docs came out this way; PATCH's default
+  behaviour creates a doc that doesn't exist rather than erroring).
+  myslewer@gmail.com -> tkaD7...(uid): serviceFillAccess +
+  assemblyPlansAccess both true. dan.darwell@gmail.com -> jsYqh...(uid):
+  serviceFillAccess true. cbuttell@gmail.com: no uid yet, not migrated -
+  see caveat above.
+
+  Verified via Playwright: page loads with zero console errors, both
+  tabs' buttons still default to display:none pre-sign-in (unchanged
+  from before - this refactor only touches WHAT sets them visible, not
+  their default). The actual Firestore-driven show path couldn't be
+  exercised end-to-end here for the same reason section 55's Google
+  popup flow couldn't - needs a real interactive Firebase sign-in, not
+  something this sandboxed environment can drive - so it rests on the
+  same getDoc()/doc() mechanics already proven correct for the `hidden`
+  map read right next to it, not its own live test. grep confirmed zero
+  remaining @gmail.com/@hotmail.com strings anywhere in index.html.
+
+  CACHE_VERSION v223->v224, app version v5.28->v5.29.
