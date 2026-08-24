@@ -9690,3 +9690,42 @@ cranes get their own subsections as they're built.
   Full existing regression suite re-run clean.
 
   CACHE_VERSION v227->v228, app version v6.1->v6.2.
+
+================================================================================
+72. Cab Entry 3D: Fit View was giving the angled view, not bird's-eye
+
+  Person's report: "fit view isn't adjusting to that top birds eye view,
+  it does this weird isometric view". Real bug, not a misunderstanding -
+  section 71's fitView() reused frameCamera(), the SAME angled 3/4
+  function used only for the very first auto-frame when the model loads.
+  This app had already settled the question of what "Fit View" should
+  mean, on the Outrigger tab's own 3D preview (methodology.txt 10.85):
+  it used to be two separate buttons, an angled "Fit View" and a
+  separate straight-down "Top View", folded into one specifically
+  because the angled version had no remaining use once the top-down one
+  already fit everything on screen. Section 71 should have looked at
+  carrier3d.js's actual current fitView() (the post-fold, top-down one)
+  instead of assuming the angled frameCamera() was close enough - it
+  wasn't, and the person noticed immediately.
+
+  Fixed by literally porting carrier3d.js's real fitView() math (FOV-
+  based distance so the model+dots box fits the visible frustum exactly,
+  15% margin, camera positioned directly above centre with only a
+  0.5deg tilt so OrbitControls doesn't sit at a degenerate polar-angle-0
+  edge) rather than re-deriving it from scratch - same box (model union
+  dotsGroup, as section 71 already had), genuinely different camera
+  placement. The very first auto-frame (on model load / first entries
+  plotted) still uses the angled frameCamera(), unchanged and correctly
+  so - that distinction (angled first look, top-down on explicit Fit
+  View) is the app's own established pattern, not something this fix
+  should have touched.
+
+  Verified via Playwright with temporary debug camera-position hooks
+  (removed before shipping, same as every other 3D fix this session):
+  confirmed the angled auto-frame position has x/y/z all comparable in
+  magnitude (the isometric look being complained about), and that
+  calling fitView() afterward moves the camera to a position with y
+  dominant and x/(z-centre) small - genuinely overhead, not just "moved
+  somewhere else." Full existing regression suite re-run clean.
+
+  CACHE_VERSION v228->v229, app version v6.2->v6.3.

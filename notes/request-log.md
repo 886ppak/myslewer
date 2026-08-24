@@ -118,3 +118,14 @@ a working record, not app content.
   debug hooks, removed before shipping) that Fit View genuinely restores
   the camera after a manual pan, not just that the button doesn't error.
   Shipped to main (CACHE_VERSION v228, app v6.2).
+- Fit View gives a weird angled/isometric view, not the top-down bird's-
+  eye it should.
+  **Status: done** — real bug: the first version of Fit View reused the
+  same angled framing as the initial auto-frame, not the actual top-down
+  math this app already settled on for the Outrigger tab's own Fit View
+  button (methodology.txt 10.85). Ported that real math in - directly
+  overhead camera, FOV-fitted distance, tiny tilt to avoid a degenerate
+  OrbitControls angle. Verified via temporary debug hooks (removed
+  before shipping) that the camera position is now genuinely near-
+  overhead after Fit View, not just "moved." Shipped to main
+  (CACHE_VERSION v229, app v6.3).

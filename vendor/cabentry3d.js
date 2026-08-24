@@ -277,16 +277,39 @@ function onCanvasClick(ev) {
 
 export function onDotSelected(cb) { onDotClick = cb; }
 
-// Re-frames the camera to fit the model + every currently plotted dot -
-// same box-fitting frameCamera() already does right after a model/entries
-// load, just callable on demand so a person who's orbited/zoomed away
-// can snap back to a sensible view without reopening the panel. No-op
-// before the model's actually loaded (nothing to fit yet).
+// Straight-down bird's-eye, not the angled 3/4 frameCamera() used for the
+// very first auto-frame - literal port of carrier3d.js's own fitView()
+// (same FOV-based distance math, same tiny 0.5deg tilt so OrbitControls
+// doesn't sit at a perfect polar-angle-0 gimbal edge), not a fresh
+// invention: this app already settled "Fit View means top-down" for the
+// Outrigger tab's own 3D preview (methodology.txt 10.85 - it used to be
+// two separate buttons, an angled one and a straight-down one, folded
+// into one because the angled version had no real use once the top-down
+// one already fit everything on screen) - the first version of this
+// button wrongly reused the angled framing instead, caught by a person
+// actually using it ("does this weird isometric view").
 export function fitView() {
-  if (!modelRoot) return;
+  if (!modelRoot || !camera) return;
   const box = new THREE.Box3().setFromObject(modelRoot);
   if (dotsGroup) box.union(new THREE.Box3().setFromObject(dotsGroup));
-  frameCamera(box);
+  if (!isFinite(box.min.x)) return;
+
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const aspect = camera.aspect || 1;
+  const fovRad = THREE.MathUtils.degToRad(camera.fov);
+  const halfZ = Math.max(size.z, 0.5) / 2;
+  const halfX = Math.max(size.x, 0.5) / 2;
+  const distForZ = halfZ / Math.tan(fovRad / 2);
+  const distForX = halfX / (Math.tan(fovRad / 2) * aspect);
+  const dist = Math.max(distForZ, distForX) * 1.15; // 15% margin so nothing sits flush against the edge
+  const tiltRad = THREE.MathUtils.degToRad(0.5);
+  camera.position.set(center.x, center.y + dist, center.z + dist * Math.sin(tiltRad));
+  camera.near = dist / 100;
+  camera.far = dist * 20;
+  camera.updateProjectionMatrix();
+  controls.target.copy(center);
+  controls.update();
 }
 
 window.__cabEntry3dActivate = activate;
