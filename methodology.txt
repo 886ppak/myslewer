@@ -9425,3 +9425,125 @@ cranes get their own subsections as they're built.
   remaining @gmail.com/@hotmail.com strings anywhere in index.html.
 
   CACHE_VERSION v223->v224, app version v5.28->v5.29.
+
+================================================================================
+68. Cab Entry tab: crane cab load-position logger, owner-only, real 3D
+    carrier + GLB model [CONVERSATION]
+
+  Started as a standalone Claude Artifact the person pasted in ("hold
+  this") - a cab keypad mockup for logging radius/slew readings. Went
+  through several rounds of fixes and features as an Artifact first
+  (switch-clears-buffer bug, assorted UI requests, a 2D SVG radar plot,
+  native-keyboard input replacing the hand-built keypad) before the
+  person asked for a genuinely real 3D plot using the actual LTM 1110
+  carrier model already vendored in this repo - something an Artifact's
+  CSP flatly can't do (no external script tags beyond Google Fonts, no
+  access to this repo's own files, so no three.js from a CDN and no GLB
+  file). At that point the whole tool moved INTO the actual PWA as a new
+  tab instead of staying a separate Artifact link.
+
+  Access: opt-in, owner-only, via the SAME userAccess/{uid} mechanism
+  section 67 built for Service Fill/Assembly Plans - one more boolean
+  field (cabEntryAccess) on the same doc, cabentry-tab-btn hidden by
+  default in the HTML, applyFeatureAccess shows it when the field is
+  true. No new collection, no new security rule.
+
+  What it logs per reading: item name + weight (persist across a
+  pick-then-land pair - same item usually gets two readings), radius (m)
+  and slew (0-180 deg, side chosen via C3/C4>/FRONT/<C1/C2 buttons OR
+  tapping either half of the dial directly), a Pick/Land toggle (auto-
+  alternates after each log, matching the real two-reading cycle), and
+  an optional New/Old toggle for a straight replacement (old part sent
+  for refurb - tap the same one again to clear back to neutral, most
+  lifts don't need it set at all). Defaults are 0m/0deg (REAR), shown as
+  placeholder ghost text rather than a real pre-filled value specifically
+  so logging never requires backspacing a default out first - slewSide
+  itself starts genuinely null (not defaulted to any side) since at
+  reading 0 the side is physically moot (confirmed via the same
+  trig the dial's own marker math already uses - sin(0)=0 regardless of
+  sign), only picking a real side once the person actually chooses one.
+
+  Real inputs (inputmode="decimal"), not a custom keypad - same
+  Radius/Slew/Weight-as-real-<input> redesign already proven out on the
+  Artifact version, ported as-is: the device's own keyboard pops up on
+  tap, native caret/backspace/selection for free, no buffer/active-field
+  state machine to get out of sync (that state machine was the root
+  cause of every bug hit on the Artifact version).
+
+  3D plot: NEW module, vendor/cabentry3d.js, deliberately NOT folded into
+  the existing vendor/carrier3d.js - that module runs a single shared
+  renderer re-parented between the Outrigger tab's two sub-tabs, carrying
+  a lot of state (outrigger pads, slew circles, ground marks, mat edges,
+  AR) with nothing to do with this tab; entangling this tab's own model/
+  dot-plotting logic into that shared state machine risked destabilising
+  a tab that's core, heavily-used functionality, for no real benefit.
+  cabentry3d.js is its own renderer/scene/camera/OrbitControls, own
+  lazy-imported module (same dynamic-import-on-first-open pattern as
+  cwt3d.js/carrier3d.js - neither three.js nor the multi-MB GLB fetch
+  unless the 3D panel is actually opened), reusing the SAME three.js
+  library files, DRACOLoader/decoder path, and
+  computeFormulaCalibration() math (copied in, not shared - kept
+  standalone on purpose) as carrier3d.js.
+
+  Carrier model is a fixed placeholder - LTM 1110 (outrigger/models/
+  ltm1110-carrier.glb, CARRIER_CALIBRATION['1110'], FOOTPRINTS['1110']),
+  regardless of which crane actually did the lift. Person's own framing:
+  this tab is about WHERE a load was picked/landed relative to the slew
+  centre, not about modelling the specific crane on site, so one
+  representative carrier stands in - explicitly not worth making
+  selectable. Log entries plot as dots around the model using the exact
+  same site-plan-mm -> model-local-coordinates mapping the Outrigger
+  tab's own ghost pads already use (computeFormulaCalibration's groundY/
+  lateralCenter/slewZ/xSlope/zSlope), so a dot's position is correctly
+  oriented relative to the model's real geometry, not guessed. Pick
+  readings hover slightly above the ground plane with a thin connecting
+  stem (still airborne, being picked); Land readings sit flush on the
+  ground. Colour: amber = pick, green = land (same two colours the rest
+  of this app already uses for accent/success, no new palette). Old/
+  refurb condition shown as a dashed ring around the dot rather than a
+  third colour, to avoid overloading the colour channel.
+
+  Real bug caught by testing, not assumed away: the raycasting hit-test
+  for tapping a 3D dot used the same small SphereGeometry(0.28) as the
+  visible marker - fine to look at, far too small a target to reliably
+  hit-test in a scene that can span 10-25m once the camera frames the
+  whole model+dots. Confirmed by testing: clicking dead-centre on a
+  dot's own projected screen position sometimes still missed. Fixed with
+  the standard oversized-invisible-hit-target technique (a second,
+  larger, fully transparent sphere at the same position, carrying the
+  actual raycast) rather than just enlarging the visible dot itself,
+  which would have made the plot look cluttered at typical multi-entry
+  zoom levels.
+
+  Styling: uses this app's OWN existing design tokens (--accent-gold,
+  --success, --text-muted, --card-bg, --input-bg, --border-color) and
+  component classes (.card, .card-title, .form-group, .mode-toggle/
+  .mode-btn, .btn, .disclaimer, <details class="card"> for the
+  collapsible 2D/3D panels) rather than importing the Artifact's own
+  separate amber-on-black palette - this is a real tab in the app now,
+  so it follows the same design system as every other tab, per the
+  person's own steer earlier this session ("honor what's already
+  there"). All new CSS classes prefixed ce- and all new element ids
+  prefixed ce/Ce to guarantee zero collision risk against 8000+ existing
+  lines - checked directly (grep for "ce[A-Z]" ids) before writing any of
+  it, not assumed safe.
+
+  Not shadowed to beta-trial - same reasoning as section 67's fix:
+  beta-trial has no Firebase Authentication/access-gate system at all
+  (confirmed directly, not assumed), so there's no owner-only permission
+  layer to attach this to there.
+
+  Verified via Playwright against the real app (not the Artifact) end to
+  end: tab reveal/switch, real-input typing + blur reformatting, dial-
+  half taps and side-select buttons, Pick/Land auto-alternation, New/Old
+  toggle-to-clear, name-required validation, log card rendering, 2D
+  radar dot placement, and the full 3D path - module import, real GLB
+  fetch, camera framing, dot placement, and (after finding and fixing the
+  hit-target bug above) actual raycasted click-to-info, including
+  confirming the 2D and 3D views share one selection state. Also smoke-
+  tested three unrelated existing tabs (Chain Shortening incl. the
+  Extend By Shackles mode, CWT Combinations, Crane Positioning) to
+  confirm nothing broke elsewhere from this change - zero console errors
+  throughout.
+
+  CACHE_VERSION v224->v225, app version v5.29->v5.30.

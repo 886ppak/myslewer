@@ -319,6 +319,75 @@
     #update-banner button { background: var(--accent-gold); color: #000; border: none; border-radius: 6px; padding: 7px 12px; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
     #update-banner button[aria-label="Dismiss"] { background: transparent; color: var(--text-muted); padding: 7px 8px; }
 
+    /* ---------- Cab Entry (owner-only tab) ---------- */
+    /* All colours pulled from the app's own existing tokens (--accent-gold,
+       --success, --text-muted etc.) rather than a separate palette - this
+       is a real tab in the app now, not the standalone artifact it started
+       as, so it uses the same design system as every other tab. */
+    .ce-dial-wrap{ position:relative; width:78%; max-width:280px; aspect-ratio:1/1; margin:0 auto 14px; }
+    .ce-dial{ width:100%; height:100%; overflow:visible; }
+    .ce-dial-hit{ cursor:pointer; }
+    .ce-dial-track{ fill:none; stroke:var(--border-color); stroke-width:9; }
+    .ce-dial-fg{ fill:none; stroke:var(--accent-gold); stroke-width:9; stroke-linecap:round; transition:stroke-dasharray 0.25s ease; }
+    .ce-dial-tick{ stroke:var(--text-muted); stroke-width:1.6; }
+    .ce-dial-tick.major{ stroke:var(--text-main); stroke-width:2.4; }
+    .ce-dial-marker{ fill:var(--accent-gold); transition:cx 0.25s ease, cy 0.25s ease; }
+    .ce-quad-lbl{ font-size:9px; font-weight:700; letter-spacing:0.08em; fill:var(--text-muted); text-anchor:middle; }
+    .ce-quad-lbl.on{ fill:var(--accent-gold); }
+    .ce-dial-readout{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; pointer-events:none; }
+    .ce-dial-val{ font-size:32px; font-weight:800; color:var(--accent-gold); line-height:1; }
+    .ce-dial-lbl{ font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-muted); margin-top:3px; }
+
+    .ce-field-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+    .ce-slew-row{ display:flex; align-items:center; gap:5px; }
+    .ce-slew-row input{ flex:1 1 auto; min-width:0; text-align:center; }
+    .ce-slew-affix{ font-weight:700; color:var(--text-main); font-size:0.95rem; }
+
+    .ce-status-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+    .ce-log-count{ float:right; color:var(--accent-gold); font-weight:600; font-size:0.8rem; text-transform:none; }
+    .ce-log-empty{ font-size:0.85rem; color:var(--text-muted); }
+    .ce-log-list{ display:flex; flex-direction:column; gap:8px; }
+    .ce-log-card{ background:var(--input-bg); border:1px solid var(--border-color); border-left:3px solid var(--border-color); border-radius:6px; padding:8px 12px; }
+    .ce-log-card.dir-up{ border-left-color:var(--accent-gold); }
+    .ce-log-card.dir-down{ border-left-color:var(--success); }
+    .ce-log-card.latest{ border-color:var(--accent-gold); }
+    .ce-log-card-top{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+    .ce-log-card-name{ font-weight:700; font-size:0.95rem; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ce-log-card-wt{ font-weight:700; font-size:0.95rem; color:var(--accent-gold); white-space:nowrap; }
+    .ce-log-card-meta{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:3px; font-size:0.78rem; color:var(--text-muted); }
+    .ce-log-card-dir.dir-up{ color:var(--accent-gold); }
+    .ce-log-card-dir.dir-down{ color:var(--success); }
+    .ce-chip{ font-weight:700; font-size:0.68rem; letter-spacing:0.06em; text-transform:uppercase; padding:1px 6px; border-radius:4px; border:1px solid var(--border-color); }
+    .ce-chip.new{ color:var(--success); border-color:var(--success); }
+    .ce-chip.old{ color:var(--text-muted); border-color:var(--text-muted); }
+
+    .ce-be-stage{ position:relative; width:100%; max-width:300px; margin:0 auto; aspect-ratio:1/1; background:#0c0f0a; border:1px solid var(--border-color); border-radius:10px; overflow:hidden; }
+    .ce-be-svg{ width:100%; height:100%; }
+    .ce-be-ring{ fill:none; stroke:var(--border-color); stroke-width:1; }
+    .ce-be-axis{ stroke:var(--border-color); stroke-width:1; stroke-dasharray:3 4; }
+    .ce-be-ring-lbl{ font-size:7px; fill:var(--text-muted); }
+    .ce-be-quad-lbl{ font-size:8px; font-weight:700; letter-spacing:0.06em; fill:var(--text-muted); text-anchor:middle; }
+    .ce-be-center{ fill:var(--card-bg); stroke:var(--text-muted); stroke-width:1.5; }
+    .ce-be-center-lbl{ font-size:6.5px; font-weight:700; letter-spacing:0.05em; fill:var(--text-muted); text-anchor:middle; }
+    .ce-be-dot{ cursor:pointer; }
+    .ce-be-dot.selected circle.core{ stroke:var(--text-main); stroke-width:2; }
+    .ce-be-empty-msg{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; font-size:0.8rem; color:var(--text-muted); padding:0 24px; }
+
+    .ce-be3d-stage{ position:relative; width:100%; max-width:300px; margin:0 auto; aspect-ratio:1/1; background:#0c0f0a; border:1px solid var(--border-color); border-radius:10px; overflow:hidden; }
+    .ce-be3d-stage canvas{ width:100%; height:100%; display:block; cursor:grab; }
+
+    .ce-be-legend{ display:flex; gap:14px; flex-wrap:wrap; margin:12px 2px 0; font-size:0.75rem; color:var(--text-muted); }
+    .ce-be-legend span{ display:inline-flex; align-items:center; gap:5px; }
+    .ce-legend-dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+    .ce-legend-ring{ width:9px; height:9px; border-radius:50%; display:inline-block; border:1.5px dashed var(--text-muted); }
+    .ce-be-info{ margin-top:10px; padding:10px 12px; min-height:20px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:8px; font-size:0.85rem; line-height:1.5; color:var(--text-main); }
+    .ce-be-ph{ color:var(--text-muted); }
+    .ce-be-info b{ color:var(--accent-gold); }
+
+    #ce-field-name.error input{ border-color:var(--danger); box-shadow:0 0 0 1px var(--danger) inset; }
+    #ce-field-name.error input::placeholder{ color:var(--danger); }
+
     @media print {
       body { background: #fff; color: #000; padding-bottom: 0; }
       header { background: #fff; border-bottom: 2px solid #000; position: static; }
@@ -700,6 +769,10 @@
           const asmBtn = document.getElementById('assembly-tab-btn');
           if (asmBtn) asmBtn.style.display = '';
         }
+        if (data.cabEntryAccess === true) {
+          const ceBtn = document.getElementById('cabentry-tab-btn');
+          if (ceBtn) ceBtn.style.display = '';
+        }
       }
 
       // Fetched once per sign-in, not on every tab switch - a person's
@@ -907,7 +980,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v5.29</span></h1>
+    <h1>MYSLEWER <span class="app-version">v5.30</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -971,6 +1044,7 @@
     <button class="tab-btn" data-tabkey="rope" onclick="switchTab('rope-tab', event)">Rope Retentioning</button>
     <button class="tab-btn" id="servicefill-tab-btn" data-tabkey="servicefill" onclick="switchTab('servicefill-tab', event)" style="display:none;">Service Fill</button>
     <button class="tab-btn" id="assembly-tab-btn" data-tabkey="assembly" onclick="switchTab('assembly-tab', event)" style="display:none;">Assembly Plans</button>
+    <button class="tab-btn" id="cabentry-tab-btn" data-tabkey="cabentry" onclick="switchTab('cabentry-tab', event)" style="display:none;">Cab Entry</button>
   </nav>
 
   <div class="container">
@@ -1970,6 +2044,116 @@
         <div id="assembly-fixed-erection-note"></div>
         <div class="disclaimer" id="assembly-fixed-erection-disclaimer">T3F/T3NZF, wide support base (100%) 10.5m × 9.6m, main boom fully retracted (T-16.7), no H-1.7 auxiliary jib fitted — per Liebherr Operating Instructions (doc LTM1650-8-1-000/27500-05-02, chapter 6.26.10). Maximum Counterweight is a fixed ceiling that doesn't change with length or radius — shown for reference, not something to aim for. Reference tool only — cross-check against the current OEM manual before erecting or taking down.</div>
       </div>
+    </div>
+
+    <!-- ================= CAB ENTRY (owner only) ================= -->
+    <div id="cabentry-tab" class="tab-content">
+      <div class="card">
+        <div class="card-title">Load</div>
+        <div class="form-group" id="ce-field-name">
+          <label>Item Name</label>
+          <input type="text" id="ceNameInput" placeholder="Item name" autocomplete="off">
+        </div>
+        <div class="form-group" style="margin-top:10px;">
+          <label>Weight (t)</label>
+          <input type="text" inputmode="decimal" id="ceWeightInput" placeholder="0.0">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Position</div>
+        <div class="ce-dial-wrap">
+          <svg class="ce-dial" viewBox="0 0 200 200">
+            <path class="ce-dial-hit" id="ceHitLt" d="M 100 100 L 100 10 A 90 90 0 0 1 100 190 Z" fill="transparent"></path>
+            <path class="ce-dial-hit" id="ceHitGt" d="M 100 100 L 100 10 A 90 90 0 0 0 100 190 Z" fill="transparent"></path>
+            <path class="ce-dial-track" d="M 100 10 A 90 90 0 0 1 100 190"></path>
+            <path class="ce-dial-track" d="M 100 10 A 90 90 0 0 0 100 190"></path>
+            <path class="ce-dial-fg" id="ceArcLeftFg"  d="M 100 10 A 90 90 0 0 0 100 190" stroke-dasharray="0 283"></path>
+            <path class="ce-dial-fg" id="ceArcRightFg" d="M 100 10 A 90 90 0 0 1 100 190" stroke-dasharray="0 283"></path>
+            <g id="ceTicks"></g>
+            <circle class="ce-dial-marker" id="ceDialMarker" cx="100" cy="190" r="6"></circle>
+            <text class="ce-quad-lbl" x="100" y="14">FRONT</text>
+            <text class="ce-quad-lbl" x="100" y="196">REAR</text>
+            <text class="ce-quad-lbl" id="ceLblC2" x="158" y="14"  text-anchor="start">C2</text>
+            <text class="ce-quad-lbl" id="ceLblC1" x="158" y="190" text-anchor="start">C1</text>
+            <text class="ce-quad-lbl" id="ceLblC3" x="42"  y="14"  text-anchor="end">C3</text>
+            <text class="ce-quad-lbl" id="ceLblC4" x="42"  y="190" text-anchor="end">C4</text>
+          </svg>
+          <div class="ce-dial-readout">
+            <div class="ce-dial-val" id="ceSlewVal">0</div>
+            <div class="ce-dial-lbl">C3/C4 &gt; · &lt; C1/C2</div>
+          </div>
+        </div>
+
+        <div class="ce-field-row">
+          <div class="form-group">
+            <label>Radius (m)</label>
+            <input type="text" inputmode="decimal" id="ceRadiusInput" placeholder="0.0">
+          </div>
+          <div class="form-group">
+            <label>Slew (0–180° · 180=FRONT)</label>
+            <div class="ce-slew-row">
+              <span class="ce-slew-affix" id="ceSlewPrefix">&lt;</span>
+              <input type="text" inputmode="decimal" id="ceSlewInput" placeholder="0">
+              <span class="ce-slew-affix" id="ceSlewSuffix">&gt;</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mode-toggle" id="ceSideSelect" style="margin-top:10px;">
+          <button class="mode-btn" data-side="gt">C3/C4 &gt;</button>
+          <button class="mode-btn" data-side="front">FRONT</button>
+          <button class="mode-btn" data-side="lt">&lt; C1/C2</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Status</div>
+        <div class="ce-status-row">
+          <div class="mode-toggle" id="ceDirToggle">
+            <button class="mode-btn active" data-dir="up">▲ Pick</button>
+            <button class="mode-btn" data-dir="down">▼ Land</button>
+          </div>
+          <div class="mode-toggle" id="ceCondToggle">
+            <button class="mode-btn" data-cond="new">New</button>
+            <button class="mode-btn" data-cond="old">Old</button>
+          </div>
+        </div>
+        <div class="disclaimer">Pick/Land marks which end of the lift this reading is - most items get logged twice, once picked, once landed. New/Old is only for a straight replacement (old part sent for refurb) - leave neither set otherwise.</div>
+      </div>
+
+      <button type="button" class="btn" id="ceLogBtn">Log Reading</button>
+
+      <div class="card">
+        <div class="card-title">Session Log <span class="ce-log-count" id="ceLogCount">0 entries</span></div>
+        <div class="ce-log-empty" id="ceLogEmpty">No readings logged yet.</div>
+        <div class="ce-log-list" id="ceLogList"></div>
+      </div>
+
+      <details class="card">
+        <summary class="card-title">Bird's-Eye (2D)</summary>
+        <p class="disclaimer" style="margin-top:0;">Position only (radius + slew), not tied to any specific crane's real footprint. Tap a dot for that reading's detail.</p>
+        <div class="ce-be-stage">
+          <svg class="ce-be-svg" id="ceBeSvg" viewBox="0 0 200 200">
+            <g id="ceBeRings"></g>
+            <g id="ceBeDots"></g>
+          </svg>
+          <div class="ce-be-empty-msg" id="ceBeEmptyMsg">Log a reading to see it plotted here.</div>
+        </div>
+      </details>
+
+      <details class="card">
+        <summary class="card-title">3D Plot</summary>
+        <p class="disclaimer" style="margin-top:0;">Real 3D carrier model (LTM 1110) as a fixed reference point - not necessarily the crane actually on this lift. Drag to orbit, pinch/scroll to zoom. Tap a dot for that reading's detail.</p>
+        <div class="ce-be3d-stage" id="ce3dWrap"></div>
+      </details>
+
+      <div class="ce-be-legend">
+        <span><span class="ce-legend-dot" style="background:var(--accent-gold)"></span>Pick</span>
+        <span><span class="ce-legend-dot" style="background:var(--success)"></span>Land</span>
+        <span><span class="ce-legend-ring"></span>Old / refurb</span>
+      </div>
+      <div class="ce-be-info" id="ceBeInfo"><span class="ce-be-ph">Tap a plotted dot to see its reading.</span></div>
     </div>
 
   </div>
@@ -10324,6 +10508,387 @@
     document.addEventListener('fullscreenchange', updateFullscreenButtonIcons);
     document.addEventListener('webkitfullscreenchange', updateFullscreenButtonIcons);
 
+    // ---------- CAB ENTRY (owner-only tab) ----------
+    // Started life as a standalone Claude Artifact prototype, moved in here
+    // once real 3D was needed - an Artifact's CSP can't load three.js from
+    // a CDN or reach this repo's own files, so its "3D plotter" was a
+    // hand-rolled isometric canvas fake. This version uses the real thing:
+    // vendor/cabentry3d.js (own module, own renderer - see its own header
+    // comment for why it's not folded into carrier3d.js) loading the actual
+    // LTM 1110 carrier GLB already vendored for the Outrigger tab.
+    //
+    // Defaults are 0m radius / 0deg slew (REAR), shown as placeholder
+    // ghost text rather than a real pre-filled value - so logging a fresh
+    // reading never requires backspacing out a default first. slewSide
+    // starts genuinely unset (null, not 'lt'/'gt'/'front') for the same
+    // reason: at reading 0 the side is visually and physically moot (see
+    // ptOnCircle's own math - sin(0)=0 regardless of sign), so nothing
+    // should show as pre-selected until the person actually picks a side,
+    // types a reading, or taps a dial half.
+    let ceItemName = '';
+    let ceItemWeight = 0;
+    let ceRadius = 0;
+    let ceSlewSide = null; // null | 'lt' | 'gt' | 'front'
+    let ceSlewReading = 0;
+    let ceDirection = 'up';   // 'up' (pick) | 'down' (land)
+    let ceCondition = null;   // null | 'new' | 'old'
+    let ceEntries = [];
+    let ceSelectedEntryId = null;
+    let ceEntrySeq = 0;
+    let ce3dLoaded = false;
+
+    function ceClampSlew(n){ return Math.min(Math.max(n, 0), 180); }
+
+    function ceFormatSlew(side, reading){
+      if(side === 'front' || reading === 180) return '180';
+      if(reading === 0) return '0';
+      return side === 'lt' ? `&lt; ${Math.round(reading)}` : `${Math.round(reading)} &gt;`;
+    }
+
+    const ceFieldName = document.getElementById('ce-field-name');
+    const ceNameInput = document.getElementById('ceNameInput');
+    const ceWeightInput = document.getElementById('ceWeightInput');
+    const ceRadiusInput = document.getElementById('ceRadiusInput');
+    const ceSlewInput = document.getElementById('ceSlewInput');
+    const ceSlewPrefix = document.getElementById('ceSlewPrefix');
+    const ceSlewSuffix = document.getElementById('ceSlewSuffix');
+    const ceSlewValDial = document.getElementById('ceSlewVal');
+    const ceLogList = document.getElementById('ceLogList');
+    const ceLogEmpty = document.getElementById('ceLogEmpty');
+    const ceLogCount = document.getElementById('ceLogCount');
+    const ceSideBtns = document.querySelectorAll('#ceSideSelect .mode-btn');
+    const ceDirBtns = document.querySelectorAll('#ceDirToggle .mode-btn');
+    const ceCondBtns = document.querySelectorAll('#ceCondToggle .mode-btn');
+
+    // ticks, same full-circle-split-at-centreline construction as the
+    // outrigger dial elsewhere in this app, just its own copy scoped to
+    // this tab's own element ids.
+    (function buildCeDialTicks(){
+      const ticksG = document.getElementById('ceTicks');
+      const rOuter=90, rInnerMajor=76, rInnerMinor=82;
+      ['lt','gt'].forEach(side=>{
+        for(let s=0; s<=180; s+=10){
+          const major = s % 30 === 0;
+          const rIn = major ? rInnerMajor : rInnerMinor;
+          const p1 = cePtOnCircle(rOuter, s, side);
+          const p2 = cePtOnCircle(rIn, s, side);
+          const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+          line.setAttribute('x1',p1.x); line.setAttribute('y1',p1.y);
+          line.setAttribute('x2',p2.x); line.setAttribute('y2',p2.y);
+          line.setAttribute('class', 'ce-dial-tick' + (major ? ' major' : ''));
+          ticksG.appendChild(line);
+        }
+      });
+    })();
+
+    function cePtOnCircle(r, s, side, ccx, ccy){
+      const rad = s * Math.PI/180;
+      const sign = side==='lt' ? 1 : -1;
+      const cx = ccx!==undefined ? ccx : 100, cy = ccy!==undefined ? ccy : 100;
+      return { x: cx + sign * r*Math.sin(rad), y: cy - r*Math.cos(rad) };
+    }
+
+    const CE_ARC_LEN = 283;
+    const ceArcLeftFg = document.getElementById('ceArcLeftFg');
+    const ceArcRightFg = document.getElementById('ceArcRightFg');
+    const ceDialMarker = document.getElementById('ceDialMarker');
+    const ceLblC1 = document.getElementById('ceLblC1');
+    const ceLblC2 = document.getElementById('ceLblC2');
+    const ceLblC3 = document.getElementById('ceLblC3');
+    const ceLblC4 = document.getElementById('ceLblC4');
+
+    function ceSetSlewArc(side, reading){
+      const sweep = 180 - ceClampSlew(reading);
+      const frac = sweep / 180;
+      ceArcRightFg.setAttribute('stroke-dasharray', `${side==='lt' ? frac*CE_ARC_LEN : 0} ${CE_ARC_LEN}`);
+      ceArcLeftFg.setAttribute('stroke-dasharray',  `${side==='gt' ? frac*CE_ARC_LEN : 0} ${CE_ARC_LEN}`);
+      const markerSide = side === 'front' ? 'lt' : side;
+      const p = cePtOnCircle(90, side==='front' ? 0 : sweep, markerSide);
+      ceDialMarker.setAttribute('cx', p.x);
+      ceDialMarker.setAttribute('cy', p.y);
+      ceLblC1.classList.toggle('on', side==='lt');
+      ceLblC2.classList.toggle('on', side==='lt');
+      ceLblC3.classList.toggle('on', side==='gt');
+      ceLblC4.classList.toggle('on', side==='gt');
+    }
+
+    function ceSyncInputsFromState(){
+      ceRadiusInput.value = ceRadius ? ceRadius.toFixed(1) : '';
+      ceWeightInput.value = ceItemWeight ? ceItemWeight.toFixed(1) : '';
+      ceSlewInput.value = ceSlewReading ? String(Math.round(ceSlewReading)) : '';
+      ceNameInput.value = ceItemName;
+    }
+
+    function ceRenderPeripherals(){
+      ceSlewPrefix.style.display = ceSlewSide === 'lt' ? '' : 'none';
+      ceSlewSuffix.style.display = ceSlewSide === 'gt' ? '' : 'none';
+      ceSlewValDial.innerHTML = ceFormatSlew(ceSlewSide, ceSlewReading);
+      ceSetSlewArc(ceSlewSide || 'lt', ceSlewReading); // arbitrary render-only side when genuinely unset - reading 0 looks identical either way
+
+      ceSideBtns.forEach(b => b.classList.toggle('active', !!ceSlewSide && b.dataset.side === ceSlewSide));
+      ceDirBtns.forEach(b => b.classList.toggle('active', b.dataset.dir === ceDirection));
+      ceCondBtns.forEach(b => b.classList.toggle('active', b.dataset.cond === ceCondition));
+
+      ceRenderLog();
+      ceRenderBirdsEye();
+      ceRenderBirdsEye3d();
+    }
+
+    function ceRender(){
+      ceSyncInputsFromState();
+      ceRenderPeripherals();
+    }
+
+    ceRadiusInput.addEventListener('input', () => {
+      const n = parseFloat(ceRadiusInput.value);
+      ceRadius = Number.isFinite(n) ? n : 0;
+      ceRenderPeripherals();
+    });
+    ceRadiusInput.addEventListener('blur', () => { ceRadiusInput.value = ceRadius ? ceRadius.toFixed(1) : ''; });
+
+    ceWeightInput.addEventListener('input', () => {
+      const n = parseFloat(ceWeightInput.value);
+      ceItemWeight = Number.isFinite(n) ? n : 0;
+      ceRenderPeripherals();
+    });
+    ceWeightInput.addEventListener('blur', () => { ceWeightInput.value = ceItemWeight ? ceItemWeight.toFixed(1) : ''; });
+
+    ceSlewInput.addEventListener('input', () => {
+      if(!ceSlewSide) ceSlewSide = 'lt'; // typing a reading with no side chosen yet picks one so the arrow has meaning
+      const n = parseFloat(ceSlewInput.value);
+      ceSlewReading = Number.isFinite(n) ? ceClampSlew(n) : 0;
+      ceRenderPeripherals();
+    });
+    ceSlewInput.addEventListener('blur', () => { ceSlewInput.value = ceSlewReading ? String(Math.round(ceSlewReading)) : ''; });
+
+    ceNameInput.addEventListener('input', () => {
+      ceItemName = ceNameInput.value;
+      ceFieldName.classList.remove('error');
+    });
+
+    function ceSelectSlewSide(side){
+      ceSlewSide = side;
+      if(side === 'front') ceSlewReading = 180;
+      ceRender();
+    }
+
+    document.getElementById('ceSideSelect').addEventListener('click', (e)=>{
+      const btn = e.target.closest('.mode-btn');
+      if(!btn) return;
+      ceSelectSlewSide(btn.dataset.side);
+    });
+    document.getElementById('ceHitLt').addEventListener('click', () => ceSelectSlewSide('lt'));
+    document.getElementById('ceHitGt').addEventListener('click', () => ceSelectSlewSide('gt'));
+
+    document.getElementById('ceDirToggle').addEventListener('click', (e)=>{
+      const btn = e.target.closest('.mode-btn');
+      if(!btn) return;
+      ceDirection = btn.dataset.dir;
+      ceRenderPeripherals();
+    });
+    document.getElementById('ceCondToggle').addEventListener('click', (e)=>{
+      const btn = e.target.closest('.mode-btn');
+      if(!btn) return;
+      ceCondition = ceCondition === btn.dataset.cond ? null : btn.dataset.cond;
+      ceRenderPeripherals();
+    });
+
+    document.getElementById('ceLogBtn').addEventListener('click', ceLogReading);
+
+    function ceLogReading(){
+      const name = ceItemName.trim();
+      if(!name){
+        ceFieldName.classList.add('error');
+        ceNameInput.focus();
+        return;
+      }
+      ceFieldName.classList.remove('error');
+
+      const d = new Date();
+      ceEntrySeq += 1;
+      ceEntries.push({
+        id: ceEntrySeq,
+        time: d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}),
+        name,
+        weight: ceItemWeight,
+        radius: ceRadius,
+        slewSide: ceSlewSide,
+        slewReading: ceSlewReading,
+        direction: ceDirection,
+        condition: ceCondition
+      });
+
+      ceRadius = 0;
+      ceSlewSide = null;
+      ceSlewReading = 0;
+      ceDirection = ceDirection === 'up' ? 'down' : 'up';
+      ceCondition = null;
+
+      ceRender();
+    }
+
+    function ceEscapeHtml(s){
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function ceRenderLog(){
+      ceLogCount.textContent = ceEntries.length + (ceEntries.length===1 ? ' entry' : ' entries');
+      ceLogEmpty.style.display = ceEntries.length ? 'none' : '';
+      ceLogList.innerHTML = '';
+      ceEntries.slice().reverse().forEach((en, i) => {
+        const card = document.createElement('div');
+        card.className = 'ce-log-card dir-' + en.direction + (i===0 ? ' latest' : '');
+        const condChip = en.condition ? `<span class="ce-chip ${en.condition}">${en.condition}</span>` : '';
+        card.innerHTML = `
+          <div class="ce-log-card-top">
+            <span class="ce-log-card-name">${ceEscapeHtml(en.name)}</span>
+            <span class="ce-log-card-wt">${en.weight.toFixed(1)}T</span>
+          </div>
+          <div class="ce-log-card-meta">
+            <span>${en.time}</span>
+            <span class="ce-log-card-dir dir-${en.direction}">${en.direction==='up' ? '▲ Pick' : '▼ Land'}</span>
+            <span>R ${en.radius.toFixed(1)}m</span>
+            <span>${ceFormatSlew(en.slewSide, en.slewReading)}</span>
+            ${condChip}
+          </div>`;
+        ceLogList.appendChild(card);
+      });
+    }
+
+    // ---------- 2D bird's-eye (SVG radar) ----------
+    const ceBeRingsG = document.getElementById('ceBeRings');
+    const ceBeDotsG = document.getElementById('ceBeDots');
+    const ceBeEmptyMsg = document.getElementById('ceBeEmptyMsg');
+    const ceBeInfo = document.getElementById('ceBeInfo');
+    const CE_BE_CX = 100, CE_BE_CY = 100, CE_BE_OUTER = 84;
+
+    function ceMaxLoggedRadius(){
+      return Math.max(10, Math.ceil((ceEntries.reduce((m,e)=>Math.max(m,e.radius),0) || 10) / 5) * 5);
+    }
+
+    function ceRenderBirdsEye(){
+      ceBeEmptyMsg.style.display = ceEntries.length ? 'none' : '';
+      ceBeRingsG.innerHTML = '';
+      ceBeDotsG.innerHTML = '';
+
+      const maxR = ceMaxLoggedRadius();
+
+      const hub = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      hub.setAttribute('cx', CE_BE_CX); hub.setAttribute('cy', CE_BE_CY); hub.setAttribute('r', 5);
+      hub.setAttribute('class', 'ce-be-center');
+      ceBeRingsG.appendChild(hub);
+      const hubLbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+      hubLbl.setAttribute('x', CE_BE_CX); hubLbl.setAttribute('y', CE_BE_CY + 13);
+      hubLbl.setAttribute('class', 'ce-be-center-lbl');
+      hubLbl.textContent = 'CRANE';
+      ceBeRingsG.appendChild(hubLbl);
+
+      const axis = document.createElementNS('http://www.w3.org/2000/svg','line');
+      axis.setAttribute('x1', CE_BE_CX); axis.setAttribute('y1', CE_BE_CY - CE_BE_OUTER);
+      axis.setAttribute('x2', CE_BE_CX); axis.setAttribute('y2', CE_BE_CY + CE_BE_OUTER);
+      axis.setAttribute('class', 'ce-be-axis');
+      ceBeRingsG.appendChild(axis);
+      [['FRONT', CE_BE_CY - CE_BE_OUTER - 5], ['REAR', CE_BE_CY + CE_BE_OUTER + 9]].forEach(([txt,y])=>{
+        const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+        t.setAttribute('x', CE_BE_CX); t.setAttribute('y', y);
+        t.setAttribute('class', 'ce-be-quad-lbl');
+        t.textContent = txt;
+        ceBeRingsG.appendChild(t);
+      });
+
+      for(let i=1;i<=3;i++){
+        const r = CE_BE_OUTER * (i/3);
+        const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
+        ring.setAttribute('cx', CE_BE_CX); ring.setAttribute('cy', CE_BE_CY); ring.setAttribute('r', r);
+        ring.setAttribute('class', 'ce-be-ring');
+        ceBeRingsG.appendChild(ring);
+        const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+        lbl.setAttribute('x', CE_BE_CX + 3); lbl.setAttribute('y', CE_BE_CY - r - 2);
+        lbl.setAttribute('class', 'ce-be-ring-lbl');
+        lbl.textContent = Math.round(maxR*(i/3)) + 'm';
+        ceBeRingsG.appendChild(lbl);
+      }
+
+      ceEntries.forEach(en => {
+        const frac = Math.min(1, en.radius / maxR);
+        const r = CE_BE_OUTER * frac;
+        const side = en.slewSide === 'front' ? 'lt' : (en.slewSide || 'lt');
+        const sweep = en.slewSide==='front' ? 0 : (180 - ceClampSlew(en.slewReading));
+        const p = cePtOnCircle(r, sweep, side, CE_BE_CX, CE_BE_CY);
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+        g.setAttribute('class', 'ce-be-dot' + (en.id === ceSelectedEntryId ? ' selected' : ''));
+
+        if(en.condition === 'old'){
+          const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
+          ring.setAttribute('cx', p.x); ring.setAttribute('cy', p.y); ring.setAttribute('r', 6.5);
+          ring.setAttribute('fill', 'none');
+          ring.setAttribute('stroke', 'var(--text-muted)');
+          ring.setAttribute('stroke-width', '1.3');
+          ring.setAttribute('stroke-dasharray', '2 2');
+          g.appendChild(ring);
+        }
+
+        const core = document.createElementNS('http://www.w3.org/2000/svg','circle');
+        core.setAttribute('cx', p.x); core.setAttribute('cy', p.y);
+        core.setAttribute('r', en.id === ceSelectedEntryId ? 5.5 : 4);
+        core.setAttribute('class', 'core');
+        core.setAttribute('fill', en.direction === 'up' ? 'var(--accent-gold)' : 'var(--success)');
+        g.appendChild(core);
+
+        g.addEventListener('click', () => {
+          ceSelectedEntryId = en.id;
+          ceRenderBirdsEye();
+          ceRenderBirdsEye3d();
+          ceShowEntryInfo(en);
+        });
+
+        ceBeDotsG.appendChild(g);
+      });
+    }
+
+    function ceShowEntryInfo(en){
+      ceBeInfo.innerHTML = `<b>${ceEscapeHtml(en.name)}</b> — ${en.weight.toFixed(1)}T<br>
+        ${en.time} · ${en.direction==='up' ? '▲ Pick' : '▼ Land'} · R ${en.radius.toFixed(1)}m · ${ceFormatSlew(en.slewSide, en.slewReading)}${en.condition ? ' · ' + en.condition.toUpperCase() : ''}`;
+    }
+
+    // ---------- 3D plot ----------
+    // Lazy-imported on first activation, same pattern as cwt3d.js/
+    // carrier3d.js elsewhere in this file - neither three.js nor the GLB
+    // model are fetched unless this tab's 3D panel is actually opened.
+    function ceEnsure3d(){
+      if (ce3dLoaded) return Promise.resolve();
+      return import('./vendor/cabentry3d.js').then((mod) => {
+        ce3dLoaded = true;
+        mod.onDotSelected((entryId) => {
+          const en = ceEntries.find(e => e.id === entryId);
+          if (!en) return;
+          ceSelectedEntryId = entryId;
+          ceRenderBirdsEye();
+          ceShowEntryInfo(en);
+        });
+        return mod.activate('ce3dWrap');
+      });
+    }
+
+    function ceRenderBirdsEye3d(){
+      if (!ce3dLoaded) return;
+      if (window.__cabEntry3dSetEntries) window.__cabEntry3dSetEntries(ceEntries);
+    }
+
+    // The 3D <details> panel only actually needs a live WebGL context once
+    // opened - importing three.js + fetching the GLB the moment this tab
+    // merely becomes visible (most sign-ins never touch this owner-only
+    // tab at all) would be wasteful. toggle fires on both open AND close,
+    // guarded by ce3dLoaded so it only ever activates once.
+    document.querySelectorAll('#cabentry-tab details.card')[1]?.addEventListener('toggle', function(){
+      if (this.open) ceEnsure3d().then(ceRenderBirdsEye3d);
+    });
+
+    function initCabEntryTab(){
+      ceRender();
+    }
+
     // Initialize Page Controls
     loadRopeModel();
     calcHook();
@@ -10333,6 +10898,7 @@
     initDriveEqTab();
     initReeveTab(); // Reeving Plans is the default active tab on load
     initAssemblyTab();
+    initCabEntryTab();
     initLoadChartTab();
     updateZoomReadout();
     updateCompassUI();

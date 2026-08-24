@@ -71,4 +71,16 @@ a working record, not app content.
   whole Cab Entry tool should move INTO the actual PWA as a new tab,
   gated to the owner only (same userAccess/{uid} opt-in pattern as
   Service Fill/Assembly Plans) - not another Artifact.
-  **Status: in progress.**
+  **Status: done** — new "Cab Entry" tab, owner-only (cabEntryAccess flag
+  granted to myslewer@gmail.com), new vendor/cabentry3d.js module loading
+  the real LTM 1110 carrier GLB with a real Three.js scene (own renderer,
+  not folded into the shared carrier3d.js). Defaults are 0m/0deg shown
+  as placeholder ghost text, slewSide starts genuinely unset. Restyled
+  to the app's own existing design tokens/components rather than the
+  Artifact's separate palette. Found and fixed a real bug in testing
+  (3D dot hit-target was too small to reliably tap - fixed with a larger
+  invisible hit-sphere). Tested end-to-end against the real app
+  including the full 3D click-to-info path, plus smoke-tested three
+  unrelated tabs for regressions. Shipped to main (CACHE_VERSION v225,
+  app v5.30) - not shadowed to beta-trial, which has no auth system to
+  gate an owner-only tab with.

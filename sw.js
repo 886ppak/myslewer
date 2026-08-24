@@ -4,7 +4,7 @@
 // reeving diagrams (see CONTENT_CACHE below) — those persist across updates
 // so a crew doesn't lose offline access to plans they've already viewed just
 // because an app update shipped.
-const CACHE_VERSION = 'myslewer-v224';
+const CACHE_VERSION = 'myslewer-v225';
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 
 // Fetched-on-demand content (reeving diagrams, etc). Fixed name, never
@@ -45,6 +45,13 @@ const CONTENT_CACHE = 'app-content-v1';
 // carrier models are deliberately NOT added here - genuinely stable,
 // unedited third-party/OEM-export content, same reasoning as the reeving
 // SVGs above, correctly left in CONTENT_CACHE.
+//
+// vendor/cabentry3d.js is the Cab Entry tab's own 3D module - same
+// dynamically-imported, actively-edited situation as carrier3d.js above,
+// so it needs the same APP_SHELL guarantee for the same reason. The GLB
+// carrier model it loads (outrigger/models/ltm1110-carrier.glb) is
+// already covered by carrier3d.js's own reasoning above (stable OEM
+// export, correctly left in CONTENT_CACHE) - it's the exact same file.
 const APP_SHELL = [
   './',
   './index.html',
@@ -63,7 +70,8 @@ const APP_SHELL = [
   './counterweight/img/ltm1300-cwt-uk-exploded.png',
   './counterweight/img/ltr1220-cwt-exploded.png',
   './reeving/manifest.json',
-  './vendor/carrier3d.js'
+  './vendor/carrier3d.js',
+  './vendor/cabentry3d.js'
 ];
 
 self.addEventListener('install', (event) => {
