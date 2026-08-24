@@ -50,4 +50,12 @@ a working record, not app content.
   asked directly whether I agreed - yes, and for a real reason: the
   custom keypad's "buffer vs committed value" state machine is the
   actual root cause of every bug fixed so far in this build.
-  **Status: in progress.**
+  **Status: done** — Radius/Weight/Slew are now real `inputmode="decimal"`
+  inputs (device keyboard pops up on tap, native caret/backspace/
+  selection); the whole active-field/entry-buffer state machine, the
+  on-screen keypad grid, and the custom Backspace/Delete handler were
+  removed outright rather than kept alongside. Tested (typing, blur
+  reformatting, side-select + dial-half still work, full log flow, 3D
+  plotter unaffected) and published. Also merged onto a newer version
+  another session/agent had published in the meantime, so nothing from
+  that round (red-zero fix, 3D plotter) was lost in the process.
