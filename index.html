@@ -981,7 +981,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.3</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.4</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2063,29 +2063,6 @@
 
       <div class="card">
         <div class="card-title">Position</div>
-        <div class="ce-dial-wrap">
-          <svg class="ce-dial" viewBox="0 0 200 200">
-            <path class="ce-dial-hit" id="ceHitLt" d="M 100 100 L 100 10 A 90 90 0 0 1 100 190 Z" fill="transparent"></path>
-            <path class="ce-dial-hit" id="ceHitGt" d="M 100 100 L 100 10 A 90 90 0 0 0 100 190 Z" fill="transparent"></path>
-            <path class="ce-dial-track" d="M 100 10 A 90 90 0 0 1 100 190"></path>
-            <path class="ce-dial-track" d="M 100 10 A 90 90 0 0 0 100 190"></path>
-            <path class="ce-dial-fg" id="ceArcLeftFg"  d="M 100 10 A 90 90 0 0 0 100 190" stroke-dasharray="0 283"></path>
-            <path class="ce-dial-fg" id="ceArcRightFg" d="M 100 10 A 90 90 0 0 1 100 190" stroke-dasharray="0 283"></path>
-            <g id="ceTicks"></g>
-            <circle class="ce-dial-marker" id="ceDialMarker" cx="100" cy="190" r="6"></circle>
-            <text class="ce-quad-lbl" x="100" y="14">FRONT</text>
-            <text class="ce-quad-lbl" x="100" y="196">REAR</text>
-            <text class="ce-quad-lbl" id="ceLblC2" x="158" y="14"  text-anchor="start">C2</text>
-            <text class="ce-quad-lbl" id="ceLblC1" x="158" y="190" text-anchor="start">C1</text>
-            <text class="ce-quad-lbl" id="ceLblC3" x="42"  y="14"  text-anchor="end">C3</text>
-            <text class="ce-quad-lbl" id="ceLblC4" x="42"  y="190" text-anchor="end">C4</text>
-          </svg>
-          <div class="ce-dial-readout">
-            <div class="ce-dial-val" id="ceSlewVal">0</div>
-            <div class="ce-dial-lbl">C3/C4 &gt; · &lt; C1/C2</div>
-          </div>
-        </div>
-
         <div class="ce-field-row">
           <div class="form-group">
             <label>Radius (m)</label>
@@ -2123,6 +2100,39 @@
       </div>
 
       <button type="button" class="btn" id="ceLogBtn">Log Reading</button>
+
+      <!-- Live slew dial - deliberately below every input field and the
+           Log button, not between them. It's a visual reference, not
+           something that needs to be seen to fill the form, and having
+           it sit mid-flow meant the whole form (name through Log
+           Reading) never fit on screen without scrolling. Person's own
+           call: keep the dial always visible (not collapsed away like
+           the 2D/3D plots below), just move it out of the input path. -->
+      <div class="card">
+        <div class="card-title">Slew Reference</div>
+        <div class="ce-dial-wrap">
+          <svg class="ce-dial" viewBox="0 0 200 200">
+            <path class="ce-dial-hit" id="ceHitLt" d="M 100 100 L 100 10 A 90 90 0 0 1 100 190 Z" fill="transparent"></path>
+            <path class="ce-dial-hit" id="ceHitGt" d="M 100 100 L 100 10 A 90 90 0 0 0 100 190 Z" fill="transparent"></path>
+            <path class="ce-dial-track" d="M 100 10 A 90 90 0 0 1 100 190"></path>
+            <path class="ce-dial-track" d="M 100 10 A 90 90 0 0 0 100 190"></path>
+            <path class="ce-dial-fg" id="ceArcLeftFg"  d="M 100 10 A 90 90 0 0 0 100 190" stroke-dasharray="0 283"></path>
+            <path class="ce-dial-fg" id="ceArcRightFg" d="M 100 10 A 90 90 0 0 1 100 190" stroke-dasharray="0 283"></path>
+            <g id="ceTicks"></g>
+            <circle class="ce-dial-marker" id="ceDialMarker" cx="100" cy="190" r="6"></circle>
+            <text class="ce-quad-lbl" x="100" y="14">FRONT</text>
+            <text class="ce-quad-lbl" x="100" y="196">REAR</text>
+            <text class="ce-quad-lbl" id="ceLblC2" x="158" y="14"  text-anchor="start">C2</text>
+            <text class="ce-quad-lbl" id="ceLblC1" x="158" y="190" text-anchor="start">C1</text>
+            <text class="ce-quad-lbl" id="ceLblC3" x="42"  y="14"  text-anchor="end">C3</text>
+            <text class="ce-quad-lbl" id="ceLblC4" x="42"  y="190" text-anchor="end">C4</text>
+          </svg>
+          <div class="ce-dial-readout">
+            <div class="ce-dial-val" id="ceSlewVal">0</div>
+            <div class="ce-dial-lbl">C3/C4 &gt; · &lt; C1/C2</div>
+          </div>
+        </div>
+      </div>
 
       <div class="card">
         <div class="card-title">Session Log <span class="ce-log-count" id="ceLogCount">0 entries</span></div>

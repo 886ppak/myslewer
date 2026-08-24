@@ -9729,3 +9729,43 @@ cranes get their own subsections as they're built.
   somewhere else." Full existing regression suite re-run clean.
 
   CACHE_VERSION v228->v229, app version v6.2->v6.3.
+
+================================================================================
+73. Cab Entry: moved the dial below the whole input flow
+
+  Person's own observation: the whole point of a cab-side quick-entry
+  tool is defeated if filling it out means scrolling, and the big square
+  dial sitting between Load and the Radius/Slew fields was exactly what
+  forced that scroll on a normal tablet/phone screen. Discussed two
+  options first (collapse the dial vs relocate it) rather than just
+  picking one - person chose relocate: keep it always visible (no tap-
+  to-expand step), just move it out of the input path entirely.
+
+  Moved the dial (SVG + its own card, now titled "Slew Reference") from
+  between the Load and Position cards to its own new card AFTER the Log
+  Reading button - so the full data-entry sequence (Item Name, Weight,
+  Radius, Slew, side-select, Pick/Land, New/Old, Log Reading) is now one
+  uninterrupted run with nothing large between any of them, and the dial
+  sits below as a visual reference rather than gating access to
+  anything below it. Position card keeps the Radius/Slew inputs and
+  side-select buttons - only the SVG itself moved.
+
+  Pure DOM reorder, zero JS changes needed or made - every element kept
+  its existing id, and all the JS wiring (dial-half tap handlers,
+  render() writing into #ceSlewVal etc.) is entirely id-based, not
+  position-based. Specifically checked the one place that WOULD have
+  been at risk - the 3D panel's toggle listener uses
+  `document.querySelectorAll('#cabentry-tab details.card')[1]`,  an
+  order-dependent selector - confirmed safe since the dial lives in a
+  plain <div class="card">, not a <details class="card">, so it was
+  never counted by that selector and the Bird's-Eye/3D Plot pair's own
+  relative order didn't change.
+
+  Verified via Playwright at a realistic tablet-ish viewport (400x850):
+  read back the actual on-screen vertical position of every field/
+  control by id, confirmed Item Name through Log Reading's bottom edge
+  now fits within 790px (comfortably inside 850px, no scroll needed),
+  and confirmed dial-half taps still correctly set slew side from the
+  dial's new position. Full existing regression suite re-run clean.
+
+  CACHE_VERSION v229->v230, app version v6.3->v6.4.

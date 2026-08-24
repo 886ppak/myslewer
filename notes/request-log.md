@@ -129,3 +129,17 @@ a working record, not app content.
   before shipping) that the camera position is now genuinely near-
   overhead after Fit View, not just "moved." Shipped to main
   (CACHE_VERSION v229, app v6.3).
+- Can the input fields sit together without scrolling - move the dial,
+  or collapse it? Discussed both, person chose: move Status + Log
+  Reading above the dial, dial sits below all the input fields instead.
+  **Status: done** — dial (now its own "Slew Reference" card) moved from
+  between Load and Position to after the Log Reading button. Full entry
+  sequence (Name, Weight, Radius, Slew, side-select, Pick/Land, New/Old,
+  Log Reading) is now one uninterrupted run. Pure DOM reorder, no JS
+  changes needed (everything's id-based) - specifically checked the one
+  order-dependent selector in this tab (the 3D panel's details.card[1]
+  toggle listener) and confirmed it's unaffected since the dial isn't a
+  details element. Verified at a realistic tablet viewport (400x850)
+  that Name-through-Log-Reading now fits without scrolling, and that
+  dial-half taps still work from the new position. Shipped to main
+  (CACHE_VERSION v230, app v6.4).
