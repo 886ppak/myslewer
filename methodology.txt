@@ -9647,3 +9647,46 @@ cranes get their own subsections as they're built.
   three unrelated tabs) re-run clean throughout.
 
   CACHE_VERSION v226->v227, app version v6.0->v6.1.
+
+================================================================================
+71. Cab Entry 3D: switched placeholder to LTM 1300, added Fit View
+
+  Follow-up to section 70's size fix: the person asked whether an LTM
+  option existed instead of LRT 1100 - fair, LRT is a rough-terrain
+  chassis, visibly a different vehicle type from the rest of this
+  fleet's LTM mobile cranes, even though the actual model was always
+  meant to be a placeholder. Gave all six LTM options by file size
+  rather than picking one silently: LTM 1300 (10.5MB) is the lightest,
+  then 1160 (11.0), 1130 (15.3), 1250 (17.1), 1110 (32.0, the original
+  problem), 1650 (46.2). Person picked 1300. Switched MODEL_URL/
+  CARRIER_CALIBRATION/FOOTPRINT to it - still a 3x cut from the original
+  1110 despite being an LTM, comfortably clear of the size problem.
+
+  Also added a Fit View button, same request as the model swap. Reused
+  the exact convention already established for the Outrigger tab's own
+  3D preview (index.html:1391 - a .toolbar-btn calling a window-exposed
+  function guarded with &&, in a .toolbar-row) rather than inventing a
+  new pattern. New fitView() export in cabentry3d.js re-runs the same
+  frameCamera() box-fitting logic already used right after a model/
+  entries load, just callable on demand so a person who's orbited/
+  zoomed away with OrbitControls can snap back without reopening the
+  panel - computed from the model's box unioned with dotsGroup's own box
+  (every dot mesh + its stem/ring, not just centre points), a
+  deliberately more generous fit than setEntries' own per-load framing
+  (centre points only) since Fit View is a "show me everything" request,
+  not a first-load default.
+
+  Verified via Playwright: confirmed the actual GLB requested is now
+  ltm1300-carrier.glb (checked via the real network resource list, not
+  assumed from the code alone), window.__cabEntry3dFitView exists and
+  the button calls it without error, and - since the module doesn't
+  normally expose camera state - added temporary debug hooks (removed
+  before shipping, same discipline as every other artifact/module fix
+  this session) to directly confirm the camera position genuinely moves
+  away when panned and Fit View genuinely brings it back to a sane
+  framing (not byte-identical to the initial auto-frame, which is
+  correct given the two use slightly different box calculations - see
+  above - but clearly restored, not left at the moved-away position).
+  Full existing regression suite re-run clean.
+
+  CACHE_VERSION v227->v228, app version v6.1->v6.2.

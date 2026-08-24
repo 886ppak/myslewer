@@ -11,25 +11,27 @@
 // is actually doing the lift - this tab is about WHERE a load was
 // picked/landed relative to the slew centre, not about modelling the
 // real crane on site, so one representative carrier stands in
-// regardless. Originally LTM 1110 (32MB) - switched to LRT 1100 (7.3MB,
-// the lightest of the seven carrier exports) after a person reported the
-// panel loading nothing on a real tablet: it worked in every desktop/
-// localhost test here, which is exactly the profile of a model too big
-// to reliably fetch+Draco-decode on a real device's network/memory
-// budget rather than a logic bug - the 32MB original was one of the two
-// largest of the seven exports (1650 is the only bigger one, at 46MB).
+// regardless. Originally LTM 1110 (32MB) - a person reported the panel
+// loading nothing on a real tablet, root cause being that size (fine on
+// localhost, not fine on a real device's network/memory). First fix used
+// LRT 1100 (7.3MB, the lightest of the seven exports), but LRT is a
+// rough-terrain chassis, visibly different from the rest of this fleet's
+// LTM mobile cranes - person asked for an LTM specifically. Landed on
+// LTM 1300 (10.5MB, the lightest LTM of the six) - still a 3x cut from
+// the original despite being an LTM, well clear of the size problem.
 // See methodology.txt for the fuller story, including the added
 // loading/error visibility below (there wasn't any before - a slow or
 // failed load looked identical to "nothing happened", which is exactly
-// how this went unnoticed until someone hit it on a real device).
+// how the size problem went unnoticed until someone hit it on a real
+// device).
 import * as THREE from 'three';
 import { GLTFLoader } from './three/GLTFLoader.js';
 import { DRACOLoader } from './three/DRACOLoader.js';
 import { OrbitControls } from './three/OrbitControls.js';
 
-const MODEL_URL = './outrigger/models/lrt1100-carrier.glb';
+const MODEL_URL = './outrigger/models/ltm1300-carrier.glb';
 const CALIBRATION = { frontAtMinZ: true, lateralSign: 1 };
-const FOOTPRINT = { width: 3300, front: 4300, rear: 4388 };
+const FOOTPRINT = { width: 3100, front: 11060, rear: 4378 };
 
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('./vendor/three/draco/');
@@ -275,6 +277,19 @@ function onCanvasClick(ev) {
 
 export function onDotSelected(cb) { onDotClick = cb; }
 
+// Re-frames the camera to fit the model + every currently plotted dot -
+// same box-fitting frameCamera() already does right after a model/entries
+// load, just callable on demand so a person who's orbited/zoomed away
+// can snap back to a sensible view without reopening the panel. No-op
+// before the model's actually loaded (nothing to fit yet).
+export function fitView() {
+  if (!modelRoot) return;
+  const box = new THREE.Box3().setFromObject(modelRoot);
+  if (dotsGroup) box.union(new THREE.Box3().setFromObject(dotsGroup));
+  frameCamera(box);
+}
+
 window.__cabEntry3dActivate = activate;
 window.__cabEntry3dSetEntries = setEntries;
 window.__cabEntry3dOnDotClick = onDotSelected;
+window.__cabEntry3dFitView = fitView;

@@ -107,3 +107,14 @@ a working record, not app content.
   of the module at a genuinely missing file, since network route-mocking
   wasn't reliably reaching this panel's fetch in testing. Shipped to
   main (CACHE_VERSION v227, app v6.1).
+- Is there an LTM option for the 3D carrier instead of LRT 1100? Also add
+  a Fit View option.
+  **Status: done** — gave all six LTM sizes, person picked LTM 1300
+  (10.5MB, lightest LTM, still a 3x cut from the original 32MB LTM
+  1110). Fit View added as a .toolbar-btn matching the exact convention
+  already used for the Outrigger tab's own 3D preview, re-frames to fit
+  the model + every currently plotted dot. Verified the real network
+  request now hits ltm1300-carrier.glb, and confirmed (via temporary
+  debug hooks, removed before shipping) that Fit View genuinely restores
+  the camera after a manual pan, not just that the button doesn't error.
+  Shipped to main (CACHE_VERSION v228, app v6.2).
