@@ -40,4 +40,6 @@ a working record, not app content.
   crane model doesn't matter, this section is about load pick/place
   history (where a lift came from, where it went) so a back-to-back
   shift can see it at a glance, not about modelling the real crane.
-  **Status: in progress.**
+  **Status: done** — hand-rolled isometric canvas view (no 3D library
+  available inside an Artifact), same underlying position data as the
+  2D radar, generic placeholder carrier box+mast, tested and published.
