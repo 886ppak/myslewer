@@ -7,20 +7,29 @@
 // AR) that has nothing to do with this tab and no reason to risk
 // entangling with it. This is its own renderer, own scene, own model.
 //
-// The carrier model is a fixed placeholder (LTM 1110), not tied to
-// whichever crane is actually doing the lift - this tab is about WHERE a
-// load was picked/landed relative to the slew centre, not about
-// modelling the real crane on site, so one representative carrier stands
-// in regardless. See methodology.txt for the fuller reasoning.
-
+// The carrier model is a fixed placeholder, not tied to whichever crane
+// is actually doing the lift - this tab is about WHERE a load was
+// picked/landed relative to the slew centre, not about modelling the
+// real crane on site, so one representative carrier stands in
+// regardless. Originally LTM 1110 (32MB) - switched to LRT 1100 (7.3MB,
+// the lightest of the seven carrier exports) after a person reported the
+// panel loading nothing on a real tablet: it worked in every desktop/
+// localhost test here, which is exactly the profile of a model too big
+// to reliably fetch+Draco-decode on a real device's network/memory
+// budget rather than a logic bug - the 32MB original was one of the two
+// largest of the seven exports (1650 is the only bigger one, at 46MB).
+// See methodology.txt for the fuller story, including the added
+// loading/error visibility below (there wasn't any before - a slow or
+// failed load looked identical to "nothing happened", which is exactly
+// how this went unnoticed until someone hit it on a real device).
 import * as THREE from 'three';
 import { GLTFLoader } from './three/GLTFLoader.js';
 import { DRACOLoader } from './three/DRACOLoader.js';
 import { OrbitControls } from './three/OrbitControls.js';
 
-const MODEL_URL = './outrigger/models/ltm1110-carrier.glb';
+const MODEL_URL = './outrigger/models/lrt1100-carrier.glb';
 const CALIBRATION = { frontAtMinZ: true, lateralSign: 1 };
-const FOOTPRINT = { width: 2850, front: 8572, rear: 3685 };
+const FOOTPRINT = { width: 3300, front: 4300, rear: 4388 };
 
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('./vendor/three/draco/');
@@ -73,7 +82,12 @@ function ensureRenderer(wrapId) {
 
   camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100000);
 
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+  } catch (err) {
+    setStatus(wrapId, "3D isn't available on this device/browser.");
+    throw err;
+  }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   wrap.appendChild(renderer.domElement);
 
@@ -99,6 +113,24 @@ function ensureRenderer(wrapId) {
   });
 
   return true;
+}
+
+// Loading/error visibility - there wasn't any before this, which is
+// exactly how a too-large model (see the header comment) went unnoticed:
+// a slow or failed load rendered nothing at all, identical on-screen to
+// "hasn't been asked to load anything yet". Plain text overlay inside
+// the wrap div, cleared once the model's actually up.
+function setStatus(wrapId, text) {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  let el = wrap.querySelector('.ce-be3d-status');
+  if (!text) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'ce-be3d-status';
+    wrap.appendChild(el);
+  }
+  el.textContent = text;
 }
 
 function resizeRenderer() {
@@ -129,6 +161,7 @@ export function activate(wrapId) {
   if (moved) resizeRenderer();
 
   if (!loadingPromise) {
+    setStatus(wrapId, 'Loading 3D model…');
     loadingPromise = loadGLTFAsync(MODEL_URL).then((root) => {
       modelRoot = root;
       scene.add(root);
@@ -137,6 +170,14 @@ export function activate(wrapId) {
       scene.add(dotsGroup);
       frameCamera(new THREE.Box3().setFromObject(root));
       resizeRenderer();
+      setStatus(wrapId, null);
+    }).catch((err) => {
+      // Reset loadingPromise so re-opening the panel (a flaky connection
+      // recovering, etc.) gets a genuine retry instead of being stuck on
+      // one rejected promise forever.
+      loadingPromise = null;
+      setStatus(wrapId, "Couldn't load the 3D model - check your connection and try reopening this panel.");
+      throw err;
     });
   }
   return loadingPromise;

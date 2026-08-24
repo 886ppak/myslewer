@@ -93,3 +93,17 @@ a working record, not app content.
   was, so it showed "< 180" while the dial showed plain "180" for the
   same reading - fixed to match. Shipped to main (CACHE_VERSION v226,
   app v6.0 - hit the .30 cap, rolled to next major per CLAUDE.md).
+- "3d view loaded nothing" - reported with a screenshot from a real
+  tablet (2D radar working, 3D panel just an empty box, no error).
+  **Status: done** — root cause: the LTM 1110 carrier GLB is 32MB, one
+  of the two largest of the seven exports - fine on a fast local test,
+  not fine on a real device's network/memory. Switched the placeholder
+  model to LRT 1100 (7.3MB, the smallest one). Also fixed the underlying
+  bug class: this panel had zero loading/error visibility before, so a
+  slow or failed load looked exactly like nothing happening - added a
+  loading overlay and a real error message, plus fixed a related bug
+  found while wiring it in (a failed load was permanently blocking retry
+  on reopen). Verified the failure/retry path by pointing a scratch copy
+  of the module at a genuinely missing file, since network route-mocking
+  wasn't reliably reaching this panel's fetch in testing. Shipped to
+  main (CACHE_VERSION v227, app v6.1).

@@ -9581,3 +9581,69 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v225->v226, app version v5.30->v6.0 (cap reached, per
   CLAUDE.md's own rollover rule).
+
+================================================================================
+70. Cab Entry 3D panel: real fix for "loaded nothing" on a real tablet
+
+  Person reported (with a screenshot) the 3D panel showing a plain empty
+  green-black box on a real tablet - 2D radar plotting fine, 3D showing
+  literally nothing, no error, no spinner, nothing to go on. Every test
+  of this feature so far had been against a fast local server/desktop
+  Chromium, which is exactly the wrong environment to catch this class of
+  bug - a slow/failed load and "nothing happening yet" look IDENTICAL
+  with no loading/error UI, and a fast localhost fetch never gives a
+  large asset the chance to actually time out or exhaust memory the way
+  a real device's network/RAM budget can.
+
+  Root cause, found by checking actual file sizes rather than guessing:
+  the LTM 1110 carrier GLB this panel loads is 32MB - one of the two
+  largest of the seven carrier exports in this repo (only the 1650, at
+  46MB, is bigger; the smallest, LRT 1100, is 7.3MB). Confirmed live and
+  reachable (curl, 200, correct byte count) - not a broken link, a
+  genuinely oversized asset for what this feature needs. Since section 68
+  already established the carrier model is a placeholder and the actual
+  crane model "doesn't matter" (person's own words), switched MODEL_URL/
+  CARRIER_CALIBRATION/FOOTPRINT to LRT 1100 - a 4.4x size cut - rather
+  than trying to shrink or re-export the 1110 model itself.
+
+  Also fixed the actual bug class, not just this one instance of it: this
+  panel had ZERO loading or error visibility before now - a stuck fetch
+  and total silence rendered identically, which is exactly how a person
+  ends up staring at an empty box wondering if anything is even trying to
+  happen. Added: a "Loading 3D model..." status overlay shown from the
+  moment activate() starts until the model's actually up; a caught
+  loadGLTFAsync() rejection now shows a plain-language error in the same
+  spot instead of an unhandled promise rejection nobody but a console
+  would ever see; ensureRenderer()'s own WebGLRenderer construction is
+  now wrapped in try/catch too (a real possibility on a device that's
+  out of available WebGL contexts or doesn't support it at all - three
+  separate 3D modules can now be live in this app: carrier3d.js, cwt3d.js,
+  this one).
+
+  Real related bug caught while wiring the error path in: ceEnsure3d()
+  (index.html) gated BOTH the one-time ES module import AND every
+  activate() call behind the same ce3dLoaded flag - so a failed first
+  load would permanently disable ever calling activate() again, silently
+  defeating the "reopen the panel to retry" the new error message
+  explicitly promises. Restructured so module import happens once
+  (cached in ceCabEntryMod) but activate() is called on every open -
+  cheap/idempotent once it has actually succeeded (activate()'s own
+  loadingPromise guard), and a genuine retry on failure (activate() now
+  resets loadingPromise to null in its own catch handler specifically so
+  this works).
+
+  Verified via Playwright, the hard way - route-level network mocking
+  turned out to not reliably reach this panel's fetch at all (raced with
+  the service worker's own fetch handling in ways that were consumed
+  hunting down rather than worked around), so the failure/retry path was
+  proven by importing the module directly in-page and pointing a scratch
+  copy of it at a genuinely nonexistent file: confirmed the promise
+  rejects with a real error, the status overlay shows the friendly
+  message, and calling activate() a second time (simulating reopen)
+  genuinely re-attempts rather than returning the same stuck rejected
+  promise. Separately confirmed the loading overlay itself appears and
+  clears correctly using an artificially delayed (not failed) response.
+  Full existing regression suite (2D/3D log flow, dial, side-select,
+  three unrelated tabs) re-run clean throughout.
+
+  CACHE_VERSION v226->v227, app version v6.0->v6.1.

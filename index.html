@@ -376,6 +376,7 @@
 
     .ce-be3d-stage{ position:relative; width:100%; max-width:300px; margin:0 auto; aspect-ratio:1/1; background:#0c0f0a; border:1px solid var(--border-color); border-radius:10px; overflow:hidden; }
     .ce-be3d-stage canvas{ width:100%; height:100%; display:block; cursor:grab; }
+    .ce-be3d-status{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; font-size:0.8rem; color:var(--text-muted); padding:0 24px; pointer-events:none; }
 
     .ce-be-legend{ display:flex; gap:14px; flex-wrap:wrap; margin:12px 2px 0; font-size:0.75rem; color:var(--text-muted); }
     .ce-be-legend span{ display:inline-flex; align-items:center; gap:5px; }
@@ -980,7 +981,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.0</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.1</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -10858,19 +10859,31 @@
     // Lazy-imported on first activation, same pattern as cwt3d.js/
     // carrier3d.js elsewhere in this file - neither three.js nor the GLB
     // model are fetched unless this tab's 3D panel is actually opened.
+    let ceCabEntryMod = null; // cached imported module - import() itself only ever needs to happen once
+
     function ceEnsure3d(){
-      if (ce3dLoaded) return Promise.resolve();
-      return import('./vendor/cabentry3d.js').then((mod) => {
-        ce3dLoaded = true;
-        mod.onDotSelected((entryId) => {
-          const en = ceEntries.find(e => e.id === entryId);
-          if (!en) return;
-          ceSelectedEntryId = entryId;
-          ceRenderBirdsEye();
-          ceShowEntryInfo(en);
-        });
-        return mod.activate('ce3dWrap');
-      });
+      // Deliberately calls activate() on every open, not just the first -
+      // module import only needs to happen once, but activate() must be
+      // able to genuinely retry a previously FAILED model load (e.g. a
+      // flaky connection) when the person reopens the panel, which a
+      // "loaded = never touch this again" flag would have silently
+      // prevented (activate()'s own loadingPromise guard already makes a
+      // repeat call cheap once it has actually succeeded).
+      const setup = ce3dLoaded
+        ? Promise.resolve(ceCabEntryMod)
+        : import('./vendor/cabentry3d.js').then((mod) => {
+            ceCabEntryMod = mod;
+            ce3dLoaded = true;
+            mod.onDotSelected((entryId) => {
+              const en = ceEntries.find(e => e.id === entryId);
+              if (!en) return;
+              ceSelectedEntryId = entryId;
+              ceRenderBirdsEye();
+              ceShowEntryInfo(en);
+            });
+            return mod;
+          });
+      return setup.then((mod) => mod.activate('ce3dWrap'));
     }
 
     function ceRenderBirdsEye3d(){
@@ -10884,7 +10897,7 @@
     // tab at all) would be wasteful. toggle fires on both open AND close,
     // guarded by ce3dLoaded so it only ever activates once.
     document.querySelectorAll('#cabentry-tab details.card')[1]?.addEventListener('toggle', function(){
-      if (this.open) ceEnsure3d().then(ceRenderBirdsEye3d);
+      if (this.open) ceEnsure3d().then(ceRenderBirdsEye3d).catch((err) => console.error('Cab Entry 3D load failed', err));
     });
 
     function initCabEntryTab(){
