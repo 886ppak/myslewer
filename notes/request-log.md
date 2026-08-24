@@ -30,3 +30,14 @@ a working record, not app content.
 - Request to keep a durable log of incoming messages so none get lost
   while work is in progress — this file.
   **Status: done (this entry).**
+- Remove the red "out-of-range" color on a near-zero slew reading - it
+  wrongly implies near-zero slew means near load capacity, which isn't
+  true at all; a near-rear reading is just a normal reading.
+  **Status: done** — the out-of-range flag/red styling removed entirely.
+- Keep the 2D bird's-eye plot as-is. ALSO add a separate 3D plotter,
+  same dots/same data, with a generic placeholder crane carrier (person
+  referenced "the 110") sitting static in the middle - the specific
+  crane model doesn't matter, this section is about load pick/place
+  history (where a lift came from, where it went) so a back-to-back
+  shift can see it at a glance, not about modelling the real crane.
+  **Status: in progress.**
