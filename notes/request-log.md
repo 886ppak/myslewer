@@ -143,3 +143,10 @@ a working record, not app content.
   that Name-through-Log-Reading now fits without scrolling, and that
   dial-half taps still work from the new position. Shipped to main
   (CACHE_VERSION v230, app v6.4).
+- Move Status (Pick/Land, New/Old) into the bottom of the Position card,
+  and remove its disclaimer text.
+  **Status: done** — merged, no separate Status card anymore, disclaimer
+  removed entirely. Log button's bottom edge dropped to 635px (was
+  790px after the dial move alone) at the same tablet viewport test -
+  measurably more compact, not just reordered. Shipped to main
+  (CACHE_VERSION v231, app v6.5).
