@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Combined CG Walkthrough — Mid Chute + Upper Chute</title>
+<style>
+  :root{
+    --bg: #0f1720;
+    --panel: #16212c;
+    --ink: #e8edf2;
+    --sub: #8fa3b3;
+    --mid: #5b9bd5;
+    --mid-fill: rgba(91,155,213,0.28);
+    --upper: #b07cd6;
+    --upper-fill: rgba(176,124,214,0.28);
+    --accent: #ff5a4e;
+    --amber: #e8a33d;
+    --line: #26343f;
+    --mono: 'SF Mono', 'Consolas', 'Menlo', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    display:flex; flex-direction:column; align-items:center;
+    padding: 22px 14px 40px;
+  }
+  h1{
+    font-size: 17px; font-weight:600; letter-spacing:0.2px;
+    margin: 0 0 2px 0; color:var(--ink);
+  }
+  .subtitle{ color:var(--sub); font-size:13px; margin-bottom:18px; }
+  .wrap{ width:100%; max-width:640px; }
+  .stage{
+    position:relative; width:100%; aspect-ratio: 4/5;
+    background: linear-gradient(180deg,#101a23,#0c1319);
+    border:1px solid var(--line); border-radius:14px;
+    overflow:hidden;
+  }
+  canvas{ width:100%; height:100%; display:block; }
+  .step-label{
+    position:absolute; top:12px; left:14px; right:14px;
+    font-size:12px; color:var(--amber); font-weight:600;
+    letter-spacing:0.4px; text-transform:uppercase;
+  }
+  .caption{
+    min-height: 58px;
+    margin-top:14px; padding:12px 14px;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    font-size:14px; line-height:1.5; color:var(--ink);
+  }
+  .caption b{ color:var(--amber); }
+  .math{
+    font-family:var(--mono); font-size:12.5px; color:#9fd3a0;
+    background:#0c1319; border:1px solid var(--line); border-radius:8px;
+    padding:8px 10px; margin-top:8px; display:none; white-space:pre;
+  }
+  .controls{
+    display:flex; align-items:center; gap:10px; margin-top:16px; width:100%;
+  }
+  button{
+    background:var(--panel); color:var(--ink); border:1px solid var(--line);
+    border-radius:8px; padding:9px 14px; font-size:13px; cursor:pointer;
+    font-weight:600;
+  }
+  button:hover{ background:#1c2932; }
+  button:disabled{ opacity:0.35; cursor:default; }
+  #playBtn{ background:var(--accent); border-color:var(--accent); color:#1a0a08; min-width:84px; }
+  #playBtn:hover{ background:#ff6d62; }
+  .track{
+    flex:1; height:6px; background:var(--line); border-radius:4px; position:relative; cursor:pointer;
+  }
+  .track-fill{
+    position:absolute; left:0; top:0; height:100%; background:var(--amber); border-radius:4px; width:0%;
+  }
+  .steps-count{ font-size:12px; color:var(--sub); font-family:var(--mono); min-width:44px; text-align:right;}
+  .legend{ display:flex; gap:16px; margin-top:14px; font-size:12px; color:var(--sub); flex-wrap:wrap;}
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+</style>
+</head>
+<body>
+
+<h1>How the Combined CG Was Found</h1>
+<div class="subtitle">Mid Chute + Upper Chute stacked assembly — step-by-step</div>
+
+<div class="wrap">
+  <div class="stage">
+    <div class="step-label" id="stepLabel">Step 1 / 8</div>
+    <canvas id="c"></canvas>
+  </div>
+
+  <div class="caption">
+    <div id="captionText">Loading…</div>
+    <div class="math" id="mathText"></div>
+  </div>
+
+  <div class="controls">
+    <button id="prevBtn">◀ Back</button>
+    <button id="playBtn">▶ Play</button>
+    <button id="nextBtn">Next ▶</button>
+  </div>
+  <div class="controls">
+    <div class="track" id="track"><div class="track-fill" id="trackFill"></div></div>
+    <div class="steps-count" id="stepsCount">1/8</div>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot" style="background:var(--mid)"></span>Mid Chute — 14,950 kg</span>
+    <span><span class="dot" style="background:var(--upper)"></span>Upper Chute — 10,190 kg</span>
+    <span><span class="dot" style="background:var(--accent)"></span>Combined CG</span>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, DPR;
+function resize(){
+  DPR = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  W = rect.width; H = rect.height;
+  canvas.width = W*DPR; canvas.height = H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', ()=>{resize(); draw();});
+
+// ---------- geometry data (mm) ----------
+const midTopW = 4415, midBaseW = 2200, midH = 2390;
+const upBaseW = 4415, upTopW = 300, upH = 3636;
+const stackH = midH + upH;
+const stackW = 5200; // canvas world width span for drawing
+
+const midCG_local = {x:2406, z:1482};
+const upCG_local  = {x:995,  z:1509}; // above its own base
+const upCG_global = {x:995, z: midH + upCG_local.z};
+const combined = {x:1834, z:2462};
+const m1=14950, m2=10190, mt=m1+m2;
+
+// world -> screen mapping, world origin bottom-left of Mid Chute base
+function worldBox(){
+  return {minX:-700, maxX: stackW-600, minZ:-300, maxZ: stackH+500};
+}
+function toScreen(x,z){
+  const wb = worldBox();
+  const pad = 20;
+  const availW = W - pad*2, availH = H - pad*2 - 20;
+  const scale = Math.min(availW/(wb.maxX-wb.minX), availH/(wb.maxZ-wb.minZ));
+  const ox = pad + (availW - (wb.maxX-wb.minX)*scale)/2;
+  const oy = pad + 20;
+  const sx = ox + (x - wb.minX)*scale;
+  const sy = oy + (wb.maxZ - z)*scale; // invert z (up = smaller y)
+  return {x:sx, y:sy, scale};
+}
+
+function midPoly(offsetX=0, offsetZ=0, alpha=1){
+  return [
+    [ (midTopW-midBaseW)/2 + offsetX, 0+offsetZ],
+    [ (midTopW-midBaseW)/2 + midBaseW + offsetX, 0+offsetZ],
+    [ midTopW + offsetX, midH+offsetZ],
+    [ 0+offsetX, midH+offsetZ]
+  ];
+}
+function upPoly(offsetX=0, offsetZ=0){
+  return [
+    [0+offsetX, offsetZ],
+    [upBaseW+offsetX, offsetZ],
+    [upBaseW/2+upTopW/2+offsetX, upH+offsetZ],
+    [upBaseW/2-upTopW/2+offsetX, upH+offsetZ]
+  ];
+}
+
+function drawPoly(pts, fill, stroke, lw=2){
+  ctx.beginPath();
+  pts.forEach((p,i)=>{
+    const s = toScreen(p[0], p[1]);
+    if(i===0) ctx.moveTo(s.x,s.y); else ctx.lineTo(s.x,s.y);
+  });
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = lw;
+  ctx.stroke();
+}
+
+function drawDot(x,z,color,r=7,glow=true){
+  const s = toScreen(x,z);
+  if(glow){
+    ctx.beginPath();
+    ctx.arc(s.x,s.y,r+6,0,Math.PI*2);
+    ctx.fillStyle = color+'33';
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(s.x,s.y,r,0,Math.PI*2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = '#0c1319';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawStar(x,z,color,r=13){
+  const s = toScreen(x,z);
+  ctx.save();
+  ctx.translate(s.x,s.y);
+  ctx.beginPath();
+  for(let i=0;i<10;i++){
+    const ang = Math.PI/2 + i*Math.PI/5;
+    const rad = i%2===0 ? r : r*0.42;
+    const px = Math.cos(ang)*rad, py = -Math.sin(ang)*rad;
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.shadowColor = color; ctx.shadowBlur = 18;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#1a0a08';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function label(text, x, y, color='#e8edf2', size=11, align='left', weight='600'){
+  ctx.fillStyle = color;
+  ctx.font = `${weight} ${size}px -apple-system, Segoe UI, sans-serif`;
+  ctx.textAlign = align;
+  ctx.fillText(text, x, y);
+}
+
+function dashedLine(x1,y1,x2,y2,color,lw=1.5){
+  ctx.save();
+  ctx.setLineDash([4,4]);
+  ctx.strokeStyle = color; ctx.lineWidth = lw;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.restore();
+}
+
+// ---------- steps ----------
+const steps = [
+  { // 1
+    label: "Step 1 / 8",
+    caption: "We start with two separate parts. <b>Mid Chute</b> (blue, 14,950 kg) sits on the ground; <b>Upper Chute</b> (purple, 10,190 kg) is drawn separately for now, off to the side.",
+    render(p){
+      drawPoly(midPoly(0,0), 'var(--mid-fill)'.replace('var(--mid-fill)', getCss('--mid-fill')), getCss('--mid'));
+      const s = toScreen(midTopW/2, midH+250);
+      label('MID CHUTE — 14,950 kg', s.x, s.y, getCss('--mid'), 12, 'center');
+
+      const ox = 200, oz = stackH - upH + 250;
+      drawPoly(upPoly(ox,oz), getCss('--upper-fill'), getCss('--upper'));
+      const s2 = toScreen(upBaseW/2+ox, oz+upH+250);
+      label('UPPER CHUTE — 10,190 kg', s2.x, s2.y, getCss('--upper'), 12, 'center');
+    }
+  },
+  { // 2
+    label: "Step 2 / 8",
+    caption: "Each drawing has a marked <b>CG point</b> — the circle-and-crosshair symbol. We scale the drawing using its known dimensions (e.g. 4415mm, 2390mm) to convert that mark's pixel position into real millimetres.",
+    render(p){
+      drawPoly(midPoly(0,0), getCss('--mid-fill'), getCss('--mid'));
+      drawDot(midCG_local.x, midCG_local.z, getCss('--mid'));
+      label(`CG: x=2406mm, z=1482mm`, toScreen(midCG_local.x,midCG_local.z).x+14, toScreen(midCG_local.x,midCG_local.z).y-10, getCss('--mid'),11,'left');
+
+      const ox = 200, oz = stackH - upH + 250;
+      drawPoly(upPoly(ox,oz), getCss('--upper-fill'), getCss('--upper'));
+      drawDot(upCG_local.x+ox, upCG_local.z+oz, getCss('--upper'));
+      label(`CG: x=995mm, z=1509mm`, toScreen(upCG_local.x+ox,upCG_local.z+oz).x+14, toScreen(upCG_local.x+ox,upCG_local.z+oz).y-10, getCss('--upper'),11,'left');
+    },
+    math: `MID CHUTE CG          UPPER CHUTE CG
+x = 2406 mm            x = 995 mm
+z = 1482 mm (above own base)   z = 1509 mm (above own base)`
+  },
+  { // 3
+    label: "Step 3 / 8",
+    caption: "Now we <b>stack</b> them — Upper Chute's base sits on Mid Chute's top flange, 2390mm up. Both parts share the same horizontal datum (left edge of the mating flange), so their x-positions line up directly.",
+    render(p){
+      const t = p; // 0..1 slide progress
+      const startOz = stackH - upH + 250;
+      const endOz = midH;
+      const oz = startOz + (endOz-startOz)*t;
+      const ox = 200*(1-t);
+
+      drawPoly(midPoly(0,0), getCss('--mid-fill'), getCss('--mid'));
+      drawDot(midCG_local.x, midCG_local.z, getCss('--mid'));
+
+      drawPoly(upPoly(ox,oz), getCss('--upper-fill'), getCss('--upper'));
+      drawDot(upCG_local.x+ox, upCG_local.z+oz, getCss('--upper'));
+
+      if(t>0.98){
+        const s1 = toScreen(0,midH), s2 = toScreen(midTopW,midH);
+        dashedLine(s1.x,s1.y,s2.x,s2.y, getCss('--amber'));
+        label('mating flange · 2390mm up', s2.x+8, s2.y+4, getCss('--amber'), 10.5,'left');
+      }
+    },
+    anim: true
+  },
+  { // 4
+    label: "Step 4 / 8",
+    caption: "Stacked. Upper Chute's CG is now expressed in the <b>same global coordinate system</b> as Mid Chute's — we just add the 2390mm stacking offset to its height.",
+    render(p){
+      drawPoly(midPoly(0,0), getCss('--mid-fill'), getCss('--mid'));
+      drawDot(midCG_local.x, midCG_local.z, getCss('--mid'));
+      label(`(2406, 1482)`, toScreen(midCG_local.x,midCG_local.z).x+14, toScreen(midCG_local.x,midCG_local.z).y-10, getCss('--mid'),11,'left');
+
+      drawPoly(upPoly(0,midH), getCss('--upper-fill'), getCss('--upper'));
+      drawDot(upCG_global.x, upCG_global.z, getCss('--upper'));
+      label(`(995, 3899)`, toScreen(upCG_global.x,upCG_global.z).x+14, toScreen(upCG_global.x,upCG_global.z).y-10, getCss('--upper'),11,'left');
+
+      const s1 = toScreen(0,midH), s2 = toScreen(midTopW,midH);
+      dashedLine(s1.x,s1.y,s2.x,s2.y, getCss('--amber'));
+    },
+    math: `MID CHUTE (global)      UPPER CHUTE (global)
+x = 2406 mm             x = 995 mm
+z = 1482 mm             z = 2390 + 1509 = 3899 mm`
+  },
+  { // 5
+    label: "Step 5 / 8",
+    caption: "Think of it like a <b>see-saw</b>: two weights on a bar, balancing at a pivot point. The combined CG is that pivot — pulled toward whichever mass is bigger.",
+    render(p){
+      // seesaw visualization
+      const cx = W/2, cy = H*0.55;
+      const barLen = W*0.62;
+      ctx.save();
+      // fulcrum triangle
+      ctx.beginPath();
+      ctx.moveTo(cx-14, cy+40); ctx.lineTo(cx+14, cy+40); ctx.lineTo(cx, cy+10);
+      ctx.closePath();
+      ctx.fillStyle = getCss('--line');
+      ctx.fill();
+      // bar (tilted toward heavier mid chute side)
+      const tilt = 0.10;
+      ctx.translate(cx, cy);
+      ctx.rotate(tilt);
+      ctx.fillStyle = '#3a4a56';
+      ctx.fillRect(-barLen/2, -4, barLen, 8);
+      // mid chute weight (left, heavier -> bigger circle)
+      ctx.beginPath();
+      ctx.arc(-barLen/2+30, -34, 30, 0, Math.PI*2);
+      ctx.fillStyle = getCss('--mid'); ctx.fill();
+      // upper chute weight (right, lighter -> smaller circle)
+      ctx.beginPath();
+      ctx.arc(barLen/2-30, -22, 24, 0, Math.PI*2);
+      ctx.fillStyle = getCss('--upper'); ctx.fill();
+      ctx.restore();
+
+      label('14,950 kg', cx-barLen/2+30, cy-70, getCss('--mid'), 12,'center');
+      label('10,190 kg', cx+barLen/2-30, cy-52, getCss('--upper'), 12,'center');
+      label('Heavier side pulls the balance point toward it', cx, cy+90, getCss('--sub'), 12,'center','500');
+    }
+  },
+  { // 6
+    label: "Step 6 / 8",
+    caption: "The <b>weighted average formula</b> is the maths version of that see-saw — each part's position multiplied by its share of the total mass.",
+    render(p){
+      drawPoly(midPoly(0,0), getCss('--mid-fill'), getCss('--mid'));
+      drawDot(midCG_local.x, midCG_local.z, getCss('--mid'));
+      drawPoly(upPoly(0,midH), getCss('--upper-fill'), getCss('--upper'));
+      drawDot(upCG_global.x, upCG_global.z, getCss('--upper'));
+    },
+    math: `Combined x = (m1·x1 + m2·x2) / (m1+m2)
+          = (14950×2406 + 10190×995) / 25140
+          = 1834 mm
+
+Combined z = (m1·z1 + m2·z2) / (m1+m2)
+          = (14950×1482 + 10190×3899) / 25140
+          = 2462 mm`
+  },
+  { // 7
+    label: "Step 7 / 8",
+    caption: "Plotting that result: the <b>combined CG</b> lands between the two individual points — much closer to Mid Chute's, because it's the heavier of the two parts.",
+    render(p){
+      drawPoly(midPoly(0,0), getCss('--mid-fill'), getCss('--mid'));
+      drawDot(midCG_local.x, midCG_local.z, getCss('--mid'), 6, false);
+      drawPoly(upPoly(0,midH), getCss('--upper-fill'), getCss('--upper'));
+      drawDot(upCG_global.x, upCG_global.z, getCss('--upper'), 6, false);
+
+      // connecting line
+      const s1 = toScreen(midCG_local.x, midCG_local.z);
+      const s2 = toScreen(upCG_global.x, upCG_global.z);
+      dashedLine(s1.x,s1.y,s2.x,s2.y, getCss('--sub'));
+
+      const t = p;
+      const cx = midCG_local.x + (upCG_global.x-midCG_local.x)*t;
+      const cz = midCG_local.z + (upCG_global.z-midCG_local.z)*t;
+      if(t>=0.999){
+        drawStar(combined.x, combined.z, getCss('--accent'));
+        label('COMBINED CG (1834, 2462)', toScreen(combined.x,combined.z).x, toScreen(combined.x,combined.z).y-24, getCss('--accent'),12.5,'center','700');
+      } else {
+        drawDot(cx, cz, getCss('--accent'), 8, false);
+      }
+    },
+    anim:true
+  },
+  { // 8
+    label: "Step 8 / 8",
+    caption: "Final result: combined CG sits <b>1834mm</b> from the shared flange edge, <b>2462mm</b> above the stack base — about 41% up the total 6026mm height.",
+    render(p){
+      drawPoly(midPoly(0,0), getCss('--mid-fill'), getCss('--mid'));
+      drawDot(midCG_local.x, midCG_local.z, getCss('--mid'), 6, false);
+      drawPoly(upPoly(0,midH), getCss('--upper-fill'), getCss('--upper'));
+      drawDot(upCG_global.x, upCG_global.z, getCss('--upper'), 6, false);
+      drawStar(combined.x, combined.z, getCss('--accent'), 15);
+
+      const s = toScreen(combined.x, combined.z);
+      label('COMBINED CG', s.x, s.y-30, getCss('--accent'),13,'center','700');
+      label('x=1834mm  z=2462mm', s.x, s.y-16, getCss('--accent'),11,'center','500');
+
+      // vertical dashed guide to base
+      const base = toScreen(combined.x, 0);
+      dashedLine(s.x, s.y, base.x, base.y, getCss('--accent')+'88');
+    }
+  }
+];
+
+function getCss(varName){
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+}
+
+// ---------- state / animation engine ----------
+let stepIdx = 0;
+let animProgress = 0; // 0..1 for animated steps
+let playing = false;
+let lastTs = null;
+const ANIM_DURATION = 1100; // ms for animated steps
+const HOLD_AFTER = 1400; // ms hold before auto-advance while playing
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  const s = steps[stepIdx];
+  const p = s.anim ? animProgress : 1;
+  s.render(p);
+  document.getElementById('stepLabel').textContent = s.label;
+  document.getElementById('captionText').innerHTML = s.caption;
+  const mathEl = document.getElementById('mathText');
+  if(s.math){ mathEl.style.display='block'; mathEl.textContent = s.math; }
+  else { mathEl.style.display='none'; }
+  document.getElementById('stepsCount').textContent = `${stepIdx+1}/${steps.length}`;
+  document.getElementById('trackFill').style.width = `${(stepIdx/(steps.length-1))*100}%`;
+  document.getElementById('prevBtn').disabled = stepIdx===0;
+}
+
+function goStep(i, resetAnim=true){
+  stepIdx = Math.max(0, Math.min(steps.length-1, i));
+  animProgress = steps[stepIdx].anim ? 0 : 1;
+  lastTs = null;
+  draw();
+}
+
+let rafId = null;
+function tick(ts){
+  if(lastTs===null) lastTs = ts;
+  const dt = ts - lastTs; lastTs = ts;
+  const s = steps[stepIdx];
+  if(s.anim && animProgress < 1){
+    animProgress = Math.min(1, animProgress + dt/ANIM_DURATION);
+    draw();
+    rafId = requestAnimationFrame(tick);
+    return;
+  }
+  if(playing){
+    // hold then advance
+    holdTimer += dt;
+    if(holdTimer >= HOLD_AFTER){
+      holdTimer = 0;
+      if(stepIdx < steps.length-1){
+        goStep(stepIdx+1);
+      } else {
+        playing = false;
+        document.getElementById('playBtn').textContent = '▶ Play';
+        return;
+      }
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+}
+let holdTimer = 0;
+
+document.getElementById('nextBtn').addEventListener('click', ()=>{
+  playing=false; document.getElementById('playBtn').textContent='▶ Play';
+  if(stepIdx<steps.length-1) goStep(stepIdx+1);
+});
+document.getElementById('prevBtn').addEventListener('click', ()=>{
+  playing=false; document.getElementById('playBtn').textContent='▶ Play';
+  if(stepIdx>0) goStep(stepIdx-1);
+});
+document.getElementById('playBtn').addEventListener('click', ()=>{
+  playing = !playing;
+  document.getElementById('playBtn').textContent = playing ? '⏸ Pause' : '▶ Play';
+  if(playing){
+    holdTimer = 0; lastTs=null;
+    rafId = requestAnimationFrame(tick);
+  }
+});
+document.getElementById('track').addEventListener('click', (e)=>{
+  const rect = e.currentTarget.getBoundingClientRect();
+  const frac = (e.clientX-rect.left)/rect.width;
+  goStep(Math.round(frac*(steps.length-1)));
+});
+
+resize();
+goStep(0);
+</script>
+</body>
+</html>
