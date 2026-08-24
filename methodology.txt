@@ -9547,3 +9547,37 @@ cranes get their own subsections as they're built.
   throughout.
 
   CACHE_VERSION v224->v225, app version v5.29->v5.30.
+
+================================================================================
+69. Cab Entry: removed the FRONT side-select button
+
+  Person's own call: it didn't do anything worth a third of the toggle
+  row's width - pointing this out surfaced a genuine bug rather than just
+  a cosmetic trim. FRONT's only job was a shortcut to set slewReading to
+  exactly 180; ceFormatSlew already showed a plain "180" (no </> arrow)
+  purely from the READING being 180, regardless of side - so removing the
+  button loses nothing display-wise for the dial's own big centre
+  readout. slewSide is now only ever null/'lt'/'gt' - every 'front'
+  branch across index.html (ceFormatSlew, ceSetSlewArc's marker calc,
+  ceSelectSlewSide, the 2D radar's per-entry angle calc) and
+  cabentry3d.js (setEntries' per-entry angle calc) was dead the moment
+  the button was gone, so removed rather than left as unreachable cruft -
+  no persistence layer exists for logged entries (in-memory per session
+  only), so there was no legacy 'front' data to worry about breaking.
+
+  Real bug this surfaced, caught by testing rather than assumed fixed:
+  the SLEW INPUT FIELD's own </> prefix/suffix affix was driven purely by
+  ceSlewSide, with no pole check - so typing exactly 180 showed "< 180"
+  in the input row while the dial's big centre readout correctly showed
+  plain "180" for the exact same reading. Fixed by suppressing the affix
+  at both poles (reading 0 or 180), matching ceFormatSlew's own logic,
+  not just at the moment side is null.
+
+  Verified via Playwright: only 2 side buttons remain (C3/C4 >, < C1/C2),
+  typing 180 shows plain "180" on both the dial AND the input row's own
+  affix (the bug above, confirmed fixed), gt/lt buttons and dial-half
+  taps still work, full log/2D/3D regression re-run clean, plus the same
+  three-unrelated-tab smoke test as section 68 - zero console errors.
+
+  CACHE_VERSION v225->v226, app version v5.30->v6.0 (cap reached, per
+  CLAUDE.md's own rollover rule).

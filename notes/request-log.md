@@ -84,3 +84,12 @@ a working record, not app content.
   unrelated tabs for regressions. Shipped to main (CACHE_VERSION v225,
   app v5.30) - not shadowed to beta-trial, which has no auth system to
   gate an owner-only tab with.
+- Remove the FRONT side-select button from Cab Entry - not worth the
+  space, doesn't do anything.
+  **Status: done** — removed, and cleaned up every now-dead 'front'
+  branch it left behind rather than leaving unreachable code. Testing
+  this surfaced a real bug: the slew input's own </> affix wasn't
+  suppressed at exactly 180deg the way the dial's big readout already
+  was, so it showed "< 180" while the dial showed plain "180" for the
+  same reading - fixed to match. Shipped to main (CACHE_VERSION v226,
+  app v6.0 - hit the .30 cap, rolled to next major per CLAUDE.md).

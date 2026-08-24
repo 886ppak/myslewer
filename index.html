@@ -980,7 +980,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v5.30</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.0</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2102,7 +2102,6 @@
 
         <div class="mode-toggle" id="ceSideSelect" style="margin-top:10px;">
           <button class="mode-btn" data-side="gt">C3/C4 &gt;</button>
-          <button class="mode-btn" data-side="front">FRONT</button>
           <button class="mode-btn" data-side="lt">&lt; C1/C2</button>
         </div>
       </div>
@@ -10528,7 +10527,7 @@
     let ceItemName = '';
     let ceItemWeight = 0;
     let ceRadius = 0;
-    let ceSlewSide = null; // null | 'lt' | 'gt' | 'front'
+    let ceSlewSide = null; // null | 'lt' | 'gt'
     let ceSlewReading = 0;
     let ceDirection = 'up';   // 'up' (pick) | 'down' (land)
     let ceCondition = null;   // null | 'new' | 'old'
@@ -10540,8 +10539,7 @@
     function ceClampSlew(n){ return Math.min(Math.max(n, 0), 180); }
 
     function ceFormatSlew(side, reading){
-      if(side === 'front' || reading === 180) return '180';
-      if(reading === 0) return '0';
+      if(reading === 180 || reading === 0) return String(reading); // both poles read as a plain number - side is physically moot at either (see ceSetSlewArc's own comment)
       return side === 'lt' ? `&lt; ${Math.round(reading)}` : `${Math.round(reading)} &gt;`;
     }
 
@@ -10602,8 +10600,7 @@
       const frac = sweep / 180;
       ceArcRightFg.setAttribute('stroke-dasharray', `${side==='lt' ? frac*CE_ARC_LEN : 0} ${CE_ARC_LEN}`);
       ceArcLeftFg.setAttribute('stroke-dasharray',  `${side==='gt' ? frac*CE_ARC_LEN : 0} ${CE_ARC_LEN}`);
-      const markerSide = side === 'front' ? 'lt' : side;
-      const p = cePtOnCircle(90, side==='front' ? 0 : sweep, markerSide);
+      const p = cePtOnCircle(90, sweep, side);
       ceDialMarker.setAttribute('cx', p.x);
       ceDialMarker.setAttribute('cy', p.y);
       ceLblC1.classList.toggle('on', side==='lt');
@@ -10620,8 +10617,14 @@
     }
 
     function ceRenderPeripherals(){
-      ceSlewPrefix.style.display = ceSlewSide === 'lt' ? '' : 'none';
-      ceSlewSuffix.style.display = ceSlewSide === 'gt' ? '' : 'none';
+      // Side is physically moot at either pole (0 or 180 - same reasoning
+      // as ceFormatSlew), so the </> affix beside the input suppresses
+      // there too, not just the dial's own big centre readout - otherwise
+      // the field shows "< 180" while the dial shows plain "180" for the
+      // exact same reading, which read as two different things.
+      const atPole = ceSlewReading === 0 || ceSlewReading === 180;
+      ceSlewPrefix.style.display = (!atPole && ceSlewSide === 'lt') ? '' : 'none';
+      ceSlewSuffix.style.display = (!atPole && ceSlewSide === 'gt') ? '' : 'none';
       ceSlewValDial.innerHTML = ceFormatSlew(ceSlewSide, ceSlewReading);
       ceSetSlewArc(ceSlewSide || 'lt', ceSlewReading); // arbitrary render-only side when genuinely unset - reading 0 looks identical either way
 
@@ -10668,7 +10671,6 @@
 
     function ceSelectSlewSide(side){
       ceSlewSide = side;
-      if(side === 'front') ceSlewReading = 180;
       ceRender();
     }
 
@@ -10812,8 +10814,8 @@
       ceEntries.forEach(en => {
         const frac = Math.min(1, en.radius / maxR);
         const r = CE_BE_OUTER * frac;
-        const side = en.slewSide === 'front' ? 'lt' : (en.slewSide || 'lt');
-        const sweep = en.slewSide==='front' ? 0 : (180 - ceClampSlew(en.slewReading));
+        const side = en.slewSide || 'lt';
+        const sweep = 180 - ceClampSlew(en.slewReading);
         const p = cePtOnCircle(r, sweep, side, CE_BE_CX, CE_BE_CY);
 
         const g = document.createElementNS('http://www.w3.org/2000/svg','g');

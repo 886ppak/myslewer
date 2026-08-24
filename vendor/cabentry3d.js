@@ -145,7 +145,8 @@ export function activate(wrapId) {
 // entries: [{id, name, weight, radius, slewSide, slewReading, direction, condition}]
 // radius is metres, slewReading is 0-180 degrees - same convention as the
 // 2D radar plot and the dial itself (side 'lt' sweeps toward C1/C2, 'gt'
-// toward C3/C4, 'front' = straight up/180).
+// toward C3/C4; side is physically moot at exactly 0 or 180, so a null
+// slewSide - never chosen yet - is treated the same as 'lt').
 export function setEntries(entries) {
   if (!loadingPromise) return;
   loadingPromise.then(() => {
@@ -157,7 +158,7 @@ export function setEntries(entries) {
     const box = new THREE.Box3().setFromObject(modelRoot);
 
     entries.forEach((en) => {
-      const sweep = en.slewSide === 'front' ? 0 : (180 - Math.min(Math.max(en.slewReading, 0), 180));
+      const sweep = 180 - Math.min(Math.max(en.slewReading, 0), 180);
       const rad = sweep * Math.PI / 180;
       const sign = en.slewSide === 'gt' ? -1 : 1;
       const dxMm = sign * en.radius * 1000 * Math.sin(rad);
