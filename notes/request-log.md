@@ -43,3 +43,11 @@ a working record, not app content.
   **Status: done** — hand-rolled isometric canvas view (no 3D library
   available inside an Artifact), same underlying position data as the
   2D radar, generic placeholder carrier box+mast, tested and published.
+- Replace the on-screen custom numeric keypad with the device's own
+  native keyboard popping up (e.g. Android's) for Radius/Slew/Weight
+  entry - current fixed keypad makes it hard to see what's actually
+  being typed, and native input should be cleaner UI-wise too. Person
+  asked directly whether I agreed - yes, and for a real reason: the
+  custom keypad's "buffer vs committed value" state machine is the
+  actual root cause of every bug fixed so far in this build.
+  **Status: in progress.**
