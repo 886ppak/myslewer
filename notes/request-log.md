@@ -59,3 +59,16 @@ a working record, not app content.
   plotter unaffected) and published. Also merged onto a newer version
   another session/agent had published in the meantime, so nothing from
   that round (red-zero fix, 3D plotter) was lost in the process.
+- Revision to the slew default: 0, not 180 (radius stays 0m too). Both
+  Radius/Slew/Weight should show their default as ghosted placeholder
+  text, not a real pre-filled value, so the user never has to backspace
+  it out before typing. And the 3D plotter isn't what was asked for -
+  person wants the REAL LTM110T 3D carrier model (the actual GLB/
+  Three.js infrastructure already in this repo - vendor/carrier3d.js,
+  vendor/three/*, the .glb models) as the centrepiece with plots around
+  it, not a hand-rolled placeholder box. Since an Artifact's CSP can't
+  load Three.js from a CDN or reach this repo's own files at all, the
+  whole Cab Entry tool should move INTO the actual PWA as a new tab,
+  gated to the owner only (same userAccess/{uid} opt-in pattern as
+  Service Fill/Assembly Plans) - not another Artifact.
+  **Status: in progress.**
