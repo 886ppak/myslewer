@@ -8992,3 +8992,12 @@ cranes get their own subsections as they're built.
   in unchanged from main; no beta-specific auth/admin code involved.
 
   CACHE_VERSION v51-beta149->v51-beta150.
+
+68. Fix unsorted Counterweight Currently Fitted dropdown (Driving w/ Equipment)
+
+  Shadowed from main - the weight dropdown wasn't sorted, just whatever
+  order the source rows happened to be in. Added .sort((a,b) => b - a)
+  so it lists heaviest first, matching every other weight dropdown in
+  the app. No beta-specific code involved.
+
+  CACHE_VERSION v51-beta150->v51-beta151.

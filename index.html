@@ -4279,7 +4279,7 @@
         sel.innerHTML = '<option>Select boom direction first…</option>';
         return;
       }
-      const weights = [...new Set(dirData.rows.map(r => r.weight))];
+      const weights = [...new Set(dirData.rows.map(r => r.weight))].sort((a, b) => b - a);
       sel.disabled = false;
       buildSelect(sel, weights, (w) => `${w.toFixed(1)} t`, (w) => w);
     }
