@@ -369,3 +369,22 @@ a working record, not app content.
   corrected file and shipped (CACHE_VERSION v240->v241, app v6.14-
   >v6.15). See methodology.txt 85 for the full measurement-methodology
   history.
+- "say I give access to a user to the service fill tab, I want the
+  toggle switch to be a 3 click toggle on / hidden (where they have to
+  enable it in there show hide icon them self but now they have
+  access) and off and we wire this in?" Clarified scope first: applies
+  to all 11 top-level tabs (not just the 3 opt-in ones), and the
+  "show/hide icon" turned out to be the app's existing Customize Tabs
+  panel.
+  **Status: done, shipped.** Admin Dashboard's per-tab checkbox is now
+  a 3-way button (OFF/HIDDEN/ON, colour-coded) - HIDDEN grants access
+  but seeds the tab into that same local Customize Tabs hidden list,
+  so the person has to notice and reveal it themselves; a one-time-per-
+  device "seeded" guard stops that nudge from fighting a later manual
+  reveal. New userAccess/{uid}.startHidden field reuses the existing
+  admin write rule - no firestore.rules redeploy needed. Verified via
+  a mocked-window UI test (20 checks), a real-function seeding-logic
+  test covering the fresh-grant/manual-reveal/not-yet-granted cases (10
+  checks), a live Firestore merge check, and the full existing
+  regression suite, all clean. Shipped to main (CACHE_VERSION v241-
+  >v242, app v6.15->v6.16). See methodology.txt 86.

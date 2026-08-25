@@ -10549,3 +10549,97 @@ cranes get their own subsections as they're built.
   files ever risked shipping alongside the real fix.
 
   CACHE_VERSION v240->v241, app version v6.14->v6.15.
+
+86. Admin Dashboard: three-state tab access (off / hidden / on)
+
+  "Say I give access to a user to the Service Fill tab, I want the
+  toggle to be a 3-click toggle: on / hidden (where they have to
+  enable it in their show/hide icon themself but now they have access)
+  / off." Applied to all 11 tabs per the person's own answer when
+  asked whether this should be just the 3 opt-in tabs or every tab.
+
+  The "show/hide icon" the person meant turned out to already exist -
+  the Customize Tabs panel (#tabs-btn, TAB_PREFS_STORAGE_KEY), a purely
+  local per-device declutter menu shipped well before this session.
+  Rather than build a second self-reveal UI from scratch, the new
+  HIDDEN admin state reuses that exact mechanism: granting access with
+  HIDDEN seeds the SAME local hidden-tab entry Customize Tabs itself
+  writes when someone unchecks a tab there, so the newly-granted tab
+  shows up in that panel, unchecked, same as if the person had hidden
+  it themselves - no separate reveal control anywhere else needed.
+
+  New userAccess/{uid}.startHidden map, one boolean per tab key,
+  written by a new window.__adminSetStartHidden - same nested-map-
+  merge shape as the existing hidden map, same isAdmin() write rule
+  already covering the whole doc, so no firestore.rules change or
+  redeploy was needed at all (confirmed: `git diff --stat` after this
+  ships touches index.html only). Each of the three states writes an
+  explicit, complete pair of values (access + startHidden) rather than
+  patching just one field, so the state machine can never drift into
+  an inconsistent combination regardless of what the previous state
+  was:
+    OFF:    access=false, startHidden=false
+    HIDDEN: access=true,  startHidden=true
+    ON:     access=true,  startHidden=false
+  Admin Dashboard's per-tab checkbox became a button that cycles
+  off -> hidden -> on -> off on click, colour-coded (red/amber/green)
+  by state.
+
+  The one real design problem: startHidden is a piece of ADMIN
+  (Firestore, cross-device) state, but "hidden until self-revealed" is
+  otherwise a purely LOCAL (per-device) concept - granting access
+  doesn't fire a push to every open tab, it's picked up next sign-in/
+  reload, same as every other userAccess flag already worked. Naively
+  re-applying startHidden on every load would fight a person who'd
+  already gone and revealed the tab themselves via Customize Tabs -
+  their own choice would get silently overwritten back to hidden on
+  their very next reload, as long as the admin flag stayed set (which
+  it normally would - nothing ever clears it after the initial grant).
+  Solved with a SEPARATE local "already seeded" tracking key
+  (myslewer_starthidden_seeded_v1) recording which tab keys have ever
+  been nudged into the hidden state on THIS device - each key gets
+  that one-time nudge into Customize Tabs' own hidden set at most
+  once, ever, on a given device; after that it's entirely the
+  person's own choice from then on, same as any other tab they've
+  manually hidden or revealed, regardless of what the admin flag does
+  afterwards. Only marks a key seeded at the moment access is ACTUALLY
+  granted (not just startHidden=true) - otherwise a person who reloads
+  before their grant lands would burn their one nudge for nothing and
+  never see the tab go hidden once access genuinely arrives.
+
+  Wiring detail: the two admin-flag-application functions
+  (applyFeatureAccess/applyTabRestrictions) live in the gate's
+  <script type="module">, while Customize Tabs (loadTabPrefs/
+  saveTabPrefs/buildTabPrefsMenu/applyTabPrefs) lives in the classic
+  <script> below it - already-established cross-scope pattern (see
+  section on window.__profileXxx) is that classic-script top-level
+  function DECLARATIONS are implicit globals reachable as bare
+  identifiers from the module's own code (already relied on for
+  applyTabOrder/buildTabPrefsMenu/applyTabPrefs themselves in the same
+  .finally() block) - the new seedStartHiddenPrefs follows the exact
+  same pattern rather than introducing a new window.__ assignment for
+  a function that didn't need one. Also had to translate between the
+  two different key-naming conventions in play: the 3 opt-in tabs'
+  userAccess flag names (serviceFillAccess etc.) aren't their own
+  data-tabkey (servicefill etc.) - same split already noted in section
+  84 for ADMIN_TAB_TOGGLES, translated via one small map inside
+  seedStartHiddenPrefs itself.
+
+  Verified in three layers before shipping: (1) a mocked-window
+  Playwright test driving the actual admin button through all three
+  states for both an opt-in and a deny-list tab, checking the exact
+  fields written on each click (20 checks, all passing); (2) a second
+  Playwright test exercising seedStartHiddenPrefs directly against the
+  real classic-script functions - fresh grant hides the tab and lists
+  it unchecked in Customize Tabs, a person's manual reveal survives a
+  simulated reload even with the admin flag unchanged, and the seeded-
+  tracking guard correctly withholds the "seen" mark until access is
+  actually granted (10 checks, all passing); (3) a real Admin-SDK round
+  trip against live Firestore confirming startHidden's nested-map merge
+  doesn't clobber sibling keys and coexists cleanly with the pre-
+  existing hidden/access fields on the same doc, cleaned up after.
+  Full existing regression suite (smoke, feature access, pools UI,
+  profile panel, tab reorder, What's New, Lift Logger pool wiring +
+  persistence + delete, slew decimal) re-run clean alongside it.
+
+  CACHE_VERSION v241->v242, app version v6.15->v6.16.
