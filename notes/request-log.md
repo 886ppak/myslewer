@@ -178,3 +178,19 @@ a working record, not app content.
   correctly at every step (typing, blur, dial readout, log entry,
   localStorage) while whole numbers and the 0/180 poles still render
   clean. Shipped to main (CACHE_VERSION v233, app v6.7).
+- Way to delete individual lift log entries with an X, in case some were
+  entered wrong.
+  **Status: done** — small X button added to each log card (top-right,
+  next to the weight), deletes just that entry from the array, clears
+  it if currently selected on the 2D/3D plots, and persists the
+  deletion to localStorage. Verified: delete removes the right entry
+  from both the DOM and storage, deleting down to zero shows the clean
+  empty state again, and the 2D radar's dot count tracks deletions.
+  Shipped to main (CACHE_VERSION v234, app v6.8).
+- Separately, brainstormed (not yet decided/built): shared invite/accept
+  lift-log pools between users, an "overseer" supervisor role that can
+  view logs across a pool without being a member, and a longer-term plan
+  for other tabs (e.g. Lift Plans - admin assigns gear/method details to
+  a user) needing a real backend + admin dashboard to push content to
+  users. Person is still deciding the backend path - no implementation
+  started.

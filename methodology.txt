@@ -9889,3 +9889,34 @@ cranes get their own subsections as they're built.
   re-run clean.
 
   CACHE_VERSION v232->v233, app version v6.6->v6.7.
+
+================================================================================
+77. Lift Logger: per-entry delete (X button)
+
+  Asked for a way to delete an individual logged reading in case one was
+  entered wrong - no delete path existed at all before, the log could
+  only ever grow. Added a small ✕ button to each log card's top-right
+  corner (next to the weight figure), matching the same plain-glyph
+  dismiss-button convention already used for the update banner
+  elsewhere in this file, rather than inventing a new icon/pattern.
+
+  New ceDeleteEntry(id) filters the entry out of ceEntries, clears
+  ceSelectedEntryId if the deleted entry was the one currently selected
+  on the 2D/3D plots (so a stale selection can't reference a since-
+  deleted entry), calls ceSaveEntries() so the deletion actually persists
+  to localStorage (not just the in-memory list - see section 75), then
+  re-renders. One delegated click listener on the static #ceLogList
+  container (not one listener per card - ceRenderLog() tears down and
+  rebuilds every card's innerHTML on every log/delete anyway, so a
+  per-card listener would just leak/re-attach needlessly).
+
+  Verified via Playwright: logged three entries, deleted the newest via
+  its own button and confirmed both the DOM and the underlying
+  localStorage-persisted array actually lost that one entry (not just
+  hidden), deleted a second, deleted the last remaining one down to a
+  clean empty state, and confirmed the 2D radar's dot count tracks the
+  deletions (0 dots once the log's empty) since it renders straight off
+  the same ceEntries array. Full existing regression suite (basic tab
+  flow + the slew-decimal fix from section 76) re-run clean.
+
+  CACHE_VERSION v233->v234, app version v6.7->v6.8.

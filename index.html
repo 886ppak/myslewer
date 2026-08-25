@@ -356,8 +356,11 @@
     .ce-log-card.dir-down{ border-left-color:var(--success); }
     .ce-log-card.latest{ border-color:var(--accent-gold); }
     .ce-log-card-top{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
-    .ce-log-card-name{ font-weight:700; font-size:0.95rem; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ce-log-card-name{ font-weight:700; font-size:0.95rem; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1 1 auto; min-width:0; }
+    .ce-log-card-top-right{ display:flex; align-items:center; gap:6px; flex:0 0 auto; }
     .ce-log-card-wt{ font-weight:700; font-size:0.95rem; color:var(--accent-gold); white-space:nowrap; }
+    .ce-log-delete{ background:none; border:none; padding:2px 5px; margin:0; color:var(--text-muted); font-size:0.9rem; line-height:1; cursor:pointer; border-radius:4px; }
+    .ce-log-delete:hover, .ce-log-delete:active{ color:var(--danger); }
     .ce-log-card-meta{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:3px; font-size:0.78rem; color:var(--text-muted); }
     .ce-log-card-dir.dir-up{ color:var(--accent-gold); }
     .ce-log-card-dir.dir-down{ color:var(--success); }
@@ -984,7 +987,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.7</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.8</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -10797,7 +10800,10 @@
         card.innerHTML = `
           <div class="ce-log-card-top">
             <span class="ce-log-card-name">${ceEscapeHtml(en.name)}</span>
-            <span class="ce-log-card-wt">${en.weight.toFixed(1)}T</span>
+            <span class="ce-log-card-top-right">
+              <span class="ce-log-card-wt">${en.weight.toFixed(1)}T</span>
+              <button type="button" class="ce-log-delete" data-id="${en.id}" aria-label="Delete this reading" title="Delete this reading">✕</button>
+            </span>
           </div>
           <div class="ce-log-card-meta">
             <span>${en.time}</span>
@@ -10809,6 +10815,22 @@
         ceLogList.appendChild(card);
       });
     }
+
+    function ceDeleteEntry(id){
+      ceEntries = ceEntries.filter(en => en.id !== id);
+      if(ceSelectedEntryId === id) ceSelectedEntryId = null;
+      ceSaveEntries();
+      ceRenderPeripherals();
+    }
+
+    // Delegated on the (static) list container rather than one listener
+    // per card, since ceRenderLog() rebuilds every card's innerHTML on
+    // every log/delete.
+    ceLogList.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.ce-log-delete');
+      if(!btn) return;
+      ceDeleteEntry(Number(btn.dataset.id));
+    });
 
     // ---------- 2D bird's-eye (SVG radar) ----------
     const ceBeRingsG = document.getElementById('ceBeRings');
