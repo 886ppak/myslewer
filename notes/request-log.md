@@ -388,3 +388,14 @@ a working record, not app content.
   checks), a live Firestore merge check, and the full existing
   regression suite, all clean. Shipped to main (CACHE_VERSION v241-
   >v242, app v6.15->v6.16). See methodology.txt 86.
+- "why in this list is 55t not in order like the rest of the figures?"
+  - screenshot of the Driving w/ Equipment tab, LTM 1650-8.1
+    Counterweight Currently Fitted dropdown showing 45/35/25/0/55 t.
+  **Status: done, shipped.** The list was built straight from the
+  underlying weight-table's row order, never actually sorted - looked
+  sorted most of the time by coincidence, but 55t's first appearance
+  in the source rows happened to be near the end. Added an explicit
+  descending sort (the sibling vehicle-mount list already had one).
+  Verified across all 24 crane/boom-config/direction/location
+  combinations with more than one weight option. Shipped to main
+  (CACHE_VERSION v242->v243, app v6.16->v6.17). See methodology.txt 87.

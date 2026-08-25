@@ -10643,3 +10643,35 @@ cranes get their own subsections as they're built.
   persistence + delete, slew decimal) re-run clean alongside it.
 
   CACHE_VERSION v241->v242, app version v6.15->v6.16.
+
+87. Driving w/ Equipment: Counterweight Currently Fitted dropdown wasn't sorted
+
+  "Why in this list is 55t not in order like the rest of the figures?"
+  - screenshot of LTM 1650-8.1, T-29.0 with winch 2/without winch 3,
+    boom to the front: 45.0/35.0/25.0/0.0/55.0 t.
+
+  resetDriveEqWeightSelect() (index.html, the Driving w/ Equipment
+  tab) built this list straight from
+  `[...new Set(dirData.rows.map(r => r.weight))]` - whatever order the
+  distinct weight values first appear in the underlying permissible-
+  radius table rows, never sorted. Coincidentally looks sorted most of
+  the time because the source rows mostly do run high to low, but 55t
+  only first appears in a row further down that table (for a different
+  boom angle/radius combination), so it landed at the end instead of
+  the front. The sibling vehicle-mount branch two lines below already
+  did this correctly (`Object.keys(cfg.vehicleWeights).map(Number)
+  .sort((a, b) => b - a)`) - this was the one path that never got the
+  same treatment.
+
+  Fix: add the same `.sort((a, b) => b - a)` to the superstructure-
+  mount branch. Purely presentational - buildSelect just populates
+  <option>s in whatever order it's given, and the actual weight lookup
+  (renderDriveEqOutput) reads the select's parsed VALUE, not its
+  position, so sorting the list has no effect on which row gets
+  matched. Verified with a fast in-page sweep (no UI clicking, direct
+  module-scope state + resetDriveEqWeightSelect() calls) across every
+  crane x boom-config x direction x mount-location combination that
+  has more than one weight option - 24 combinations, all correctly
+  descending after the fix.
+
+  CACHE_VERSION v242->v243, app version v6.16->v6.17.
