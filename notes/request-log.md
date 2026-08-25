@@ -257,3 +257,22 @@ a working record, not app content.
   test docs cleaned up after. Full UI test suite plus the entire existing
   regression suite clean. Stage 3 (admin dashboard) still not built, by
   design. Shipped to main (CACHE_VERSION v236, app v6.10).
+- "Go ahead" on Stage 3 (admin dashboard); "can I just give your service
+  account admin rights?"; confirmed the Datastore permission grant
+  should be permanent, not revoked after.
+  **Status: done.** New Admin Dashboard tab (gated on a new admins/{uid}
+  collection, not a userAccess flag - kept separate since it's the root
+  of trust everything else sits on): toggle any user's gated-tab access,
+  promote/demote pool member roles. Along the way found a real gap: the
+  service account couldn't actually write Firestore data at all (only
+  rules documents), confirmed by testing both raw REST and the real
+  official Admin SDK - both failed. Explained it and asked before doing
+  anything; person granted "Cloud Datastore User" to the service account
+  (permanent, not temporary). Verified with 16 real behavioural checks
+  across three throwaway accounts, all passed; verified cleanup was
+  actually complete (found and removed 3 orphaned test pool docs left
+  over from earlier stages, since pools have no delete mechanism until
+  now). Granted the real admin flag to the account requesting this once
+  everything checked out, so the dashboard is live and usable now, not
+  just built. Full UI test suite plus entire existing regression suite
+  clean. Shipped to main (CACHE_VERSION v237, app v6.11).

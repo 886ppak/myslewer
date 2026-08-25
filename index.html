@@ -152,6 +152,18 @@
     .profile-invite-status.err { color: var(--danger); }
     #profile-create-pool-btn { width: 100%; margin-top: 4px; }
 
+    /* Stage 3 - Admin Dashboard tab. */
+    .admin-user-row { background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; }
+    .admin-user-name { font-weight: 700; font-size: 0.9rem; color: var(--text-main); margin-bottom: 6px; }
+    .admin-user-toggles { display: flex; flex-wrap: wrap; gap: 12px; }
+    .admin-user-toggles label { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--text-muted); cursor: pointer; }
+    .admin-user-toggles input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+    .admin-pool-block { margin-bottom: 16px; }
+    .admin-pool-block-name { font-size: 0.85rem; font-weight: 700; color: var(--accent-gold); margin-bottom: 6px; }
+    .admin-member-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; }
+    .admin-member-row:last-child { border-bottom: none; }
+    .admin-member-row select { background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 4px 6px; font-size: 0.82rem; }
+
     .nav-tabs { display: flex; justify-content: flex-start; background-color: #181a1d; border-bottom: 2px solid var(--border-color); overflow-x: auto; scrollbar-width: none; }
     /* Left-aligned by default - the base/fallback case, and the only
        safe option whenever the tabs actually overflow their container
@@ -825,6 +837,26 @@
         }
       }
 
+      // Stage 3 - admin dashboard tab. Deliberately its OWN check against
+      // admins/{uid}, not another userAccess flag - admin status is the
+      // root of trust the rest of Stage 3 is built on (see
+      // firestore.rules' own comment on isAdmin()), so it gets its own
+      // single source of truth rather than being just one more flag an
+      // admin could (in principle) grant themselves through the same
+      // mechanism as everything else. Absence of a doc = not an admin,
+      // same not-found-is-the-default handling as loadTabRestrictions.
+      function loadAdminStatus(uid) {
+        getDoc(doc(db, 'admins', uid))
+          .then((snap) => {
+            window.__isAdmin = snap.exists() && snap.data().isAdmin === true;
+            if (window.__isAdmin) {
+              const btn = document.getElementById('admin-tab-btn');
+              if (btn) btn.style.display = '';
+            }
+          })
+          .catch((err) => { console.error('Could not load admin status', err); window.__isAdmin = false; });
+      }
+
       // Fetched once per sign-in, not on every tab switch - a person's
       // access doesn't change mid-session, and this way the persistent
       // Firestore cache only needs to be hit once per app load rather
@@ -979,6 +1011,40 @@
             .map((d) => ({ uid: d.id, displayName: d.data().displayName })));
       };
 
+      // Admin Dashboard (Stage 3). Every write here goes through
+      // firestore.rules' isAdmin() check - this client code doesn't
+      // enforce anything itself, it just calls the same setDoc a non-
+      // admin's identical call would also make (and get rejected for).
+      // User list: the directory (every signed-in user has an entry,
+      // see Stage 1) cross-referenced with each user's userAccess flags -
+      // one extra read per user, acceptable at this app's crew-sized
+      // scale, not worth a denormalized copy for.
+      window.__adminListUsers = function () {
+        return getDocs(collection(db, 'directory')).then((dirSnap) => {
+          const users = dirSnap.docs.map((d) => ({ uid: d.id, displayName: d.data().displayName }));
+          return Promise.all(users.map((u) =>
+            getDoc(doc(db, 'userAccess', u.uid)).then((snap) => {
+              const access = (snap.exists() && snap.data()) || {};
+              return Object.assign({}, u, {
+                serviceFillAccess: access.serviceFillAccess === true,
+                assemblyPlansAccess: access.assemblyPlansAccess === true,
+                cabEntryAccess: access.cabEntryAccess === true
+              });
+            })
+          ));
+        });
+      };
+
+      window.__adminSetUserAccess = function (uid, flag, value) {
+        const fields = {};
+        fields[flag] = value;
+        return setDoc(doc(db, 'userAccess', uid), fields, { merge: true });
+      };
+
+      window.__adminSetMemberRole = function (poolId, uid, role) {
+        return setDoc(doc(db, 'pools', poolId, 'members', uid), { role: role }, { merge: true });
+      };
+
       function loadProfile(user) {
         window.__profileEmail = user.email || '';
         getDoc(doc(db, 'directory', user.uid))
@@ -999,6 +1065,7 @@
           gateEl.style.display = 'none';
           loadTabRestrictions(user.uid);
           loadProfile(user);
+          loadAdminStatus(user.uid);
           return;
         }
         // Confirmed signed-out (not just "still checking") - only now is
@@ -1165,7 +1232,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.10</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.11</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -1262,6 +1329,7 @@
     <button class="tab-btn" id="servicefill-tab-btn" data-tabkey="servicefill" onclick="switchTab('servicefill-tab', event)" style="display:none;">Service Fill</button>
     <button class="tab-btn" id="assembly-tab-btn" data-tabkey="assembly" onclick="switchTab('assembly-tab', event)" style="display:none;">Assembly Plans</button>
     <button class="tab-btn" id="cabentry-tab-btn" data-tabkey="cabentry" onclick="switchTab('cabentry-tab', event)" style="display:none;">Lift Logger</button>
+    <button class="tab-btn" id="admin-tab-btn" data-tabkey="admin" onclick="switchTab('admin-tab', event)" style="display:none;">Admin Dashboard</button>
   </nav>
 
   <div class="container">
@@ -2380,6 +2448,23 @@
       <div class="ce-be-info" id="ceBeInfo"><span class="ce-be-ph">Tap a plotted dot to see its reading.</span></div>
     </div>
 
+    <!-- ================= ADMIN DASHBOARD (admin only) ================= -->
+    <div id="admin-tab" class="tab-content">
+      <div class="card">
+        <div class="card-title">User Access</div>
+        <p class="disclaimer" style="margin-top:0;">Toggle which gated tabs each signed-in user can see. Nobody but you can see this list or these toggles.</p>
+        <div class="profile-empty-msg" id="adminUsersEmpty">Loading users…</div>
+        <div id="adminUsersList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Pool Roles</div>
+        <p class="disclaimer" style="margin-top:0;">Promote a member to overseer (can view a pool's lift log without needing to log lifts themselves) in any pool you belong to.</p>
+        <div class="profile-empty-msg" id="adminPoolsEmpty">You're not in any pool yet.</div>
+        <div id="adminPoolsList"></div>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -3181,6 +3266,7 @@
       }
       if (tabId === 'reeve-tab') initReeveTab();
       if (tabId === 'servicefill-tab') initServiceFillTab();
+      if (tabId === 'admin-tab') { adminRefreshUsers(); adminRefreshPools(); }
       // Re-checked on every visit, not just after the button runs - content
       // also gets cached one file at a time just by viewing it, so the
       // tick/cross needs to reflect that too, not only a full-download run.
@@ -9351,6 +9437,103 @@
         })
         .finally(() => { btn.disabled = false; });
     }
+
+    // Admin Dashboard (Stage 3) - refreshed fresh every time the tab is
+    // opened (see switchTab's own 'admin-tab' case), same one-shot-on-
+    // open reasoning as the Profile panel's pools/invites sections. Every
+    // toggle/select here just calls the matching window.__adminXxx hook -
+    // the actual authorization is entirely firestore.rules' isAdmin()
+    // check; this code has no enforcement power of its own, same as
+    // every other admin-only control already in this app.
+    const adminUsersEmpty = document.getElementById('adminUsersEmpty');
+    const adminUsersList = document.getElementById('adminUsersList');
+    const adminPoolsEmpty = document.getElementById('adminPoolsEmpty');
+    const adminPoolsList = document.getElementById('adminPoolsList');
+
+    const ADMIN_ACCESS_FLAGS = [
+      { flag: 'serviceFillAccess', label: 'Service Fill' },
+      { flag: 'assemblyPlansAccess', label: 'Assembly Plans' },
+      { flag: 'cabEntryAccess', label: 'Lift Logger' }
+    ];
+
+    function adminRefreshUsers() {
+      adminUsersList.innerHTML = '';
+      adminUsersEmpty.style.display = '';
+      adminUsersEmpty.textContent = 'Loading users…';
+      window.__adminListUsers()
+        .then((users) => {
+          adminUsersEmpty.style.display = users.length ? 'none' : '';
+          adminUsersEmpty.textContent = 'No signed-in users yet.';
+          adminUsersList.innerHTML = '';
+          users.forEach((u) => {
+            const row = document.createElement('div');
+            row.className = 'admin-user-row';
+            const toggles = ADMIN_ACCESS_FLAGS.map((f) => `
+              <label>
+                <input type="checkbox" data-uid="${u.uid}" data-flag="${f.flag}" ${u[f.flag] ? 'checked' : ''}>
+                ${f.label}
+              </label>`).join('');
+            row.innerHTML = `
+              <div class="admin-user-name">${ceEscapeHtml(u.displayName || '(unnamed)')}</div>
+              <div class="admin-user-toggles">${toggles}</div>`;
+            adminUsersList.appendChild(row);
+          });
+        })
+        .catch(() => { adminUsersEmpty.textContent = 'Could not load users.'; adminUsersEmpty.style.display = ''; });
+    }
+
+    adminUsersList.addEventListener('change', (ev) => {
+      const input = ev.target.closest('input[type="checkbox"][data-uid]');
+      if (!input) return;
+      input.disabled = true;
+      window.__adminSetUserAccess(input.dataset.uid, input.dataset.flag, input.checked)
+        .catch(() => { input.checked = !input.checked; })
+        .finally(() => { input.disabled = false; });
+    });
+
+    function adminRefreshPools() {
+      adminPoolsList.innerHTML = '';
+      adminPoolsEmpty.style.display = '';
+      adminPoolsEmpty.textContent = 'Loading pools…';
+      window.__poolsList()
+        .then((pools) => {
+          adminPoolsEmpty.style.display = pools.length ? 'none' : '';
+          adminPoolsEmpty.textContent = "You're not in any pool yet.";
+          adminPoolsList.innerHTML = '';
+          pools.forEach((pool) => {
+            const block = document.createElement('div');
+            block.className = 'admin-pool-block';
+            block.innerHTML = `<div class="admin-pool-block-name">${ceEscapeHtml(pool.poolName)}</div>`;
+            adminPoolsList.appendChild(block);
+            window.__poolsMembers(pool.poolId)
+              .then((members) => {
+                members.forEach((m) => {
+                  const row = document.createElement('div');
+                  row.className = 'admin-member-row';
+                  row.innerHTML = `
+                    <span>${ceEscapeHtml(m.displayName || '(unnamed)')}</span>
+                    <select data-pool="${pool.poolId}" data-uid="${m.uid}">
+                      <option value="member" ${m.role === 'member' ? 'selected' : ''}>Member</option>
+                      <option value="overseer" ${m.role === 'overseer' ? 'selected' : ''}>Overseer</option>
+                    </select>`;
+                  block.appendChild(row);
+                });
+              })
+              .catch(() => {});
+          });
+        })
+        .catch(() => { adminPoolsEmpty.textContent = 'Could not load pools.'; adminPoolsEmpty.style.display = ''; });
+    }
+
+    adminPoolsList.addEventListener('change', (ev) => {
+      const select = ev.target.closest('select[data-pool]');
+      if (!select) return;
+      const previous = select.value === 'member' ? 'overseer' : 'member';
+      select.disabled = true;
+      window.__adminSetMemberRole(select.dataset.pool, select.dataset.uid, select.value)
+        .catch(() => { select.value = previous; })
+        .finally(() => { select.disabled = false; });
+    });
 
     // Personal "declutter" tab menu - purely a per-device display
     // preference, stored in localStorage only, never Firestore. Separate

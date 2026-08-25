@@ -10162,3 +10162,107 @@ cranes get their own subsections as they're built.
   suite both clean, zero console/page errors throughout.
 
   CACHE_VERSION v235->v236, app version v6.9->v6.10.
+
+================================================================================
+81. Shared lift-log pools - Stage 3 (Admin Dashboard) + a real gap found
+    and fixed in how the service account actually works
+
+  "Go ahead" on Stage 3 - the last piece from the original design pass
+  (methodology.txt 78): user-access toggles and pool-role assignment,
+  in a new gated Admin Dashboard tab, same visibility pattern as Lift
+  Logger except gated on a NEW admins/{uid} collection rather than
+  another userAccess flag - deliberate, since admin status is the root
+  of trust everything else in Stage 3 sits on top of, and shouldn't be
+  just one more flag another admin could toggle through the same
+  mechanism as everything else.
+
+  Rules: isAdmin() helper (checks admins/{request.auth.uid}.isAdmin ==
+  true); admins/{uid} itself stays get-your-own-only, list/write always
+  false from the client - granting admin status was ALWAYS meant to stay
+  a manual, out-of-band action (see section 78's own reasoning), and
+  this round's real discovery (below) ended up making that even more
+  true than intended. userAccess/{uid} extended: admin may now get/list
+  any doc and write any doc's flags, own-doc get unchanged. pools/
+  {poolId}/members/{uid} extended: admin may update ONLY the role field,
+  and only on a pool they're already an active member of themselves - no
+  new "see every pool" carve-out, matching the original v1 scope
+  decision. Deployed via the same create-then-release pipeline as every
+  prior rules change (syntax-validated clean before touching the live
+  release).
+
+  The real discovery: tried to seed a throwaway test account's
+  admins/{uid} doc using the service account, the same way every prior
+  grant this session worked - and it failed, with BOTH the raw-REST
+  approach used all session AND (when that failed) the actual official
+  firebase-admin npm SDK, which is supposed to bypass security rules by
+  design. Root cause, confirmed by installing and testing firebase-admin
+  directly rather than guessing: Firestore's rules-bypass for privileged
+  callers is governed by the caller's underlying Google Cloud IAM
+  permissions on the Datastore API itself, NOT by which client library
+  or auth flow is used, and NOT automatically granted just by holding
+  valid service-account credentials with the broad cloud-platform OAuth
+  scope. The service account had firebaserules.admin (added in section
+  79, covers RULES documents only) but nothing granting it actual
+  Firestore DATA read/write - a completely separate permission. This
+  means every earlier successful service-account write this session
+  (the original cabEntryAccess-style grants referenced in this file from
+  before this session's own start) either used a different, broader-
+  permissioned credential than the one available in THIS session, or
+  went through the Firebase console's Data tab by hand rather than a
+  script - genuinely can't be certain which from inside this session,
+  and said so plainly rather than asserting either explanation as fact.
+
+  Asked directly rather than guessing further or working around it:
+  explained the gap, and that fixing it meant granting the service
+  account "Cloud Datastore User" (roles/datastore.user) - deliberately
+  recommended over broader options like "Editor" or "Firebase Admin"
+  that would also cover this, same narrowest-role-that-actually-covers-
+  it discipline as firebaserules.admin. Person granted it and made clear
+  this one's meant to be a standing/permanent capability, not a revoke-
+  after-testing one like the rules-deploy question earlier - noted
+  plainly rather than assumed. IAM propagation took roughly a minute
+  after granting - confirmed via a background poll rather than guessing
+  a fixed wait and retrying blind.
+
+  Once live, ran 16 real behavioural checks with three throwaway
+  accounts (an admin, and two regular users) covering every path this
+  time actually reachable: seeding the admin doc via the now-working
+  service account (the literal real grant mechanism), a non-admin denied
+  writing even their own userAccess doc (write is now fully admin-gated,
+  own-doc GET is the only thing that stayed unchanged), the admin
+  writing another user's flags and listing the whole collection, a non-
+  admin blocked from listing or reading someone else's doc, the admin
+  promoting a real pool member to overseer (role-only update), a non-
+  admin blocked from changing anyone's role including their own, the
+  admin blocked from sneaking a non-role field change past the same
+  update, and - the scoping check that matters most - the admin blocked
+  from touching role in a DIFFERENT pool they aren't themselves a member
+  of. All 16 passed. Verified cleanup was actually complete this time
+  (not just assumed) by querying the admins/userAccess collections
+  directly afterward - found and removed three orphaned test pool docs
+  left over from earlier testing sessions (pools have no client-side
+  delete mechanism at all, by design, so these could never have been
+  cleaned up before gaining this same Datastore permission) while
+  confirming two pre-existing, unrelated userAccess docs from before
+  this session were untouched and left alone rather than second-guessed.
+
+  UI: new Admin Dashboard tab, two cards - "User Access" (every
+  directory user, a checkbox per gated flag, wired straight to
+  window.__adminSetUserAccess) and "Pool Roles" (every pool the admin
+  belongs to, a Member/Overseer <select> per member, wired to
+  window.__adminSetMemberRole) - reusing window.__poolsList/
+  __poolsMembers from Stage 2 rather than duplicating that fetch logic.
+  Refreshed fresh every time the tab opens (switchTab's own per-tab-id
+  hook, same pattern already used for reeve-tab/servicefill-tab), not
+  onSnapshot-live. A failed toggle/role-change reverts its own control
+  back to the prior value rather than leaving the UI showing a state
+  that didn't actually get saved - verified directly via a stubbed
+  rejected-promise test, not just the success path. Granted the real
+  admin flag to the account requesting all of this once everything was
+  verified, so the tab is actually live and usable, not just built.
+
+  Full new admin-dashboard UI test suite plus the entire existing
+  regression suite (Lift Logger, Profile panel, pools/invites) re-run
+  clean, zero console/page errors throughout.
+
+  CACHE_VERSION v236->v237, app version v6.10->v6.11.
