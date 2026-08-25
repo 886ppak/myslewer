@@ -10425,3 +10425,65 @@ cranes get their own subsections as they're built.
   open.
 
   CACHE_VERSION v238->v239, app version v6.12->v6.13.
+
+================================================================================
+84. Admin Dashboard: backfilled missing users, extended toggles to every
+    tab, not just the three opt-in ones
+
+  Two follow-ups on the just-shipped dashboard. First: "I still can't
+  see other users... with or without user name." Checked the real data
+  directly rather than guessing - the userEmails backfill mechanism
+  (section 82) only writes a doc on someone's NEXT sign-in, and 7 of the
+  8 real signed-in accounts on this project hadn't reopened the app
+  since that shipped, so only the admin's own doc existed yet. Not a
+  bug in the query (already proven correct against real rules) - a real
+  data gap. Fixed by running a one-off backfill: `auth.listUsers()`
+  (Admin SDK, real ground truth of every Firebase Auth account that's
+  ever signed in) cross-checked against the existing userEmails
+  collection, created a doc for each of the 7 missing. All 8 real users
+  show up in the dropdown immediately now, no need to wait for anyone
+  to happen to reopen the app first.
+
+  Second: "the options to be able to turn on/off any tab... not just
+  Service Fill, Lift Logger... all of them." The dashboard only ever
+  covered the three opt-in tabs (userAccess boolean flags); everything
+  else (Reeving Plans, CWT Combinations, Load Chart Finder, Crane
+  Positioning, Driving w/ Equipment, Hook Block Weights, Chain
+  Shortening, Rope Retentioning) uses the OPPOSITE mechanism underneath
+  - visible by default, a `hidden.{key}===true` entry in the SAME
+  userAccess doc turns one off (the deny-list model this app's always
+  used for its default tabs, see the gate's own TAB_RESTRICTION_TARGETS).
+  Extended ADMIN_TAB_TOGGLES to all 11 top-level tabs (the 8 deny-list
+  ones plus the original 3 opt-in ones - deliberately NOT the four cad_*/
+  loadchart_* sub-tab keys or the per-crane-model hidden.crane_XXXX
+  flags, which are a finer-grained restriction this dropdown was never
+  meant to cover), each one rendered as a single "is this tab visible"
+  checkbox regardless of which of the two mechanisms it actually uses
+  underneath - inverted at render/write time for the deny-list half so
+  an admin never has to think about which shape a given tab happens to
+  be. New window.__adminSetTabHidden(uid, key, hiddenValue) writes
+  `{hidden: {[key]: hiddenValue}}` via setDoc merge:true - no new
+  firestore.rules needed, `allow write: if isAdmin()` on userAccess
+  already covers arbitrary fields including this nested one, and the
+  Stage 3 rules battery already proved that authorization case.
+
+  Didn't just assume Firestore's nested-merge behaviour from memory
+  given this touches live user data - verified directly first: set
+  hidden.reeve, then ALSO set hidden.chain, confirmed reeve survived;
+  then un-hid reeve, confirmed chain survived. Merge is genuinely
+  recursive for nested map fields, not a shallow overwrite - confirmed,
+  not assumed, before relying on it.
+
+  UI: same one-dropdown-plus-shared-toggle-row shape as section 82,
+  just eleven checkboxes instead of three. Verified via an extended
+  Playwright test: all 11 render, an opt-in tab and a deny-list tab both
+  show the correct starting checked state (including one deliberately
+  pre-hidden tab starting unchecked), toggling an opt-in tab calls
+  __adminSetUserAccess, toggling a deny-list tab calls
+  __adminSetTabHidden with the INVERTED value (unchecking sends
+  hiddenValue=true), re-showing an already-hidden tab sends
+  hiddenValue=false, and switching users re-renders the whole set
+  correctly for whoever's newly selected. Full existing regression
+  suite re-run clean alongside it.
+
+  CACHE_VERSION v239->v240, app version v6.13->v6.14.

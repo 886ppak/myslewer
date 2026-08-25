@@ -1038,7 +1038,8 @@
               return Object.assign({}, u, {
                 serviceFillAccess: access.serviceFillAccess === true,
                 assemblyPlansAccess: access.assemblyPlansAccess === true,
-                cabEntryAccess: access.cabEntryAccess === true
+                cabEntryAccess: access.cabEntryAccess === true,
+                hidden: access.hidden || {}
               });
             })
           ));
@@ -1049,6 +1050,19 @@
         const fields = {};
         fields[flag] = value;
         return setDoc(doc(db, 'userAccess', uid), fields, { merge: true });
+      };
+
+      // Deny-list tabs (the ones visible by default - Reeving Plans, CWT
+      // Combinations, etc) work opposite to the three opt-in flags above:
+      // hidden.{key} === true means the tab is HIDDEN, not granted. This
+      // writes into that same nested map rather than a top-level field -
+      // {merge:true} with a plain nested object merges recursively for
+      // Firestore map fields, so this only ever touches this one key,
+      // never wipes any OTHER tab this person already has hidden.
+      window.__adminSetTabHidden = function (uid, tabKey, hiddenValue) {
+        const hidden = {};
+        hidden[tabKey] = hiddenValue;
+        return setDoc(doc(db, 'userAccess', uid), { hidden: hidden }, { merge: true });
       };
 
       window.__adminSetMemberRole = function (poolId, uid, role) {
@@ -1303,7 +1317,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.13</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.14</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -9531,11 +9545,37 @@
     const adminPoolsEmpty = document.getElementById('adminPoolsEmpty');
     const adminPoolsList = document.getElementById('adminPoolsList');
 
-    const ADMIN_ACCESS_FLAGS = [
-      { flag: 'serviceFillAccess', label: 'Service Fill' },
-      { flag: 'assemblyPlansAccess', label: 'Assembly Plans' },
-      { flag: 'cabEntryAccess', label: 'Lift Logger' }
+    // Every top-level tab, not just the three that happen to be opt-in.
+    // Two different underlying shapes, unified into one "is this tab
+    // visible to them" checkbox each: 'optin' tabs (hidden by default in
+    // the HTML, start.style.display:none - Service Fill/Assembly Plans/
+    // Lift Logger) are a straight boolean flag on userAccess, checked
+    // meaning granted; 'denylist' tabs (visible by default - everything
+    // else) are the OPPOSITE underneath - hidden.{key}===true means
+    // HIDDEN - but the checkbox itself still just means "visible",
+    // inverted at render/write time so an admin never has to think about
+    // which of the two mechanisms a given tab happens to use. Keys match
+    // TAB_RESTRICTION_TARGETS in the gate's own module script exactly -
+    // top-level tabs only, not the four cad_*/loadchart_* sub-tab keys or
+    // the per-crane-model hidden.crane_XXXX flags, which are a separate,
+    // finer-grained restriction this dropdown isn't meant to cover.
+    const ADMIN_TAB_TOGGLES = [
+      { key: 'reeve', label: 'Reeving Plans', kind: 'denylist' },
+      { key: 'cwt', label: 'CWT Combinations', kind: 'denylist' },
+      { key: 'loadchart', label: 'Load Chart Finder', kind: 'denylist' },
+      { key: 'cad', label: 'Crane Positioning', kind: 'denylist' },
+      { key: 'driveeq', label: 'Driving with Equipment in Place', kind: 'denylist' },
+      { key: 'hook', label: 'Minimum Hook Block Weights', kind: 'denylist' },
+      { key: 'chain', label: 'Chain Shortening', kind: 'denylist' },
+      { key: 'rope', label: 'Rope Retentioning', kind: 'denylist' },
+      { key: 'serviceFillAccess', label: 'Service Fill', kind: 'optin' },
+      { key: 'assemblyPlansAccess', label: 'Assembly Plans', kind: 'optin' },
+      { key: 'cabEntryAccess', label: 'Lift Logger', kind: 'optin' }
     ];
+
+    function adminTabVisible(u, t) {
+      return t.kind === 'optin' ? u[t.key] === true : !(u.hidden && u.hidden[t.key] === true);
+    }
 
     // One dropdown rather than a card per user - a card each stopped
     // being workable once there was more than a handful of signed-in
@@ -9551,10 +9591,10 @@
     function adminRenderUserToggles(uid) {
       const u = adminUsersCache.find((x) => x.uid === uid);
       if (!u) { adminUserToggles.innerHTML = ''; return; }
-      adminUserToggles.innerHTML = ADMIN_ACCESS_FLAGS.map((f) => `
+      adminUserToggles.innerHTML = ADMIN_TAB_TOGGLES.map((t) => `
         <label>
-          <input type="checkbox" data-uid="${u.uid}" data-flag="${f.flag}" ${u[f.flag] ? 'checked' : ''}>
-          ${f.label}
+          <input type="checkbox" data-uid="${u.uid}" data-key="${t.key}" data-kind="${t.kind}" ${adminTabVisible(u, t) ? 'checked' : ''}>
+          ${t.label}
         </label>`).join('');
     }
 
@@ -9590,11 +9630,20 @@
     adminUserToggles.addEventListener('change', (ev) => {
       const input = ev.target.closest('input[type="checkbox"][data-uid]');
       if (!input) return;
+      const uid = input.dataset.uid, key = input.dataset.key, visible = input.checked;
       input.disabled = true;
-      window.__adminSetUserAccess(input.dataset.uid, input.dataset.flag, input.checked)
+      const write = input.dataset.kind === 'optin'
+        ? window.__adminSetUserAccess(uid, key, visible)
+        : window.__adminSetTabHidden(uid, key, !visible);
+      write
         .then(() => {
-          const u = adminUsersCache.find((x) => x.uid === input.dataset.uid);
-          if (u) u[input.dataset.flag] = input.checked;
+          const u = adminUsersCache.find((x) => x.uid === uid);
+          if (!u) return;
+          if (input.dataset.kind === 'optin') {
+            u[key] = visible;
+          } else {
+            u.hidden = Object.assign({}, u.hidden, { [key]: !visible });
+          }
         })
         .catch(() => { input.checked = !input.checked; })
         .finally(() => { input.disabled = false; });

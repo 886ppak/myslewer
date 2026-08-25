@@ -307,3 +307,21 @@ a working record, not app content.
   switchTab() uncaught. Full new wiring test plus the entire existing
   regression suite clean. Shipped to main (CACHE_VERSION v239, app
   v6.13).
+- "I still can't see other users be it with or without user name I
+  thought we were making so I could see there email address if they
+  hadn't set a user name"; "I would like the options to be able to turn
+  on/off any tab that we currently have per user not just ther service
+  fill lift logger I mean all of them is that possible?"
+  **Status: done.** Checked the real data rather than guessing why -
+  7 of 8 real signed-in accounts hadn't reopened the app since the
+  email-backfill feature shipped, so their userEmails doc didn't exist
+  yet. Ran a one-off backfill using the real list of every Firebase Auth
+  account that's ever signed in - all 8 now show up immediately, no
+  need to wait for anyone to happen to reopen the app. Also extended the
+  toggle set from 3 tabs to all 11 top-level tabs - the other 8 use the
+  opposite (deny-list/hidden-by-flag) mechanism under the hood, unified
+  into the same single "is this tab visible" checkbox either way.
+  Verified the underlying nested-field Firestore merge behaviour
+  directly (not assumed) before relying on it for live data. Full UI
+  test plus entire existing regression suite clean. Shipped to main
+  (CACHE_VERSION v240, app v6.14).
