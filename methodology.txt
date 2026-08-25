@@ -10266,3 +10266,66 @@ cranes get their own subsections as they're built.
   clean, zero console/page errors throughout.
 
   CACHE_VERSION v236->v237, app version v6.10->v6.11.
+
+================================================================================
+82. Admin Dashboard revision: dropdown instead of a card per user, email
+    fallback before a name is set
+
+  Real-device feedback on the freshly-shipped Admin Dashboard (section
+  81), sent mid-turn while the next piece of work was already in
+  progress: a card per user doesn't scale - a crew of any real size
+  turns the User Access section into a wall of repeated checkbox rows.
+  Also surfaced a genuine gap while describing the fix, not just a
+  layout complaint: someone who's signed in but hasn't opened the
+  Profile panel to set a display name yet wouldn't appear in the
+  dashboard's user list AT ALL, since that list was built entirely from
+  the `directory` collection (Stage 1), and a directory doc only gets
+  created once a name is actually saved. An admin needs to be able to
+  grant a brand new person access the moment they first sign in, not
+  after they've gotten around to naming themselves.
+
+  Fixed the gap first, since the layout fix depends on it: new
+  `userEmails/{uid}` collection, deliberately separate from the public
+  `directory` doc rather than adding an email field there - email is
+  more sensitive than a display name, and directory is the one
+  collection any signed-in user can already list/get in full (Stage 1's
+  own deliberate exception), so folding email in would have leaked
+  everyone's email to everyone, not just the admin. userEmails stays
+  admin-only listable; a user can only ever get their own; write is
+  `create`-only (no update), and the value must match their own real
+  request.auth.token.email - not something they can set to an arbitrary
+  string. Every signed-in user gets one written automatically (client
+  checks it doesn't already exist first, then writes it - avoids a
+  noisy failed write attempt on every subsequent sign-in, since the
+  create-only rule would reject a repeat). This is now the authoritative
+  "every signed-in user" source for the dashboard; directory is overlaid
+  on top of it for a display name where one exists, falling back to
+  email in the dropdown's label when it doesn't.
+
+  Verified via the same real-throwaway-account discipline as every
+  other rules change this session: 9 behavioural checks - a user
+  creating their own doc with their real token email (allowed), trying
+  to write into someone ELSE's doc (blocked), trying to write a FAKE
+  email not matching their own token (blocked), trying to re-write their
+  own already-created doc (blocked - create-only, by design), a non-
+  admin blocked from listing the whole collection or reading anyone
+  else's doc, and an admin able to both get any single doc and list the
+  whole collection. All 9 passed, throwaway accounts and docs cleaned up
+  after.
+
+  UI: User Access replaced the per-user-card list with a single <select>
+  (labelled by display name, or email until one's set) plus one shared
+  toggle row for whichever user is currently picked - reusing the exact
+  same three checkboxes and window.__adminSetUserAccess call as before,
+  just rendered for one person at a time instead of everyone at once.
+  Picking a different user re-renders the toggles from a locally cached
+  list rather than re-fetching - the list was already pulled for the
+  dropdown itself. A toggle flip also updates that cached copy so
+  switching users and back doesn't show stale state. Pool Roles was
+  untouched - it was never the part that didn't scale.
+
+  Full new dropdown-based UI test (including the unnamed-user-falls-
+  back-to-email case specifically) plus the entire existing regression
+  suite re-run clean, zero console/page errors.
+
+  CACHE_VERSION v237->v238, app version v6.11->v6.12.

@@ -67,6 +67,28 @@ service cloud.firestore {
       allow write: if request.auth != null && isAdmin();
     }
 
+    // Admin-only email lookup - separate from the public displayName
+    // directory below on purpose. Every signed-in user gets one of these
+    // written automatically (client writes its own, once, at sign-in -
+    // see index.html), regardless of whether they've ever set a display
+    // name, so the Admin Dashboard's user list can show and manage
+    // someone from the moment they first sign in, not just once they've
+    // gotten around to naming themselves. Deliberately NOT folded into
+    // the public directory doc - email is more sensitive than a display
+    // name, so it only ever goes to an admin, never to other users the
+    // way a name does. `create`-only (no update) since the value is
+    // always the account's own real token email, so there's nothing to
+    // legitimately change it to later.
+    match /userEmails/{uid} {
+      allow get: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow list: if request.auth != null && isAdmin();
+      allow create: if request.auth != null && request.auth.uid == uid
+                     && request.auth.token.email != null
+                     && request.resource.data.keys().hasOnly(['email'])
+                     && request.resource.data.email == request.auth.token.email.lower();
+      allow update, delete: if false;
+    }
+
     // Public-within-the-app directory of display names, for the shared
     // lift-log pool feature (invite someone by name instead of needing
     // their exact email). Deliberately the one collection any signed-in

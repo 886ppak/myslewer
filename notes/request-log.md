@@ -276,3 +276,18 @@ a working record, not app content.
   everything checked out, so the dashboard is live and usable now, not
   just built. Full UI test suite plus entire existing regression suite
   clean. Shipped to main (CACHE_VERSION v237, app v6.11).
+- Real-device feedback on the just-shipped Admin Dashboard: a card per
+  user takes up too much space, want a dropdown instead with every
+  gated tab toggleable per user; and for users who haven't set a
+  display name yet, list them by email until they have.
+  **Status: done.** Replaced the per-user-card list with one dropdown +
+  a shared toggle row for whichever user's picked. Also fixed a real gap
+  the email-fallback request surfaced: an unnamed user wasn't in the
+  list AT ALL before (it only read the directory collection, which only
+  gets an entry once someone sets a name) - added a new admin-only
+  userEmails collection, written automatically for every signed-in user
+  regardless of naming status, so an admin can grant access from someone's
+  very first sign-in. Verified with 9 real behavioural checks (own-doc
+  write allowed, cross-user write blocked, fake-email blocked, re-write
+  blocked, admin-only listing enforced). Full UI + existing regression
+  suite clean. Shipped to main (CACHE_VERSION v238, app v6.12).
