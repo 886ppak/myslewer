@@ -984,7 +984,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.6</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.7</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -10581,9 +10581,18 @@
 
     function ceClampSlew(n){ return Math.min(Math.max(n, 0), 180); }
 
+    // Rounds to the nearest 0.1° (kills float noise like 7.6999999999)
+    // without crushing a real decimal reading like 7.7 down to a whole
+    // number - a whole-number reading still displays clean (no forced
+    // trailing ".0").
+    function ceFormatSlewNum(n){
+      const r = Math.round(n * 10) / 10;
+      return Number.isInteger(r) ? String(r) : r.toFixed(1);
+    }
+
     function ceFormatSlew(side, reading){
       if(reading === 180 || reading === 0) return String(reading); // both poles read as a plain number - side is physically moot at either (see ceSetSlewArc's own comment)
-      return side === 'lt' ? `&lt; ${Math.round(reading)}` : `${Math.round(reading)} &gt;`;
+      return side === 'lt' ? `&lt; ${ceFormatSlewNum(reading)}` : `${ceFormatSlewNum(reading)} &gt;`;
     }
 
     const ceFieldName = document.getElementById('ce-field-name');
@@ -10655,7 +10664,7 @@
     function ceSyncInputsFromState(){
       ceRadiusInput.value = ceRadius ? ceRadius.toFixed(1) : '';
       ceWeightInput.value = ceItemWeight ? ceItemWeight.toFixed(1) : '';
-      ceSlewInput.value = ceSlewReading ? String(Math.round(ceSlewReading)) : '';
+      ceSlewInput.value = ceSlewReading ? ceFormatSlewNum(ceSlewReading) : '';
       ceNameInput.value = ceItemName;
     }
 
@@ -10705,7 +10714,7 @@
       ceSlewReading = Number.isFinite(n) ? ceClampSlew(n) : 0;
       ceRenderPeripherals();
     });
-    ceSlewInput.addEventListener('blur', () => { ceSlewInput.value = ceSlewReading ? String(Math.round(ceSlewReading)) : ''; });
+    ceSlewInput.addEventListener('blur', () => { ceSlewInput.value = ceSlewReading ? ceFormatSlewNum(ceSlewReading) : ''; });
 
     ceNameInput.addEventListener('input', () => {
       ceItemName = ceNameInput.value;

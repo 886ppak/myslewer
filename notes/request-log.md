@@ -165,3 +165,16 @@ a working record, not app content.
   clearing storage still renders a clean empty state - plus full
   existing regression suite re-run clean. Shipped to main (CACHE_VERSION
   v232, app v6.6).
+- Slew degree resolution needs decimal places - typed 7.7, it rounded
+  up to 8, which is a different number/wrong reading.
+  **Status: done** — real bug, not cosmetic: the input field's own
+  re-sync (blur + render) and the display formatter (dial readout + log
+  entries) were all rounding to a whole number, even though the actual
+  stored/logged value was never touched (kept its decimal the whole
+  time). Added a shared ceFormatSlewNum() helper (rounds to nearest 0.1°
+  to kill float noise, without crushing a real decimal, and without
+  forcing a noisy trailing ".0" on whole-number readings) and swapped
+  all three rounding call sites onto it. Verified 7.7 now displays
+  correctly at every step (typing, blur, dial readout, log entry,
+  localStorage) while whole numbers and the 0/180 poles still render
+  clean. Shipped to main (CACHE_VERSION v233, app v6.7).

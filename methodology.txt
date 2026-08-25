@@ -9847,3 +9847,45 @@ cranes get their own subsections as they're built.
   console/page errors either run.
 
   CACHE_VERSION v231->v232, app version v6.5->v6.6.
+
+================================================================================
+76. Cab Entry / Lift Logger: fixed slew reading getting rounded to a
+    whole number
+
+  Reported directly: typed 7.7° slew, it got rounded up to 8 - a
+  different number, not a rounding-doesn't-matter cosmetic thing for a
+  bearing reading someone's relying on. Root cause: the underlying state
+  variable (ceSlewReading) and the actual stored/pushed log-entry data
+  were NEVER rounded - parseFloat on input already kept the decimal, and
+  the birds-eye position math already used the raw float. The rounding
+  only happened in display formatting, but it happened in three
+  independent places that all needed fixing together: the input field's
+  own re-sync on blur and on ceRender() (both did
+  String(Math.round(ceSlewReading))), and ceFormatSlew() (used for both
+  the dial's big centre readout and every log-entry line), which did the
+  same Math.round on the numeric part of "< 123" / "123 >".
+
+  Added one shared helper, ceFormatSlewNum(n) - rounds to the nearest
+  0.1° (kills float noise like 7.6999999999999 from repeated
+  parseFloat/toFixed round-trips) without crushing a real decimal like
+  7.7 to a whole number, and skips a forced trailing ".0" on an actual
+  whole-number reading (45 stays "45", not "45.0") so normal integer
+  readings don't get visually noisier for no reason. Swapped all three
+  Math.round call sites over to it. The 0/180 pole special-case in
+  ceFormatSlew (plain "180", no arrow, side is moot) was untouched -
+  still a clean whole number at the pole, decimal precision only matters
+  away from it anyway.
+
+  Verified via Playwright: typed 7.7, confirmed the input field itself
+  still reads "7.7" (not "8") both immediately and after blur (blur was
+  the exact moment it broke before - Log button click blurs the
+  previously-focused field before its own click handler runs); confirmed
+  the dial readout shows "< 7.7"; logged the entry and confirmed both
+  the rendered log-list line AND the actual localStorage-persisted
+  slewReading value are 7.7, not 8 (state/storage were never actually
+  wrong, but checked directly rather than assuming); confirmed a
+  whole-number reading (45) and both poles (0, 180) still render clean
+  with no decimal-noise regression. Full existing regression suite
+  re-run clean.
+
+  CACHE_VERSION v232->v233, app version v6.6->v6.7.
