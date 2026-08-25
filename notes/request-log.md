@@ -244,3 +244,16 @@ a working record, not app content.
   afterward. The directory collection - and so the Profile panel's Save
   Name - now genuinely works live, no manual console step needed after
   all.
+- "Go ahead with stage 2."
+  **Status: done.** Built pools, membership, invites (create a pool,
+  invite by name, accept/decline, leave), all inside the Profile panel
+  under two new sections (Pending Invites, Your Pools). Rules deployed
+  live the same way as before - created without touching the release
+  first (clean, no syntax errors), then released, then verified with 20
+  real behavioural checks across three throwaway accounts covering every
+  allow/deny path (invite/accept/decline, non-members blocked
+  everywhere, can't delete someone else's membership, can't re-accept an
+  already-accepted invite, etc.) - all 20 passed, throwaway accounts and
+  test docs cleaned up after. Full UI test suite plus the entire existing
+  regression suite clean. Stage 3 (admin dashboard) still not built, by
+  design. Shipped to main (CACHE_VERSION v236, app v6.10).

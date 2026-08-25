@@ -10071,3 +10071,94 @@ cranes get their own subsections as they're built.
   No CACHE_VERSION/app-version bump - no index.html/sw.js changes this
   round, purely a live Firestore rules deploy. The Profile panel's Save
   Name should now actually work end-to-end for real users.
+
+================================================================================
+80. Shared lift-log pools - Stage 2 (pools, membership, invites)
+
+  "Go ahead with stage 2" - the pools/invites layer originally scoped
+  alongside Stage 1 (methodology.txt 78), now actually built: creating a
+  pool, inviting someone by name (via the directory collection from
+  Stage 1), accepting/declining, leaving, all inside the same Profile
+  panel. Stage 3 (admin dashboard - role assignment, tab-access toggles)
+  still deliberately not built, same staged approach as before.
+
+  Schema: `pools/{poolId}` (name, createdBy, createdAt - nobody can ever
+  list this collection, only get a pool they're already an active member
+  of); `pools/{poolId}/members/{uid}` (role, status, a denormalized
+  displayName snapshot, joinedAt); `userPools/{uid}/pools/{poolId}` - a
+  fan-out index so "which pools am I in" is a cheap own-subcollection
+  read rather than scanning every pool for membership; `invites/{id}`
+  with a DELIBERATELY deterministic id (`poolId_invitedUid`, not an
+  auto-id) - this is what lets the membership-creation rule verify one
+  specific accepted invite by a direct key lookup rather than a query,
+  and as a side effect means at most one pending invite can ever exist
+  per pool+person pair for free (Firestore's `create` only ever matches
+  a not-yet-existing doc).
+
+  Deliberate simplification carried through both the rules and the
+  client code: every multi-document action (create a pool + your own
+  membership + your own fan-out doc; accept an invite + create
+  membership + create fan-out doc) is a chain of separate, sequentially
+  AWAITED writes, not one atomic batch. Considered relying on same-
+  transaction read-your-own-writes visibility instead (get()'ing a
+  document written earlier in the same batch), which Firestore does
+  support, but picked the simpler sequential-writes model deliberately -
+  easier to reason about and verify correct, at the cost of an unlikely
+  crash-mid-sequence leaving an orphaned doc, which costs nothing (same
+  "empty-pool cleanup is best-effort" tradeoff already accepted in the
+  original design pass).
+
+  Rules verification, same discipline as Stage 1's directory rules but a
+  much larger matrix given four interacting collections: created the new
+  ruleset via the Rules API WITHOUT touching the live release first
+  (catches any syntax error safely, confirmed clean), released it, then
+  ran 20 real behavioural checks with three throwaway Firebase accounts
+  (not simulated) covering every allow/deny path - pool creator sets up
+  their own membership, a bystander can't get/list a pool they're not in,
+  an active member can invite but a non-member can't, only the invited
+  person can accept/decline their own invite (and only the status field),
+  a re-accept of an already-accepted invite is blocked, membership can
+  only ever be created via being the creator or holding a genuinely
+  accepted invite, only your own membership doc is ever deletable by you,
+  leaving correctly drops list access. All 20 passed; both throwaway
+  accounts and every test doc were cleaned up after.
+
+  UI: Profile panel gained two new sections above Sign Out - "Pending
+  Invites" (accept/decline) and "Your Pools" (member list per pool,
+  in-place "Invite..." picker that filter-as-you-types the Stage 1
+  directory, "Leave", and a "Create a Pool" inline form). Deliberately
+  did NOT use window.prompt()/confirm()/alert() anywhere - checked first
+  that this app has never used a native browser dialog anywhere in its
+  own code, and matched that (an inline expand-and-status pattern
+  instead, same as the create-pool form and every save/error message
+  elsewhere in this file) rather than introducing the one exception.
+  Pools/invites are fetched fresh via a one-shot read every time the
+  Profile panel opens, not kept live-synced with onSnapshot listeners -
+  simpler, and this data only matters while the panel is actually open.
+
+  Testing found one real gap worth fixing before it became a false "bug"
+  later: openProfilePanel() now also kicks off the new pools/invites
+  fetches, which call through to auth.currentUser - genuinely null in
+  this sandbox (real Google/Firebase sign-in can't be driven here, same
+  standing limitation as every other auth-touching test this session),
+  so the EXISTING Stage 1 Playwright test started throwing once it tried
+  to open the panel without also stubbing the new hooks. Not a
+  production bug (in the real app the Profile button is only ever
+  reachable after onAuthStateChanged has already fired with a real user,
+  so auth.currentUser is always set by then) - fixed by updating that
+  older test to stub window.__poolsList/__poolsListInvites too, not by
+  adding defensive code the real app doesn't need. Separately caught a
+  genuine Playwright-only false negative in that same test: force-
+  clicking '#profile-backdrop' used to reliably land outside the (then
+  shorter) panel, but Stage 2's extra content made the panel tall enough
+  that the backdrop's own bounding-box CENTER now sits underneath it -
+  force-clicking there was actually landing ON the panel, not the
+  backdrop behind it. Fixed by clicking a point genuinely outside the
+  panel's footprint instead. Verified the panel's new overflow-y:auto
+  actually lets a person scroll down to Sign Out at a realistic phone
+  viewport (400x850) with several pools/invites populated. Full new UI
+  interaction suite (invite render, pool render, filter-as-you-type,
+  send invite, accept, leave, create) and the full existing regression
+  suite both clean, zero console/page errors throughout.
+
+  CACHE_VERSION v235->v236, app version v6.9->v6.10.

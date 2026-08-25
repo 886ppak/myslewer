@@ -117,7 +117,7 @@
     #profile-btn { position: absolute; left: 56px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 50%; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--accent-gold); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
     #profile-btn svg { width: 17px; height: 17px; }
     #profile-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 200; }
-    #profile-panel { display: none; position: fixed; top: 62px; right: 14px; left: 14px; max-width: 320px; margin: 0 auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; z-index: 201; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+    #profile-panel { display: none; position: fixed; top: 62px; right: 14px; left: 14px; max-width: 320px; margin: 0 auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; z-index: 201; box-shadow: 0 8px 24px rgba(0,0,0,0.5); max-height: 80vh; overflow-y: auto; }
     #profile-panel .card-title { margin-bottom: 4px; }
     #profile-email { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px; word-break: break-all; }
     #profile-name-hint { font-size: 0.78rem; color: var(--text-muted); margin-top: 6px; }
@@ -125,6 +125,32 @@
     #profile-save-status.ok { color: var(--success); }
     #profile-save-status.err { color: var(--danger); }
     #profile-signout-btn { width: 100%; margin-top: 18px; }
+
+    /* Stage 2 - shared lift-log pools, all inside the same Profile panel.
+       Section titles reuse .card-title's look at a smaller scale rather
+       than a whole new style. */
+    .profile-section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin: 20px 0 8px; padding-top: 14px; border-top: 1px solid var(--border-color); }
+    .profile-empty-msg { font-size: 0.82rem; color: var(--text-muted); }
+    .profile-invite-card, .profile-pool-card { background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; }
+    .profile-invite-top, .profile-pool-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .profile-invite-title, .profile-pool-name { font-weight: 700; font-size: 0.88rem; color: var(--text-main); }
+    .profile-invite-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+    .profile-invite-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .profile-invite-actions .toolbar-btn { flex: 1; }
+    .profile-pool-members { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
+    .profile-pool-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .profile-pool-actions .toolbar-btn { flex: 1; }
+    .profile-pool-leave { color: var(--danger); border-color: var(--danger); }
+    .profile-invite-picker { display: none; margin-top: 10px; }
+    .profile-invite-picker input { margin-bottom: 6px; }
+    .profile-invite-picker-list { max-height: 140px; overflow-y: auto; }
+    .profile-invite-picker-row { padding: 7px 8px; font-size: 0.85rem; cursor: pointer; border-radius: 4px; }
+    .profile-invite-picker-row:hover, .profile-invite-picker-row:active { background: var(--card-bg); }
+    .profile-invite-picker-empty { font-size: 0.8rem; color: var(--text-muted); padding: 6px 8px; }
+    .profile-invite-status { font-size: 0.78rem; margin-top: 6px; }
+    .profile-invite-status.ok { color: var(--success); }
+    .profile-invite-status.err { color: var(--danger); }
+    #profile-create-pool-btn { width: 100%; margin-top: 4px; }
 
     .nav-tabs { display: flex; justify-content: flex-start; background-color: #181a1d; border-bottom: 2px solid var(--border-color); overflow-x: auto; scrollbar-width: none; }
     /* Left-aligned by default - the base/fallback case, and the only
@@ -508,7 +534,8 @@
       sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, signOut
     } from './vendor/firebase/firebase-auth.js';
     import {
-      initializeFirestore, persistentLocalCache, doc, getDoc, setDoc
+      initializeFirestore, persistentLocalCache, doc, getDoc, setDoc,
+      collection, getDocs, deleteDoc, query, where
     } from './vendor/firebase/firebase-firestore.js';
 
     // Real myslewer-ed06f project config. This object is NOT a secret -
@@ -854,6 +881,104 @@
         return signOut(auth);
       };
 
+      // Shared lift-log pools (Stage 2). Every multi-step action here is
+      // deliberately a chain of separate, sequentially-AWAITED writes
+      // rather than one atomic batch - see firestore.rules' own comment
+      // on /pools/{poolId} for why: it avoids leaning on same-transaction
+      // read-your-own-writes visibility, at the cost of a crash mid-
+      // sequence being able to leave an orphaned doc behind (accepted as
+      // low-stakes, matching the already-accepted "pool cleanup is best-
+      // effort" tradeoff from the original design discussion).
+      window.__poolsCreate = function (name) {
+        const trimmed = (name || '').trim();
+        if (!trimmed) return Promise.reject(new Error('empty'));
+        const uid = auth.currentUser.uid;
+        const poolRef = doc(collection(db, 'pools'));
+        const poolId = poolRef.id;
+        const now = Date.now();
+        return setDoc(poolRef, { createdBy: uid, name: trimmed, createdAt: now })
+          .then(() => setDoc(doc(db, 'pools', poolId, 'members', uid), {
+            role: 'member', status: 'active',
+            displayName: window.__profileDisplayName || '', joinedAt: now
+          }))
+          .then(() => setDoc(doc(db, 'userPools', uid, 'pools', poolId), {
+            poolName: trimmed, role: 'member', status: 'active'
+          }))
+          .then(() => poolId);
+      };
+
+      window.__poolsList = function () {
+        const uid = auth.currentUser.uid;
+        return getDocs(collection(db, 'userPools', uid, 'pools'))
+          .then((snap) => snap.docs.map((d) => Object.assign({ poolId: d.id }, d.data())));
+      };
+
+      // Member displayNames here are a snapshot from whenever that person
+      // joined, not a live join against their current directory doc - if
+      // they rename later, this list shows the old name until they
+      // rejoin. Accepted v1 simplification, not worth an extra read per
+      // member to keep live for a small crew's pool member list.
+      window.__poolsMembers = function (poolId) {
+        return getDocs(collection(db, 'pools', poolId, 'members'))
+          .then((snap) => snap.docs.map((d) => Object.assign({ uid: d.id }, d.data())));
+      };
+
+      window.__poolsLeave = function (poolId) {
+        const uid = auth.currentUser.uid;
+        return deleteDoc(doc(db, 'pools', poolId, 'members', uid))
+          .then(() => deleteDoc(doc(db, 'userPools', uid, 'pools', poolId)));
+      };
+
+      window.__poolsInvite = function (poolId, poolName, invitedUid) {
+        const uid = auth.currentUser.uid;
+        return setDoc(doc(db, 'invites', poolId + '_' + invitedUid), {
+          poolId: poolId, poolName: poolName, invitedUid: invitedUid,
+          invitedByUid: uid, invitedByName: window.__profileDisplayName || '',
+          status: 'pending', createdAt: Date.now()
+        });
+      };
+
+      // Filtered to pending client-side rather than a compound
+      // (invitedUid==, status==) query - avoids any doubt about whether
+      // that needs a composite index, and the result set (one person's
+      // own invites) is always small.
+      window.__poolsListInvites = function () {
+        const uid = auth.currentUser.uid;
+        return getDocs(query(collection(db, 'invites'), where('invitedUid', '==', uid)))
+          .then((snap) => snap.docs
+            .map((d) => Object.assign({ id: d.id }, d.data()))
+            .filter((inv) => inv.status === 'pending'));
+      };
+
+      window.__poolsAcceptInvite = function (invite) {
+        const uid = auth.currentUser.uid;
+        const now = Date.now();
+        return setDoc(doc(db, 'invites', invite.id), { status: 'accepted' }, { merge: true })
+          .then(() => setDoc(doc(db, 'pools', invite.poolId, 'members', uid), {
+            role: 'member', status: 'active',
+            displayName: window.__profileDisplayName || '', joinedAt: now
+          }))
+          .then(() => setDoc(doc(db, 'userPools', uid, 'pools', invite.poolId), {
+            poolName: invite.poolName, role: 'member', status: 'active'
+          }));
+      };
+
+      window.__poolsDeclineInvite = function (invite) {
+        return setDoc(doc(db, 'invites', invite.id), { status: 'declined' }, { merge: true });
+      };
+
+      // Whole-directory fetch rather than a server-side prefix search -
+      // Firestore doesn't do substring matching natively anyway, and this
+      // app's directory is small (one small crew), so client-side filter-
+      // as-you-type on the full list is simpler and fine at this scale.
+      window.__directoryList = function () {
+        const uid = auth.currentUser.uid;
+        return getDocs(collection(db, 'directory'))
+          .then((snap) => snap.docs
+            .filter((d) => d.id !== uid)
+            .map((d) => ({ uid: d.id, displayName: d.data().displayName })));
+      };
+
       function loadProfile(user) {
         window.__profileEmail = user.email || '';
         getDoc(doc(db, 'directory', user.uid))
@@ -1040,7 +1165,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.9</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.10</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -1082,6 +1207,21 @@
     <div id="profile-name-hint">Shown to others instead of your email - e.g. when sharing a lift log.</div>
     <button type="button" class="btn" id="profile-save-btn" onclick="profileSaveName()">Save Name</button>
     <div id="profile-save-status" style="display:none;"></div>
+
+    <div class="profile-section-title">Pending Invites</div>
+    <div class="profile-empty-msg" id="profile-invites-empty">No pending invites.</div>
+    <div id="profile-invites-list"></div>
+
+    <div class="profile-section-title">Your Pools</div>
+    <div class="profile-empty-msg" id="profile-pools-empty">Not sharing a lift log with anyone yet.</div>
+    <div id="profile-pools-list"></div>
+    <button type="button" class="toolbar-btn" id="profile-create-pool-btn" onclick="profileToggleCreatePool()">Create a Pool</button>
+    <div id="profile-create-pool-form" style="display:none; margin-top:8px;">
+      <input type="text" id="profileNewPoolName" placeholder="Pool name (e.g. a crew or site)" autocomplete="off" maxlength="60">
+      <button type="button" class="btn" id="profile-create-pool-confirm" onclick="profileCreatePool()" style="margin-top:8px;">Create</button>
+      <div id="profile-create-pool-status" style="display:none;"></div>
+    </div>
+
     <button type="button" class="toolbar-btn" id="profile-signout-btn" onclick="profileSignOut()">Sign Out</button>
   </div>
 
@@ -8980,6 +9120,8 @@
       profileSaveStatus.style.display = 'none';
       document.getElementById('profile-panel').style.display = 'block';
       document.getElementById('profile-backdrop').style.display = 'block';
+      profileRefreshInvites();
+      profileRefreshPools();
     }
 
     function closeProfilePanel() {
@@ -9018,6 +9160,196 @@
     function profileSignOut() {
       closeProfilePanel();
       window.__profileSignOut();
+    }
+
+    // Stage 2 - shared lift-log pools, all rendered inside this same
+    // Profile panel. Re-fetched fresh every time the panel opens (see
+    // openProfilePanel above) rather than kept live-synced with
+    // onSnapshot listeners - this data only matters while the panel is
+    // actually open, so a plain one-shot fetch on open is simpler and
+    // cheaper than maintaining listeners for a rarely-open panel.
+    const profileInvitesEmpty = document.getElementById('profile-invites-empty');
+    const profileInvitesList = document.getElementById('profile-invites-list');
+    const profilePoolsEmpty = document.getElementById('profile-pools-empty');
+    const profilePoolsList = document.getElementById('profile-pools-list');
+
+    function profileRefreshInvites() {
+      profileInvitesList.innerHTML = '';
+      window.__poolsListInvites()
+        .then((invites) => {
+          profileInvitesList.innerHTML = '';
+          profileInvitesEmpty.style.display = invites.length ? 'none' : '';
+          invites.forEach((inv) => {
+            const card = document.createElement('div');
+            card.className = 'profile-invite-card';
+            card._invite = inv;
+            card.innerHTML = `
+              <div class="profile-invite-title">${ceEscapeHtml(inv.poolName)}</div>
+              <div class="profile-invite-sub">Invited by ${ceEscapeHtml(inv.invitedByName || 'someone')}</div>
+              <div class="profile-invite-actions">
+                <button type="button" class="toolbar-btn" data-action="accept">Accept</button>
+                <button type="button" class="toolbar-btn" data-action="decline">Decline</button>
+              </div>`;
+            profileInvitesList.appendChild(card);
+          });
+        })
+        .catch(() => { profileInvitesList.innerHTML = '<div class="profile-empty-msg">Could not load invites.</div>'; });
+    }
+
+    profileInvitesList.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('button[data-action]');
+      if (!btn) return;
+      const card = btn.closest('.profile-invite-card');
+      const invite = card._invite;
+      btn.disabled = true;
+      const action = btn.dataset.action === 'accept'
+        ? window.__poolsAcceptInvite(invite)
+        : window.__poolsDeclineInvite(invite);
+      action
+        .then(() => { profileRefreshInvites(); profileRefreshPools(); })
+        .catch(() => { btn.disabled = false; });
+    });
+
+    function profileRefreshPools() {
+      profilePoolsList.innerHTML = '';
+      window.__poolsList()
+        .then((pools) => {
+          profilePoolsList.innerHTML = '';
+          profilePoolsEmpty.style.display = pools.length ? 'none' : '';
+          pools.forEach((pool) => {
+            const card = document.createElement('div');
+            card.className = 'profile-pool-card';
+            card._pool = pool;
+            card.innerHTML = `
+              <div class="profile-pool-top">
+                <span class="profile-pool-name">${ceEscapeHtml(pool.poolName)}</span>
+                <button type="button" class="toolbar-btn profile-pool-leave" data-action="leave">Leave</button>
+              </div>
+              <div class="profile-pool-members">Loading members…</div>
+              <div class="profile-pool-actions">
+                <button type="button" class="toolbar-btn" data-action="invite-toggle">Invite…</button>
+              </div>
+              <div class="profile-invite-picker">
+                <input type="text" placeholder="Search name..." autocomplete="off">
+                <div class="profile-invite-picker-list"></div>
+                <div class="profile-invite-status" style="display:none;"></div>
+              </div>`;
+            profilePoolsList.appendChild(card);
+            window.__poolsMembers(pool.poolId)
+              .then((members) => {
+                const names = members.map((m) => m.displayName || '(unnamed)').join(', ');
+                card.querySelector('.profile-pool-members').textContent = names;
+              })
+              .catch(() => { card.querySelector('.profile-pool-members').textContent = ''; });
+          });
+        })
+        .catch(() => { profilePoolsList.innerHTML = '<div class="profile-empty-msg">Could not load pools.</div>'; });
+    }
+
+    // Fetched once per panel-open, shared across however many pool cards'
+    // invite pickers get opened in that same visit, rather than re-
+    // fetching the whole directory per pool.
+    let profileDirectoryCache = null;
+
+    function profileOpenInvitePicker(card) {
+      const listEl = card.querySelector('.profile-invite-picker-list');
+      listEl.innerHTML = '<div class="profile-invite-picker-empty">Loading…</div>';
+      const load = profileDirectoryCache ? Promise.resolve(profileDirectoryCache) : window.__directoryList();
+      load
+        .then((dir) => { profileDirectoryCache = dir; profileRenderInvitePickerList(card, ''); })
+        .catch(() => { listEl.innerHTML = '<div class="profile-invite-picker-empty">Could not load names.</div>'; });
+    }
+
+    function profileRenderInvitePickerList(card, filterText) {
+      const listEl = card.querySelector('.profile-invite-picker-list');
+      if (!profileDirectoryCache) return;
+      const q = filterText.trim().toLowerCase();
+      const matches = profileDirectoryCache.filter((u) => !q || (u.displayName || '').toLowerCase().includes(q));
+      listEl.innerHTML = '';
+      if (!matches.length) {
+        listEl.innerHTML = '<div class="profile-invite-picker-empty">No matching names.</div>';
+        return;
+      }
+      matches.forEach((u) => {
+        const row = document.createElement('div');
+        row.className = 'profile-invite-picker-row';
+        row.textContent = u.displayName || '(unnamed)';
+        row.dataset.uid = u.uid;
+        listEl.appendChild(row);
+      });
+    }
+
+    profilePoolsList.addEventListener('click', (ev) => {
+      const leaveBtn = ev.target.closest('button[data-action="leave"]');
+      if (leaveBtn) {
+        const card = leaveBtn.closest('.profile-pool-card');
+        leaveBtn.disabled = true;
+        window.__poolsLeave(card._pool.poolId)
+          .then(() => profileRefreshPools())
+          .catch(() => { leaveBtn.disabled = false; });
+        return;
+      }
+      const inviteToggleBtn = ev.target.closest('button[data-action="invite-toggle"]');
+      if (inviteToggleBtn) {
+        const card = inviteToggleBtn.closest('.profile-pool-card');
+        const picker = card.querySelector('.profile-invite-picker');
+        const opening = picker.style.display !== 'block';
+        picker.style.display = opening ? 'block' : 'none';
+        if (opening) profileOpenInvitePicker(card);
+        return;
+      }
+      const pickRow = ev.target.closest('.profile-invite-picker-row');
+      if (pickRow) {
+        const card = pickRow.closest('.profile-pool-card');
+        const statusEl = card.querySelector('.profile-invite-status');
+        statusEl.style.display = 'none';
+        window.__poolsInvite(card._pool.poolId, card._pool.poolName, pickRow.dataset.uid)
+          .then(() => {
+            statusEl.textContent = 'Invited ' + pickRow.textContent + '.';
+            statusEl.className = 'profile-invite-status ok';
+            statusEl.style.display = '';
+          })
+          .catch(() => {
+            statusEl.textContent = 'Could not send that invite - try again.';
+            statusEl.className = 'profile-invite-status err';
+            statusEl.style.display = '';
+          });
+      }
+    });
+
+    profilePoolsList.addEventListener('input', (ev) => {
+      const input = ev.target.closest('.profile-invite-picker input');
+      if (!input) return;
+      profileRenderInvitePickerList(input.closest('.profile-pool-card'), input.value);
+    });
+
+    function profileToggleCreatePool() {
+      const form = document.getElementById('profile-create-pool-form');
+      const opening = form.style.display !== 'block';
+      form.style.display = opening ? 'block' : 'none';
+      if (opening) document.getElementById('profileNewPoolName').focus();
+    }
+
+    function profileCreatePool() {
+      const input = document.getElementById('profileNewPoolName');
+      const statusEl = document.getElementById('profile-create-pool-status');
+      const trimmed = input.value.trim();
+      if (!trimmed) return;
+      const btn = document.getElementById('profile-create-pool-confirm');
+      btn.disabled = true;
+      statusEl.style.display = 'none';
+      window.__poolsCreate(trimmed)
+        .then(() => {
+          input.value = '';
+          document.getElementById('profile-create-pool-form').style.display = 'none';
+          profileRefreshPools();
+        })
+        .catch(() => {
+          statusEl.textContent = 'Could not create the pool - check your connection and try again.';
+          statusEl.className = 'profile-invite-status err';
+          statusEl.style.display = '';
+        })
+        .finally(() => { btn.disabled = false; });
     }
 
     // Personal "declutter" tab menu - purely a per-device display

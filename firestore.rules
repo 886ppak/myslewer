@@ -61,6 +61,99 @@ service cloud.firestore {
                     && request.resource.data.displayName.size() <= 40;
     }
 
+    // Shared lift-log pools. Nobody can ever list the `pools` collection
+    // itself - only see pools they're already an active member of, same
+    // no-browse discipline as googleAllowlist/userAccess above. Writes
+    // here are meant to be issued as separate, sequential client calls
+    // (create the pool, THEN create your own membership doc, THEN the
+    // fan-out doc below) rather than one atomic batch - a touch less
+    // atomic (a crash mid-sequence can leave an orphaned pool with no
+    // member), but far simpler to reason about and verify correct than
+    // relying on same-transaction read-your-own-writes visibility, and
+    // an orphan here costs nothing - same "empty-pool cleanup is best-
+    // effort, not instant" tradeoff already accepted for auto-delete.
+    match /pools/{poolId} {
+      allow get: if request.auth != null
+                  && exists(/databases/$(database)/documents/pools/$(poolId)/members/$(request.auth.uid));
+      allow create: if request.auth != null
+                     && request.resource.data.createdBy == request.auth.uid
+                     && request.resource.data.name is string
+                     && request.resource.data.name.size() > 0
+                     && request.resource.data.name.size() <= 60;
+      allow list, update, delete: if false;
+    }
+
+    // Pool membership. Only an active member of a pool can see who else
+    // is in it. A person may only ever write their OWN membership doc,
+    // and only in one of two specific shapes: setting it up as
+    // 'active'/'member' either (a) as the pool's own creator, in the
+    // sequential write immediately after creating the pool doc above, or
+    // (b) after accepting a specific invite addressed to them - the
+    // invites match below uses a deterministic poolId_uid document id
+    // specifically so this rule can confirm a real accepted invite
+    // exists via one direct-key lookup, not a query. No client-side
+    // role/status editing beyond creation - promoting someone to
+    // overseer is an admin action (Stage 3, not built yet); the only way
+    // status ever changes after that is the member deleting their own
+    // doc to leave.
+    match /pools/{poolId}/members/{uid} {
+      allow get: if request.auth != null
+                  && (request.auth.uid == uid
+                      || exists(/databases/$(database)/documents/pools/$(poolId)/members/$(request.auth.uid)));
+      allow list: if request.auth != null
+                   && exists(/databases/$(database)/documents/pools/$(poolId)/members/$(request.auth.uid));
+      allow create: if request.auth != null && request.auth.uid == uid
+                     && request.resource.data.role == 'member'
+                     && request.resource.data.status == 'active'
+                     && (
+                          get(/databases/$(database)/documents/pools/$(poolId)).data.createdBy == request.auth.uid
+                          || get(/databases/$(database)/documents/invites/$(poolId + '_' + uid)).data.status == 'accepted'
+                        );
+      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow update: if false;
+    }
+
+    // Per-user fan-out index ("which pools am I in"), so listing your
+    // own pools never has to scan every pools/* doc looking for
+    // membership - just a get/list on your own uid's own subcollection,
+    // same cheap shape as everything else in this file. Only ever
+    // created once an active membership doc for that exact pool genuinely
+    // exists (checked directly, not just asserted by the client).
+    match /userPools/{uid}/pools/{poolId} {
+      allow get, list: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+                     && get(/databases/$(database)/documents/pools/$(poolId)/members/$(uid)).data.status == 'active';
+      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow update: if false;
+    }
+
+    // Pool invites. Deterministic doc id (poolId_invitedUid) rather than
+    // an auto-id - lets the membership rule above verify one specific
+    // accepted invite by direct key rather than a query, and also means
+    // at most one pending invite can ever exist per pool+person pair (a
+    // second invite() call while one's already pending just fails
+    // outright rather than creating a duplicate - `create` in Firestore
+    // rules only ever matches when no document already exists at that
+    // id). Only the two people involved can ever read one; only an
+    // already-active member of the target pool can create one; only the
+    // invited person can accept/decline it, and only that one field.
+    match /invites/{inviteId} {
+      allow get, list: if request.auth != null
+                         && (resource.data.invitedUid == request.auth.uid
+                             || resource.data.invitedByUid == request.auth.uid);
+      allow create: if request.auth != null
+                     && inviteId == request.resource.data.poolId + '_' + request.resource.data.invitedUid
+                     && request.resource.data.invitedByUid == request.auth.uid
+                     && request.resource.data.status == 'pending'
+                     && get(/databases/$(database)/documents/pools/$(request.resource.data.poolId)/members/$(request.auth.uid)).data.status == 'active';
+      allow update: if request.auth != null
+                     && request.auth.uid == resource.data.invitedUid
+                     && resource.data.status == 'pending'
+                     && request.resource.data.status in ['accepted', 'declined']
+                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+      allow delete: if false;
+    }
+
     // Deny everything else outright - an explicit fallback rather than
     // relying on Firestore's own "no matching rule = denied" default, so
     // adding some unrelated collection later can't accidentally inherit
