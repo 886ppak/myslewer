@@ -8,6 +8,26 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Root of trust for everything admin-related below. Deliberately the
+    // ONE thing in this whole admin layer that stays out of the app
+    // entirely - granting admin status is still a manual Admin-SDK
+    // script action (same as every userAccess flag grant before this),
+    // never toggleable from inside the app by anyone, including another
+    // admin. That's on purpose: it means no admin can ever grant more
+    // admins (or themselves more power) purely through the client, no
+    // matter what else in this file gets built on top of isAdmin().
+    // Single admin for now by explicit choice - the collection supports
+    // more without any rule change if that's ever needed.
+    function isAdmin() {
+      return request.auth != null
+             && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+             && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isAdmin == true;
+    }
+    match /admins/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list, write: if false;
+    }
+
     // Google Sign-In allowlist. Keyed by the person's lowercased email,
     // not their uid - unlike Password/Email Link (where an admin-created
     // Auth account already exists, and so a uid already exists, before
@@ -35,9 +55,16 @@ service cloud.firestore {
     // Users. The `hidden` field is a flat map of short tab/sub-tab keys
     // to `true` for anything specifically hidden from that person -
     // see TAB_RESTRICTION_TARGETS in index.html for the exact key names.
+    // Own-doc read stays exactly as it always has. Added for Stage 3: an
+    // admin may get/list any user's doc (to build the dashboard's user
+    // list) and write any user's flags (to toggle them) - the SAME
+    // three booleans applyFeatureAccess() in index.html already reads
+    // (serviceFillAccess, assemblyPlansAccess, cabEntryAccess) plus the
+    // existing `hidden` map, nothing new added to what a flag can mean.
     match /userAccess/{uid} {
-      allow get: if request.auth != null && request.auth.uid == uid;
-      allow list, write: if false;
+      allow get: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow list: if request.auth != null && isAdmin();
+      allow write: if request.auth != null && isAdmin();
     }
 
     // Public-within-the-app directory of display names, for the shared
@@ -91,11 +118,14 @@ service cloud.firestore {
     // (b) after accepting a specific invite addressed to them - the
     // invites match below uses a deterministic poolId_uid document id
     // specifically so this rule can confirm a real accepted invite
-    // exists via one direct-key lookup, not a query. No client-side
-    // role/status editing beyond creation - promoting someone to
-    // overseer is an admin action (Stage 3, not built yet); the only way
-    // status ever changes after that is the member deleting their own
-    // doc to leave.
+    // exists via one direct-key lookup, not a query. The only other way
+    // this doc ever changes: an admin (Stage 3) may update ONLY the
+    // `role` field, to promote/demote member<->overseer - deliberately
+    // scoped to pools the admin can already see (still has to already be
+    // an active member of that pool themselves - no new "see every pool
+    // in the app" carve-out was added for this, matching the original
+    // design decision to keep that out of Stage 3's v1). Status only
+    // ever changes by the member deleting their own doc to leave.
     match /pools/{poolId}/members/{uid} {
       allow get: if request.auth != null
                   && (request.auth.uid == uid
@@ -110,7 +140,10 @@ service cloud.firestore {
                           || get(/databases/$(database)/documents/invites/$(poolId + '_' + uid)).data.status == 'accepted'
                         );
       allow delete: if request.auth != null && request.auth.uid == uid;
-      allow update: if false;
+      allow update: if isAdmin()
+                     && exists(/databases/$(database)/documents/pools/$(poolId)/members/$(request.auth.uid))
+                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+                     && request.resource.data.role in ['member', 'overseer'];
     }
 
     // Per-user fan-out index ("which pools am I in"), so listing your
