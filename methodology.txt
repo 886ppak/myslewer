@@ -8983,3 +8983,12 @@ cranes get their own subsections as they're built.
   the same way by hand (e.g. 2x35t = 14.22 + 19.53x2 = 53.28kg).
 
   CACHE_VERSION v222->v223, app version v5.27->v5.28.
+
+67. Fix LTM 1160 outrigger 3D model - beams now fully extended
+
+  Shadowed from main (see main's own methodology.txt for the full
+  investigation) - the LTM 1160 carrier GLB's outrigger beams weren't
+  rendering fully extended at max reach. Corrected model file swapped
+  in unchanged from main; no beta-specific auth/admin code involved.
+
+  CACHE_VERSION v51-beta149->v51-beta150.
