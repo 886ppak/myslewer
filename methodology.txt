@@ -10013,3 +10013,61 @@ cranes get their own subsections as they're built.
   previous rules change on this project.
 
   CACHE_VERSION v234->v235, app version v6.8->v6.9.
+
+================================================================================
+79. Deployed the directory rules live directly (Firebase Rules API), not
+    via console paste
+
+  Follow-up closing the gap section 78 left open. Asked directly whether
+  I could deploy the updated firestore.rules myself using the existing
+  myslewer-admin-tasks service account (the one already used for
+  userAccess flag grants via Firestore's own REST API). Checked first,
+  read-only, rather than assuming: a GET on
+  projects/{project}/releases/cloud.firestore came back 403
+  IAM_PERMISSION_DENIED on firebaserules.releases.get - that service
+  account had Firestore document access but nothing on the separate
+  Firebase Rules API (firebaserules.googleapis.com), which is what
+  actually controls rules deploys. Explained the gap and the two paths
+  (grant the narrow "Firebase Rules Admin" role vs. the manual console
+  paste from section 78) rather than either pushing through the
+  permission gap myself or silently falling back to the manual path -
+  this crosses into "affects a shared/production system, hard to
+  reverse if wrong" territory the same way a force-push would, so it
+  got the same explicit-confirmation treatment.
+
+  Person granted roles/firebaserules.admin to that service account via
+  Cloud Console IAM (deliberately the narrowest role that covers this -
+  not "Firebase Admin" or "Editor", which would hand over far more).
+  Re-ran the same read-only check first - now 200, confirmed the SA can
+  actually see the live release. Fetched the CURRENTLY-live ruleset
+  source before touching anything and diffed it against the repo's
+  firestore.rules-as-it-was-before-section-78 to make sure nothing had
+  been hand-edited in the console since I last saw it (it hadn't -
+  byte-identical to the pre-directory version). Only then deployed:
+  created a new ruleset via the Rules API (POST .../rulesets with the
+  updated source) and pointed the live cloud.firestore release at it
+  (PATCH .../releases/cloud.firestore). Re-fetched the now-live ruleset
+  content immediately after and diffed it against the repo's
+  firestore.rules again - byte-identical, confirming the deploy landed
+  exactly as intended, not just that the API calls returned 200.
+
+  Went further than a content diff for the actual verification, same
+  "test the real behaviour, not just that nothing crashed" standard as
+  the original rules rollout (methodology.txt 8690-8699): created two
+  real throwaway Firebase Auth accounts via the Identity Toolkit REST
+  API (no existing test accounts reused) and exercised every path in
+  the new rule directly over REST with their real ID tokens - writing
+  your own directory doc (200, allowed), writing the OTHER account's doc
+  (403, blocked), sneaking an extra field past the intended
+  displayName/updatedAt-only write (403, blocked), reading someone
+  else's doc by direct get (200, allowed - the deliberate exception this
+  collection is built around), listing the whole collection (200,
+  allowed, the other account's saved name genuinely came back in the
+  listing), and an entirely unauthenticated request (403, blocked). All
+  six matched the intended design exactly. Deleted both throwaway
+  accounts and their directory docs immediately after - nothing test-
+  related left behind in production.
+
+  No CACHE_VERSION/app-version bump - no index.html/sw.js changes this
+  round, purely a live Firestore rules deploy. The Profile panel's Save
+  Name should now actually work end-to-end for real users.

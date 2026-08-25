@@ -224,3 +224,23 @@ a working record, not app content.
   pasted into the Firebase console's Rules tab by the person themselves
   - no rules-deploy tooling exists in this project - before the
   directory collection actually starts working live.
+- Asked if I could deploy the rules myself using the existing service
+  account, since it already has access.
+  **Status: done.** Checked read-only first - the service account had
+  Firestore document access but no permission on the separate Firebase
+  Rules API (403 on a GET). Explained the gap and asked before doing
+  anything about it, since a rules mistake affects the whole app's
+  sign-in gate at once. Person granted the account the narrow "Firebase
+  Rules Admin" role via Cloud Console IAM. Re-checked (now 200), diffed
+  the currently-live rules against the repo first to make sure nothing
+  had changed out of band, then deployed the updated firestore.rules
+  directly via the Firebase Rules API and re-diffed the live result -
+  byte-identical to the repo. Verified the actual rule BEHAVIOUR, not
+  just that the deploy succeeded: two real throwaway Firebase accounts,
+  own-doc write allowed, cross-user write blocked, an extra smuggled-in
+  field blocked, cross-user name lookup allowed (by design), full-
+  collection listing allowed and correct, unauthenticated access
+  blocked - all six as intended, both throwaway accounts deleted
+  afterward. The directory collection - and so the Profile panel's Save
+  Name - now genuinely works live, no manual console step needed after
+  all.
