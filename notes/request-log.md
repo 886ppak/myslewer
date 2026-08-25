@@ -325,3 +325,21 @@ a working record, not app content.
   directly (not assumed) before relying on it for live data. Full UI
   test plus entire existing regression suite clean. Shipped to main
   (CACHE_VERSION v240, app v6.14).
+- "iv found one big problem the 3d model for the 160t crane outrigger
+  are not actually fully deployed they are actually at 50% for some
+  reason!" - spotted via the paint/ground-layout markings not lining up
+  with where the 3D beams visually end.
+  **Status: investigated, root cause confirmed - not a code bug.**
+  Loaded the Support Pad Placement 3D view for LTM 1160 and compared it
+  directly against LTM 1130/1250 - the 1160's outrigger beams are
+  genuinely shorter/more retracted relative to its own chassis than the
+  other two. Inspected the GLB's own internal node structure (not
+  assumed) - the beams are baked straight into the mesh geometry
+  exported from the source CAD (generic "Part N" occurrence names, no
+  separately-transformable beam/outrigger node), and no per-crane
+  extension scale exists in the app's own code that treats 1160
+  differently. Person confirmed: fault is in the ltm1160-carrier.glb
+  file they originally provided, not the app. No code fix possible
+  without a corrected export (source CAD re-exported with outriggers at
+  full extension) - nothing shipped this round, waiting on a replacement
+  model file.
