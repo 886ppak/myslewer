@@ -194,3 +194,33 @@ a working record, not app content.
   a user) needing a real backend + admin dashboard to push content to
   users. Person is still deciding the backend path - no implementation
   started.
+- Full backend design pass: users able to see/browse each other to
+  invite (by name, not email); asked me to go ahead and design the
+  backend piece; admin dashboard able to assign roles and toggle tab
+  access with a user database + toggles; single admin for now (can add
+  more later); how does first-time username assignment work without
+  duplicating on a second device; whether allowing a name change means
+  building a full Profile tab.
+  **Status: design done, Stage 1 built.** Design: `directory/{uid}`
+  collection for name-only browsing (declared exception to the app's
+  usual no-list rule, justified by this being a small invite-gated
+  crew); `admins/{uid}` as the root of trust for a future admin
+  dashboard (admin-granting itself stays a manual script, never self-
+  service, single admin for now); pools/members/invites schema; zero
+  Cloud Functions by design, one deliberate corner cut (empty-pool
+  auto-delete is best-effort, not instant). Declined the "what you have
+  access to" list per direct instruction - people shouldn't be able to
+  see what's gated from them. Confirmed a Profile TAB is worth building
+  given more tabs than Lift Logger are planned long-term. Explained the
+  duplicate-proof mechanism for the one-time name prompt: gate it on the
+  Firestore doc existing (cloud state), never local/device state.
+  **Stage 1 actually shipped**: new Profile header icon/panel (name-only
+  directory doc, editable display name, sign-out, auto-opens once on a
+  genuinely first-ever sign-in). Stage 2 (pools/invites) and Stage 3
+  (admin dashboard) not yet built, by design - staged deliberately
+  rather than shipping everything in one enormous change. Shipped to
+  main (CACHE_VERSION v235, app v6.9). One manual step still needed:
+  the updated firestore.rules (added directory/{uid} rules) has to be
+  pasted into the Firebase console's Rules tab by the person themselves
+  - no rules-deploy tooling exists in this project - before the
+  directory collection actually starts working live.

@@ -9920,3 +9920,96 @@ cranes get their own subsections as they're built.
   flow + the slew-decimal fix from section 76) re-run clean.
 
   CACHE_VERSION v233->v234, app version v6.7->v6.8.
+
+================================================================================
+78. Shared lift-pool backend: design pass + Stage 1 build (Profile panel,
+    directory collection)
+
+  Extended discussion (not all built yet - explicitly staged) covering
+  the shared multi-user lift-logging backend first scoped in section 77's
+  companion discussion: letting users see each other to invite (by name,
+  not email), an overseer/supervisor role, and later an admin dashboard
+  able to toggle tab access and assign pool roles directly instead of
+  the current one-off Admin-SDK-script method. Landed on: single fixed
+  admin for now (expandable to more admins later via the same manual
+  script method, deliberately never self-service-promotable from inside
+  the app - keeps the root of trust outside the app entirely); the
+  admin-dashboard "what tabs am I granted" list was explicitly declined
+  - the person didn't want users to know what's gated from them, so they
+  can't nag for access that isn't theirs to ask for; a Profile tab is
+  worth building (not just an inline edit) since more than just Lift
+  Logger is planned long-term.
+
+  Display-name-once mechanism: gate the one-time name prompt on the
+  uid's own directory doc existing in Firestore, never on local/device
+  state - checking cloud state instead of device state is what makes it
+  both "ask exactly once" (the doc's existence IS the answer) and safe
+  across multiple devices (same Google account always resolves to the
+  same uid, so a second device sees the doc already there) without any
+  separate "have I asked this person before" tracking. Structurally
+  duplicate-proof for the same reason: one doc per uid, so even a
+  mistaken re-prompt just overwrites the same doc.
+
+  Stage 1 actually built this round: a `directory/{uid}` Firestore
+  collection (`{displayName, updatedAt}`) plus a new Profile header
+  icon/panel - the first genuinely new piece of client-writable Firestore
+  data this app has ever had (every prior collection - googleAllowlist,
+  userAccess - is admin/console-write-only, zero client writes existed
+  before this). Rules deliberately narrow: any signed-in user may
+  `get`/`list` the whole collection (name only, never email or anything
+  else - a conscious, explained exception to this app's usual no-`list`
+  rule, justified by this being a small invite-gated crew rather than a
+  public product), but may only `write` their OWN doc, and only its
+  displayName/updatedAt fields (`request.resource.data.keys().hasOnly(...)`
+  plus a non-empty/<=40-char string check on displayName).
+
+  Profile icon placed left:56px in the header, right next to the
+  existing cache-btn (left:14px) - same circular-button/panel-anchor
+  treatment as cache/share/tabs, same 42px icon spacing already
+  established on the right-side trio. Panel shows "Signed in as
+  {email}" (read-only), an editable display-name field + Save, and Sign
+  Out. Auto-opens once per account on first sign-in (no directory doc
+  yet) via a `window.__profileOnLoaded(isFirstRun)` hook the gate's
+  module script calls after its one Firestore read - not a trap, closes
+  the same way as any other visit; if dismissed without saving, the
+  check runs again next sign-in since the doc still won't exist.
+
+  Cross-script wiring follows the SAME pattern already used throughout
+  this file for the lazy 3D modules (window.__carrier3dXxx etc.) -
+  necessary because the Firebase/auth logic lives in its own <script
+  type="module"> (the access gate), which doesn't share scope with the
+  main classic <script> where the rest of the UI lives.
+  window.__profileEmail/__profileDisplayName are set once per sign-in;
+  window.__profileSaveDisplayName()/__profileSignOut() are the two
+  actions the module script exposes for the panel to call.
+
+  Verified via Playwright (real Google/Firebase sign-in can't be driven
+  in this sandbox, same limitation as every other auth-touching test in
+  this project): confirmed the icon/panel render correctly and don't
+  overlap any other header icon; simulated the module script's own
+  post-sign-in state (window.__profileEmail/__profileOnLoaded) to verify
+  the panel populates and the first-run-vs-returning-user auto-open
+  logic is actually correct, not just present; stubbed
+  window.__profileSaveDisplayName/__profileSignOut to verify the Save/
+  Sign Out buttons call through with the right arguments and both the
+  success and failure UI paths render correctly, without touching real
+  Firebase. Found and fixed one thing in testing before it became a
+  false "bug" in a later test: re-clicking the header icon itself while
+  its own panel is open doesn't close it (the backdrop, above the
+  header in z-index, intercepts the click) - confirmed this is existing
+  behaviour already shared by cache/share/tabs, not something new, so
+  left as-is rather than reworking stacking order across every header
+  panel for a change nobody asked for. Full existing regression suite
+  re-run clean, zero console/page errors.
+
+  One real gap, called out directly rather than glossed over: this app
+  has no rules-deploy tooling (no firebase.json/CLI project link found -
+  see section on the original Firestore rollout, methodology.txt 8680-
+  8688) - rules get pasted into the Firebase console's Rules tab by
+  hand. The directory collection genuinely will not work (reads/writes
+  fail closed with PERMISSION_DENIED, caught gracefully - no crash, no
+  false first-run prompt loop) until the person pastes this updated
+  firestore.rules into the console themselves, same manual step as every
+  previous rules change on this project.
+
+  CACHE_VERSION v234->v235, app version v6.8->v6.9.

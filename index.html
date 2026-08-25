@@ -110,6 +110,22 @@
     #cache-panel { display: none; position: fixed; top: 62px; right: 14px; left: 14px; max-width: 320px; margin: 0 auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; z-index: 201; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
     #cache-panel .card-title { margin-bottom: 12px; }
 
+    /* Second left-side header icon, right next to cache-btn - account/
+       profile stuff (display name for shared lift pools, sign out).
+       Always visible once signed in, same as cache-btn - there's no
+       gating flag for this one, everyone who's signed in has a profile. */
+    #profile-btn { position: absolute; left: 56px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 50%; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--accent-gold); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+    #profile-btn svg { width: 17px; height: 17px; }
+    #profile-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 200; }
+    #profile-panel { display: none; position: fixed; top: 62px; right: 14px; left: 14px; max-width: 320px; margin: 0 auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; z-index: 201; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+    #profile-panel .card-title { margin-bottom: 4px; }
+    #profile-email { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px; word-break: break-all; }
+    #profile-name-hint { font-size: 0.78rem; color: var(--text-muted); margin-top: 6px; }
+    #profile-save-status { font-size: 0.8rem; margin-top: 8px; }
+    #profile-save-status.ok { color: var(--success); }
+    #profile-save-status.err { color: var(--danger); }
+    #profile-signout-btn { width: 100%; margin-top: 18px; }
+
     .nav-tabs { display: flex; justify-content: flex-start; background-color: #181a1d; border-bottom: 2px solid var(--border-color); overflow-x: auto; scrollbar-width: none; }
     /* Left-aligned by default - the base/fallback case, and the only
        safe option whenever the tabs actually overflow their container
@@ -399,7 +415,7 @@
       body { background: #fff; color: #000; padding-bottom: 0; }
       header { background: #fff; border-bottom: 2px solid #000; position: static; }
       header h1 { color: #000; }
-      #update-check-btn, #share-btn, #cache-btn { display: none; }
+      #update-check-btn, #share-btn, #cache-btn, #profile-btn { display: none; }
       .card { background: #fff; border: 1px solid #999; break-inside: avoid; }
       .card-title { color: #000; border-bottom: 1px solid #999; }
       input, select { background: #fff; color: #000; border: 1px solid #999; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -492,7 +508,7 @@
       sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, signOut
     } from './vendor/firebase/firebase-auth.js';
     import {
-      initializeFirestore, persistentLocalCache, doc, getDoc
+      initializeFirestore, persistentLocalCache, doc, getDoc, setDoc
     } from './vendor/firebase/firebase-firestore.js';
 
     // Real myslewer-ed06f project config. This object is NOT a secret -
@@ -817,10 +833,47 @@
           .finally(() => { applyTabOrder(); buildTabPrefsMenu(); applyTabPrefs(); openFirstTabInOrder(); maybeShowWhatsNew(); });
       }
 
+      // Profile (directory/{uid}) - a display name shown to other users
+      // instead of email once shared lift pools exist, plus the sign-in
+      // email itself and a sign-out action. Fetched once per sign-in,
+      // same reasoning as loadTabRestrictions above. window.__profileXxx
+      // is how the classic (non-module) script below reads/acts on this -
+      // same cross-scope pattern already used throughout this file for
+      // the lazy-loaded 3D modules (window.__carrier3dXxx etc.), since a
+      // <script type="module"> and a classic <script> don't share scope.
+      window.__profileSaveDisplayName = function (name) {
+        const trimmed = (name || '').trim();
+        if (!trimmed) return Promise.reject(new Error('empty'));
+        return setDoc(doc(db, 'directory', auth.currentUser.uid), {
+          displayName: trimmed,
+          updatedAt: Date.now()
+        }).then(() => { window.__profileDisplayName = trimmed; });
+      };
+
+      window.__profileSignOut = function () {
+        return signOut(auth);
+      };
+
+      function loadProfile(user) {
+        window.__profileEmail = user.email || '';
+        getDoc(doc(db, 'directory', user.uid))
+          .then((snap) => {
+            const existing = snap.exists() ? snap.data().displayName : '';
+            window.__profileDisplayName = existing || '';
+            if (window.__profileOnLoaded) window.__profileOnLoaded(!existing);
+          })
+          .catch((err) => {
+            console.error('Could not load profile', err);
+            window.__profileDisplayName = '';
+            if (window.__profileOnLoaded) window.__profileOnLoaded(false);
+          });
+      }
+
       onAuthStateChanged(auth, (user) => {
         if (user) {
           gateEl.style.display = 'none';
           loadTabRestrictions(user.uid);
+          loadProfile(user);
           return;
         }
         // Confirmed signed-out (not just "still checking") - only now is
@@ -987,9 +1040,12 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.8</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.9</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
+    </button>
+    <button id="profile-btn" type="button" onclick="toggleProfilePanel()" title="Profile" aria-label="Profile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7"></path></svg>
     </button>
     <button id="share-btn" type="button" onclick="toggleSharePanel()" title="Share this app" aria-label="Share this app">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
@@ -1013,6 +1069,20 @@
       </div>
       <div class="cache-all-progress-text" style="font-size:0.8rem; color:var(--text-muted); margin-top:6px; text-align:center;"></div>
     </div>
+  </div>
+
+  <div id="profile-backdrop" onclick="closeProfilePanel()"></div>
+  <div id="profile-panel">
+    <div class="card-title">Profile</div>
+    <div id="profile-email"></div>
+    <div class="form-group">
+      <label>Display Name</label>
+      <input type="text" id="profileNameInput" placeholder="Your name" autocomplete="off" maxlength="40">
+    </div>
+    <div id="profile-name-hint">Shown to others instead of your email - e.g. when sharing a lift log.</div>
+    <button type="button" class="btn" id="profile-save-btn" onclick="profileSaveName()">Save Name</button>
+    <div id="profile-save-status" style="display:none;"></div>
+    <button type="button" class="toolbar-btn" id="profile-signout-btn" onclick="profileSignOut()">Sign Out</button>
   </div>
 
   <div id="share-backdrop" onclick="closeSharePanel()"></div>
@@ -8884,6 +8954,70 @@
     function closeCachePanel() {
       document.getElementById('cache-panel').style.display = 'none';
       document.getElementById('cache-backdrop').style.display = 'none';
+    }
+
+    // Profile panel - display name (directory/{uid}, see the gate's
+    // module script for the actual Firestore read/write) + sign-in email
+    // + sign out. window.__profileEmail/__profileDisplayName are set by
+    // that module script once per sign-in; window.__profileOnLoaded is
+    // this script's own hook, called back once that fetch resolves -
+    // needed because the module script and this classic script don't
+    // share scope, so there's no direct function call across them
+    // otherwise (same cross-scope pattern as the lazy 3D modules).
+    const profileEmailEl = document.getElementById('profile-email');
+    const profileNameInput = document.getElementById('profileNameInput');
+    const profileSaveStatus = document.getElementById('profile-save-status');
+
+    function toggleProfilePanel() {
+      const panel = document.getElementById('profile-panel');
+      if (panel.style.display === 'block') { closeProfilePanel(); return; }
+      openProfilePanel();
+    }
+
+    function openProfilePanel() {
+      profileEmailEl.textContent = 'Signed in as ' + (window.__profileEmail || '');
+      profileNameInput.value = window.__profileDisplayName || '';
+      profileSaveStatus.style.display = 'none';
+      document.getElementById('profile-panel').style.display = 'block';
+      document.getElementById('profile-backdrop').style.display = 'block';
+    }
+
+    function closeProfilePanel() {
+      document.getElementById('profile-panel').style.display = 'none';
+      document.getElementById('profile-backdrop').style.display = 'none';
+    }
+
+    // First sign-in ever for this account (no directory doc yet) - open
+    // the panel automatically once so a name gets set before it's needed
+    // anywhere else, rather than leaving it to be discovered by accident.
+    // Not a trap: same close/backdrop as any other visit, and if it's
+    // dismissed without saving, the doc still won't exist next time, so
+    // this same check just asks again then - no separate "have I asked
+    // already" tracking needed (see methodology.txt on this exact point).
+    window.__profileOnLoaded = function (isFirstRun) {
+      if (isFirstRun) openProfilePanel();
+    };
+
+    function profileSaveName() {
+      const btn = document.getElementById('profile-save-btn');
+      btn.disabled = true;
+      window.__profileSaveDisplayName(profileNameInput.value)
+        .then(() => {
+          profileSaveStatus.textContent = 'Saved.';
+          profileSaveStatus.className = 'ok';
+          profileSaveStatus.style.display = '';
+        })
+        .catch(() => {
+          profileSaveStatus.textContent = 'Could not save - check your connection and try again.';
+          profileSaveStatus.className = 'err';
+          profileSaveStatus.style.display = '';
+        })
+        .finally(() => { btn.disabled = false; });
+    }
+
+    function profileSignOut() {
+      closeProfilePanel();
+      window.__profileSignOut();
     }
 
     // Personal "declutter" tab menu - purely a per-device display

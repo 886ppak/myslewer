@@ -40,6 +40,27 @@ service cloud.firestore {
       allow list, write: if false;
     }
 
+    // Public-within-the-app directory of display names, for the shared
+    // lift-log pool feature (invite someone by name instead of needing
+    // their exact email). Deliberately the one collection any signed-in
+    // user CAN list/get in full, not just their own doc - unlike
+    // googleAllowlist/userAccess above, which only ever leak a yes/no
+    // against a key you already know. The tradeoff is intentional: this
+    // app is a small, invite-gated crew, not a public product, so
+    // exposing display names (and ONLY display names - never email, never
+    // anything else) to other already-signed-in users is low-risk and is
+    // what makes the invite flow usable at all. A user may only write
+    // their own doc, and only the displayName/updatedAt fields - nothing
+    // here lets anyone write on another uid's behalf.
+    match /directory/{uid} {
+      allow get, list: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid
+                    && request.resource.data.keys().hasOnly(['displayName', 'updatedAt'])
+                    && request.resource.data.displayName is string
+                    && request.resource.data.displayName.size() > 0
+                    && request.resource.data.displayName.size() <= 40;
+    }
+
     // Deny everything else outright - an explicit fallback rather than
     // relying on Firestore's own "no matching rule = denied" default, so
     // adding some unrelated collection later can't accidentally inherit
