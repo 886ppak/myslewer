@@ -291,3 +291,19 @@ a working record, not app content.
   write allowed, cross-user write blocked, fake-email blocked, re-write
   blocked, admin-only listing enforced). Full UI + existing regression
   suite clean. Shipped to main (CACHE_VERSION v238, app v6.12).
+- "Yeah go ahead and wire the lift logger to it."
+  **Status: done.** New "Logging To" selector in Lift Details -
+  Personal (unchanged local/localStorage behavior) or any pool the
+  person belongs to. Pool mode is genuinely live-synced (a teammate's
+  entry appears without reopening the tab), only a 'member' role can
+  log (overseers view-only, enforced server-side not just hidden), and
+  each entry is only editable/deletable by whoever logged it - the
+  delete button is hidden entirely for anyone else's entry in pool
+  mode, and shows who logged it. Verified with 9 real behavioural
+  checks against real throwaway accounts before building the UI.
+  Testing surfaced and fixed two real bugs: switching back to Personal
+  could leave stale pool entries on screen if nothing was saved locally
+  yet, and a synchronous (not async) auth-not-ready throw could escape
+  switchTab() uncaught. Full new wiring test plus the entire existing
+  regression suite clean. Shipped to main (CACHE_VERSION v239, app
+  v6.13).

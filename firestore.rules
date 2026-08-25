@@ -168,6 +168,28 @@ service cloud.firestore {
                      && request.resource.data.role in ['member', 'overseer'];
     }
 
+    // The actual shared lift log. Any active member (member OR overseer)
+    // can read it - that's the whole point of the overseer role, seeing
+    // the log without needing to log lifts themselves - but only a
+    // 'member' can create a new entry (an overseer viewing-only isn't
+    // just a UI convention, it's enforced here too). Each entry is only
+    // ever editable/deletable by whoever logged it - same "you can only
+    // touch your own" shape as the local-only Lift Logger's own delete
+    // button already had, just now enforced server-side since other
+    // people can see (and would otherwise be able to touch) each other's
+    // entries once the log is actually shared.
+    match /pools/{poolId}/lifts/{liftId} {
+      allow get, list: if request.auth != null
+                         && exists(/databases/$(database)/documents/pools/$(poolId)/members/$(request.auth.uid));
+      allow create: if request.auth != null
+                     && get(/databases/$(database)/documents/pools/$(poolId)/members/$(request.auth.uid)).data.status == 'active'
+                     && get(/databases/$(database)/documents/pools/$(poolId)/members/$(request.auth.uid)).data.role == 'member'
+                     && request.resource.data.loggedByUid == request.auth.uid;
+      allow update, delete: if request.auth != null
+                              && resource.data.loggedByUid == request.auth.uid
+                              && exists(/databases/$(database)/documents/pools/$(poolId)/members/$(request.auth.uid));
+    }
+
     // Per-user fan-out index ("which pools am I in"), so listing your
     // own pools never has to scan every pools/* doc looking for
     // membership - just a get/list on your own uid's own subcollection,

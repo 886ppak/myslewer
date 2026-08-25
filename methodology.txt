@@ -10329,3 +10329,99 @@ cranes get their own subsections as they're built.
   suite re-run clean, zero console/page errors.
 
   CACHE_VERSION v237->v238, app version v6.11->v6.12.
+
+================================================================================
+83. Wired the Lift Logger's actual entries into a shared pool
+
+  The one piece of the original shared-backend vision left unbuilt after
+  Stages 1-3: the Lift Logger's own log was still 100% localStorage,
+  even for someone sitting in a real pool with real invited teammates.
+  "Go ahead and wire the lift logger to it."
+
+  Rules: `pools/{poolId}/lifts/{liftId}`. Any active member (member OR
+  overseer) can read the whole log - that's the actual point of the
+  overseer role from the original design pass, seeing a pool's lifts
+  without needing to log any themselves - but only a 'member' can
+  create an entry, enforced server-side, not just left as a UI
+  convention. Each entry is only ever editable/deletable by whoever
+  logged it (loggedByUid must match request.auth.uid on create; update/
+  delete require resource.data.loggedByUid == request.auth.uid) - the
+  exact same "only your own" shape the local-only delete button already
+  had, now actually enforced since other people can see the log too.
+  Verified with 9 real behavioural checks: a member logging (allowed),
+  reading as a member and as an overseer (both allowed), an overseer
+  trying to create an entry (blocked - role enforced, not just hidden),
+  a non-member reading (blocked), a member trying to log an entry with
+  someone ELSE's loggedByUid (blocked - can't forge whose name is on a
+  reading), editing/deleting your own entry (allowed), an overseer or
+  anyone else trying to delete someone else's entry (blocked). All 9
+  passed, throwaway pool/accounts cleaned up after.
+
+  Data shape: kept close to the existing local entry shape, added
+  loggedByUid/loggedByName (denormalized snapshot, same pattern as pool
+  membership's own displayName copy) and switched from a pre-formatted
+  `time` string to a raw `createdAt` timestamp formatted at RENDER time
+  instead of at log time - a local entry only ever gets read on the same
+  device that wrote it, so a baked-in formatted string was fine before,
+  but a shared entry can be logged on one person's phone and viewed on
+  another's, so each viewer's own device/locale should decide how it
+  displays, not the logger's. Old local entries missing createdAt still
+  render correctly (falls back to the legacy `time` field).
+
+  UI: a "Logging To" select at the top of the Lift Details card -
+  "Personal (this device only)" plus every pool the signed-in person
+  belongs to, remembered per device (falls back to Personal if the
+  saved pool's no longer valid - left it, etc). Genuinely live-synced
+  via onSnapshot while a pool's selected (not the one-shot-per-panel-
+  open pattern used everywhere else in Stages 1-3) - deliberate,
+  because the actual point of a shared lift log is a teammate's entry
+  showing up without needing to close and reopen the tab. Logging/
+  deleting in pool mode doesn't touch ceEntries directly - it fires the
+  Firestore write and lets the live listener's own callback update the
+  array, so every pool member (including the one who just acted) is
+  always looking at the exact same source of truth, not a locally-
+  guessed version of it that might drift. The existing delete button is
+  now hidden entirely for any entry not logged by the current person
+  while in pool mode (matches the server rule exactly, rather than
+  showing a button that would just get rejected) - and shows who logged
+  each entry next to it, since that's now actually meaningful information
+  once more than one person can add to the same log.
+
+  Found and fixed two real bugs before they shipped, both caught by
+  testing rather than assumed away:
+  1. ceSetActiveMode('local') only ASSIGNED ceEntries when ceLoadEntries()
+     found actual saved data - switching back to Personal with nothing
+     yet saved on that device left whichever pool's entries had just
+     been showing still sitting in ceEntries instead of a clean empty
+     log. Fixed by clearing ceEntries unconditionally before either
+     branch, not just inside the pool one.
+  2. window.__poolsList() reads auth.currentUser.uid SYNCHRONOUSLY, not
+     inside its own promise chain - calling it before auth is ready
+     throws immediately rather than rejecting, so ceBuildModeOptions()'s
+     own .catch() never got a chance to run and an uncaught exception
+     escaped switchTab() instead. Not reachable in real use (the tab
+     itself is only ever clickable after sign-in has already completed,
+     same reasoning already established for the Profile/Admin buttons),
+     but cheap and worth guarding directly in the real code rather than
+     only in tests, given what a synchronous throw mid-switchTab could
+     do to whatever tab-specific init runs after it. Wrapped the call in
+     a plain try/catch so it falls back to Personal the same way an
+     async failure already did.
+  Also fixed a latent id-type issue while touching this code: existing
+  local entries have a numeric id, but a Firestore document id (used for
+  every pool-mode entry) is a string, and an HTML dataset attribute is
+  always a string regardless - the delete button's own id lookup now
+  compares String(en.id) against it, so it still matches a person's
+  pre-existing local entries logged before this change, not just new
+  ones.
+
+  Full new pool-wiring UI test (mode switch, live entry arriving via the
+  listener callback, ownership-based delete-button visibility, deleting,
+  switching back to Personal) plus the ENTIRE existing regression suite
+  re-run clean - the pool-wiring test specifically caught the two bugs
+  above, and re-running the full suite after was what caught the
+  synchronous-throw one leaking into an unrelated, already-passing test
+  the moment ceBuildModeOptions() started running on every cabentry-tab
+  open.
+
+  CACHE_VERSION v238->v239, app version v6.12->v6.13.

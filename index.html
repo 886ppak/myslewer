@@ -419,6 +419,7 @@
     .ce-chip{ font-weight:700; font-size:0.68rem; letter-spacing:0.06em; text-transform:uppercase; padding:1px 6px; border-radius:4px; border:1px solid var(--border-color); }
     .ce-chip.new{ color:var(--success); border-color:var(--success); }
     .ce-chip.old{ color:var(--text-muted); border-color:var(--text-muted); }
+    .ce-log-card-by{ color:var(--accent-gold); font-weight:600; }
 
     .ce-be-stage{ position:relative; width:100%; max-width:300px; margin:0 auto; aspect-ratio:1/1; background:#0c0f0a; border:1px solid var(--border-color); border-radius:10px; overflow:hidden; }
     .ce-be-svg{ width:100%; height:100%; }
@@ -545,7 +546,7 @@
     } from './vendor/firebase/firebase-auth.js';
     import {
       initializeFirestore, persistentLocalCache, doc, getDoc, setDoc,
-      collection, getDocs, deleteDoc, query, where
+      collection, getDocs, deleteDoc, query, where, addDoc, onSnapshot
     } from './vendor/firebase/firebase-firestore.js';
 
     // Real myslewer-ed06f project config. This object is NOT a secret -
@@ -1054,8 +1055,48 @@
         return setDoc(doc(db, 'pools', poolId, 'members', uid), { role: role }, { merge: true });
       };
 
+      // Shared lift log - wiring the Lift Logger tab's own entries into
+      // a pool instead of (or alongside) its existing localStorage-only
+      // mode. Unlike everything else in this file, this one's genuinely
+      // live-synced (onSnapshot, not a one-shot fetch) - the whole point
+      // of sharing a lift log with a crew is seeing each other's entries
+      // show up without needing to close and reopen the tab, unlike the
+      // Profile panel's own pools/invites sections, which only matter
+      // while that panel happens to be open.
+      let liftsUnsubscribe = null;
+
+      window.__poolsWatchLifts = function (poolId, onChange) {
+        if (liftsUnsubscribe) { liftsUnsubscribe(); liftsUnsubscribe = null; }
+        liftsUnsubscribe = onSnapshot(collection(db, 'pools', poolId, 'lifts'), (snap) => {
+          const entries = snap.docs
+            .map((d) => Object.assign({ id: d.id }, d.data()))
+            .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+          onChange(entries);
+        }, (err) => {
+          console.error('Lift log listener failed', err);
+          onChange([]);
+        });
+      };
+
+      window.__poolsUnwatchLifts = function () {
+        if (liftsUnsubscribe) { liftsUnsubscribe(); liftsUnsubscribe = null; }
+      };
+
+      window.__poolsLogLift = function (poolId, entryData) {
+        const uid = auth.currentUser.uid;
+        return addDoc(collection(db, 'pools', poolId, 'lifts'), Object.assign({
+          loggedByUid: uid,
+          loggedByName: window.__profileDisplayName || ''
+        }, entryData));
+      };
+
+      window.__poolsDeleteLift = function (poolId, liftId) {
+        return deleteDoc(doc(db, 'pools', poolId, 'lifts', liftId));
+      };
+
       function loadProfile(user) {
         window.__profileEmail = user.email || '';
+        window.__profileUid = user.uid;
         getDoc(doc(db, 'directory', user.uid))
           .then((snap) => {
             const existing = snap.exists() ? snap.data().displayName : '';
@@ -1262,7 +1303,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.12</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.13</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2365,6 +2406,12 @@
     <div id="cabentry-tab" class="tab-content">
       <div class="card">
         <div class="card-title">Lift Details</div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label>Logging To</label>
+          <select id="ceModeSelect">
+            <option value="local">Personal (this device only)</option>
+          </select>
+        </div>
         <div class="ce-name-weight-row">
           <div class="form-group" id="ce-field-name">
             <label>Item Name</label>
@@ -3300,6 +3347,7 @@
       if (tabId === 'reeve-tab') initReeveTab();
       if (tabId === 'servicefill-tab') initServiceFillTab();
       if (tabId === 'admin-tab') { adminRefreshUsers(); adminRefreshPools(); }
+      if (tabId === 'cabentry-tab') ceBuildModeOptions();
       // Re-checked on every visit, not just after the button runs - content
       // also gets cached one file at a time just by viewing it, so the
       // tick/cross needs to reflect that too, not only a full-download run.
@@ -11292,6 +11340,92 @@
       }
     }
 
+    // 'local' (this device's own localStorage log, unchanged from
+    // before) or a poolId string (live-synced shared log via
+    // window.__poolsWatchLifts). Remembered per device so reopening the
+    // tab lands back on whichever log was last being used - falls back
+    // to 'local' if that pool's no longer valid (left it, doesn't exist).
+    let ceActiveMode = 'local';
+    const CE_MODE_STORAGE_KEY = 'myslewer-cabentry-active-mode';
+
+    function ceResetEntryFields(){
+      ceRadius = 0;
+      ceSlewSide = null;
+      ceSlewReading = 0;
+      ceDirection = ceDirection === 'up' ? 'down' : 'up';
+      ceCondition = null;
+    }
+
+    // Local entries never had a stored time zone/locale concern (same
+    // device logs and reads them), but a shared pool entry can be
+    // logged on one person's phone and viewed on another's, so display
+    // time is derived from a raw timestamp at RENDER time instead of
+    // baked in as a pre-formatted string when logged. Falls back to the
+    // old `time` field for any local entry saved before this change.
+    function ceFormatTime(en){
+      if(typeof en.createdAt === 'number'){
+        return new Date(en.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false});
+      }
+      return en.time || '';
+    }
+
+    function ceSetActiveMode(mode){
+      if (window.__poolsUnwatchLifts) window.__poolsUnwatchLifts();
+      ceActiveMode = mode;
+      try { localStorage.setItem(CE_MODE_STORAGE_KEY, mode); } catch(e) {}
+      ceSelectedEntryId = null;
+      // Cleared unconditionally, BEFORE either branch - ceLoadEntries()
+      // only ever ASSIGNS ceEntries when it finds saved data, so without
+      // this a switch back to Personal with nothing yet saved locally
+      // would leave whichever pool's entries were showing a moment ago
+      // still sitting in ceEntries instead of a clean empty log.
+      ceEntries = [];
+      if (mode === 'local') {
+        ceLoadEntries();
+        ceRenderPeripherals();
+      } else {
+        ceRenderPeripherals();
+        window.__poolsWatchLifts(mode, (entries) => {
+          ceEntries = entries;
+          ceRenderPeripherals();
+        });
+      }
+    }
+
+    function ceBuildModeOptions(){
+      const select = document.getElementById('ceModeSelect');
+      const savedMode = (function(){ try { return localStorage.getItem(CE_MODE_STORAGE_KEY) || 'local'; } catch(e) { return 'local'; } })();
+      // window.__poolsList() reads auth.currentUser.uid synchronously
+      // (not inside its own promise chain), so it can throw immediately
+      // rather than reject - wrapped in try so a call before auth is
+      // ready falls back to local mode the same way an async failure
+      // already does, instead of an uncaught exception escaping switchTab.
+      let listPromise;
+      try {
+        listPromise = window.__poolsList ? window.__poolsList() : Promise.resolve([]);
+      } catch (err) {
+        listPromise = Promise.reject(err);
+      }
+      listPromise
+        .then((pools) => {
+          select.innerHTML = '<option value="local">Personal (this device only)</option>';
+          pools.forEach((p) => {
+            const opt = document.createElement('option');
+            opt.value = p.poolId;
+            opt.textContent = p.poolName;
+            select.appendChild(opt);
+          });
+          const validMode = (savedMode === 'local' || pools.some((p) => p.poolId === savedMode)) ? savedMode : 'local';
+          select.value = validMode;
+          ceSetActiveMode(validMode);
+        })
+        .catch(() => { select.value = 'local'; ceSetActiveMode('local'); });
+    }
+
+    document.getElementById('ceModeSelect').addEventListener('change', (e) => {
+      ceSetActiveMode(e.target.value);
+    });
+
     function ceClampSlew(n){ return Math.min(Math.max(n, 0), 180); }
 
     // Rounds to the nearest 0.1° (kills float noise like 7.6999999999)
@@ -11471,28 +11605,34 @@
       }
       ceFieldName.classList.remove('error');
 
-      const d = new Date();
-      ceEntrySeq += 1;
-      ceEntries.push({
-        id: ceEntrySeq,
-        time: d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}),
+      const entryData = {
         name,
         weight: ceItemWeight,
         radius: ceRadius,
         slewSide: ceSlewSide,
         slewReading: ceSlewReading,
         direction: ceDirection,
-        condition: ceCondition
-      });
-      ceSaveEntries();
+        condition: ceCondition,
+        createdAt: Date.now()
+      };
 
-      ceRadius = 0;
-      ceSlewSide = null;
-      ceSlewReading = 0;
-      ceDirection = ceDirection === 'up' ? 'down' : 'up';
-      ceCondition = null;
-
-      ceRender();
+      if (ceActiveMode === 'local') {
+        ceEntrySeq += 1;
+        ceEntries.push(Object.assign({ id: String(ceEntrySeq) }, entryData));
+        ceSaveEntries();
+        ceResetEntryFields();
+        ceRender();
+      } else {
+        // ceEntries itself updates via the live listener once the write
+        // lands (usually near-instant thanks to Firestore's own local
+        // cache/optimistic writes) - not pushed here directly, so every
+        // pool member (including this one) sees the exact same source
+        // of truth rather than a locally-guessed version of it.
+        window.__poolsLogLift(ceActiveMode, entryData)
+          .catch((err) => console.error('Could not log shared reading', err));
+        ceResetEntryFields();
+        ceRender();
+      }
     }
 
     function ceEscapeHtml(s){
@@ -11503,43 +11643,68 @@
       ceLogCount.textContent = ceEntries.length + (ceEntries.length===1 ? ' entry' : ' entries');
       ceLogEmpty.style.display = ceEntries.length ? 'none' : '';
       ceLogList.innerHTML = '';
+      // In a shared pool, only whoever logged an entry can delete it
+      // (matches the server-side rule exactly - see firestore.rules on
+      // pools/{poolId}/lifts) - the button's just hidden rather than
+      // shown-then-rejected for anyone else's entry. Always yours in
+      // local/personal mode, same as before this tab shared anything.
+      const myUid = window.__profileUid;
       ceEntries.slice().reverse().forEach((en, i) => {
         const card = document.createElement('div');
         card.className = 'ce-log-card dir-' + en.direction + (i===0 ? ' latest' : '');
         const condChip = en.condition ? `<span class="ce-chip ${en.condition}">${en.condition}</span>` : '';
+        const canDelete = ceActiveMode === 'local' || en.loggedByUid === myUid;
+        const deleteBtn = canDelete ? `<button type="button" class="ce-log-delete" data-id="${en.id}" aria-label="Delete this reading" title="Delete this reading">✕</button>` : '';
+        const loggedByTag = (ceActiveMode !== 'local' && en.loggedByName) ? `<span class="ce-log-card-by">${ceEscapeHtml(en.loggedByName)}</span>` : '';
         card.innerHTML = `
           <div class="ce-log-card-top">
             <span class="ce-log-card-name">${ceEscapeHtml(en.name)}</span>
             <span class="ce-log-card-top-right">
               <span class="ce-log-card-wt">${en.weight.toFixed(1)}T</span>
-              <button type="button" class="ce-log-delete" data-id="${en.id}" aria-label="Delete this reading" title="Delete this reading">✕</button>
+              ${deleteBtn}
             </span>
           </div>
           <div class="ce-log-card-meta">
-            <span>${en.time}</span>
+            <span>${ceFormatTime(en)}</span>
             <span class="ce-log-card-dir dir-${en.direction}">${en.direction==='up' ? '▲ Pick' : '▼ Land'}</span>
             <span>R ${en.radius.toFixed(1)}m</span>
             <span>${ceFormatSlew(en.slewSide, en.slewReading)}</span>
             ${condChip}
+            ${loggedByTag}
           </div>`;
         ceLogList.appendChild(card);
       });
     }
 
     function ceDeleteEntry(id){
-      ceEntries = ceEntries.filter(en => en.id !== id);
-      if(ceSelectedEntryId === id) ceSelectedEntryId = null;
-      ceSaveEntries();
-      ceRenderPeripherals();
+      if(String(ceSelectedEntryId) === id) ceSelectedEntryId = null;
+      if (ceActiveMode === 'local') {
+        // String(en.id) rather than a plain !== - entries logged before
+        // this change have a numeric id (from before ids became strings
+        // to also cover Firestore's own string doc ids in pool mode),
+        // and the delete button's data-id is always a string regardless
+        // (HTML dataset values always are), so a strict compare would
+        // silently fail to match any pre-existing local entry.
+        ceEntries = ceEntries.filter(en => String(en.id) !== id);
+        ceSaveEntries();
+        ceRenderPeripherals();
+      } else {
+        // ceEntries updates via the live listener once the delete lands,
+        // same reasoning as logging a new entry - one shared source of
+        // truth, not a locally-guessed one.
+        window.__poolsDeleteLift(ceActiveMode, id).catch((err) => console.error('Could not delete shared reading', err));
+      }
     }
 
     // Delegated on the (static) list container rather than one listener
     // per card, since ceRenderLog() rebuilds every card's innerHTML on
-    // every log/delete.
+    // every log/delete. Ids are always strings now (a Firestore document
+    // id in pool mode isn't numeric) - local-mode ids are stored as
+    // strings too (see ceLogReading) so both modes compare consistently.
     ceLogList.addEventListener('click', (ev) => {
       const btn = ev.target.closest('.ce-log-delete');
       if(!btn) return;
-      ceDeleteEntry(Number(btn.dataset.id));
+      ceDeleteEntry(btn.dataset.id);
     });
 
     // ---------- 2D bird's-eye (SVG radar) ----------
@@ -11635,8 +11800,9 @@
     }
 
     function ceShowEntryInfo(en){
+      const byLine = (ceActiveMode !== 'local' && en.loggedByName) ? ` · ${ceEscapeHtml(en.loggedByName)}` : '';
       ceBeInfo.innerHTML = `<b>${ceEscapeHtml(en.name)}</b> — ${en.weight.toFixed(1)}T<br>
-        ${en.time} · ${en.direction==='up' ? '▲ Pick' : '▼ Land'} · R ${en.radius.toFixed(1)}m · ${ceFormatSlew(en.slewSide, en.slewReading)}${en.condition ? ' · ' + en.condition.toUpperCase() : ''}`;
+        ${ceFormatTime(en)} · ${en.direction==='up' ? '▲ Pick' : '▼ Land'} · R ${en.radius.toFixed(1)}m · ${ceFormatSlew(en.slewSide, en.slewReading)}${en.condition ? ' · ' + en.condition.toUpperCase() : ''}${byLine}`;
     }
 
     // ---------- 3D plot ----------
