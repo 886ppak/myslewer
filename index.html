@@ -339,6 +339,9 @@
     .ce-dial-lbl{ font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-muted); margin-top:3px; }
 
     .ce-field-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+    .ce-name-weight-row{ display:flex; gap:10px; }
+    .ce-name-weight-row .form-group:first-child{ flex:2 1 auto; min-width:0; }
+    .ce-name-weight-row .form-group:last-child{ flex:1 1 auto; min-width:0; }
     .ce-slew-row{ display:flex; align-items:center; gap:5px; }
     .ce-slew-row input{ flex:1 1 auto; min-width:0; text-align:center; }
     .ce-slew-affix{ font-weight:700; color:var(--text-main); font-size:0.95rem; }
@@ -981,7 +984,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.5</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.6</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -1045,7 +1048,7 @@
     <button class="tab-btn" data-tabkey="rope" onclick="switchTab('rope-tab', event)">Rope Retentioning</button>
     <button class="tab-btn" id="servicefill-tab-btn" data-tabkey="servicefill" onclick="switchTab('servicefill-tab', event)" style="display:none;">Service Fill</button>
     <button class="tab-btn" id="assembly-tab-btn" data-tabkey="assembly" onclick="switchTab('assembly-tab', event)" style="display:none;">Assembly Plans</button>
-    <button class="tab-btn" id="cabentry-tab-btn" data-tabkey="cabentry" onclick="switchTab('cabentry-tab', event)" style="display:none;">Cab Entry</button>
+    <button class="tab-btn" id="cabentry-tab-btn" data-tabkey="cabentry" onclick="switchTab('cabentry-tab', event)" style="display:none;">Lift Logger</button>
   </nav>
 
   <div class="container">
@@ -2050,20 +2053,19 @@
     <!-- ================= CAB ENTRY (owner only) ================= -->
     <div id="cabentry-tab" class="tab-content">
       <div class="card">
-        <div class="card-title">Load</div>
-        <div class="form-group" id="ce-field-name">
-          <label>Item Name</label>
-          <input type="text" id="ceNameInput" placeholder="Item name" autocomplete="off">
+        <div class="card-title">Lift Details</div>
+        <div class="ce-name-weight-row">
+          <div class="form-group" id="ce-field-name">
+            <label>Item Name</label>
+            <input type="text" id="ceNameInput" placeholder="Item name" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label>Weight (t)</label>
+            <input type="text" inputmode="decimal" id="ceWeightInput" placeholder="0.0">
+          </div>
         </div>
-        <div class="form-group" style="margin-top:10px;">
-          <label>Weight (t)</label>
-          <input type="text" inputmode="decimal" id="ceWeightInput" placeholder="0.0">
-        </div>
-      </div>
 
-      <div class="card">
-        <div class="card-title">Position</div>
-        <div class="ce-field-row">
+        <div class="ce-field-row" style="margin-top:10px;">
           <div class="form-group">
             <label>Radius (m)</label>
             <input type="text" inputmode="decimal" id="ceRadiusInput" placeholder="0.0">
@@ -10546,6 +10548,37 @@
     let ceEntrySeq = 0;
     let ce3dLoaded = false;
 
+    // Local-device persistence only, deliberately a stopgap - the actual
+    // ask is a shared backend two+ people can log against, still being
+    // scoped (Firebase/Firestore vs self-hosted Supabase etc.). Until
+    // that's built, the log was pure in-memory JS state, wiped by any
+    // reload/tab-close - this at least survives THAT, on THIS device,
+    // via plain localStorage (small JSON blob, well within its size
+    // limits even after months of lifts). Gets fully superseded, not
+    // extended, once real shared sync lands - this isn't meant to grow
+    // into the sync layer itself.
+    const CE_STORAGE_KEY = 'myslewer-cabentry-lifts-v1';
+
+    function ceSaveEntries(){
+      try {
+        localStorage.setItem(CE_STORAGE_KEY, JSON.stringify({ entries: ceEntries, seq: ceEntrySeq }));
+      } catch(e) {
+        console.error('Could not save lift log locally', e);
+      }
+    }
+
+    function ceLoadEntries(){
+      try {
+        const raw = localStorage.getItem(CE_STORAGE_KEY);
+        if(!raw) return;
+        const data = JSON.parse(raw);
+        if(Array.isArray(data.entries)) ceEntries = data.entries;
+        if(typeof data.seq === 'number') ceEntrySeq = data.seq;
+      } catch(e) {
+        console.error('Could not load saved lift log', e);
+      }
+    }
+
     function ceClampSlew(n){ return Math.min(Math.max(n, 0), 180); }
 
     function ceFormatSlew(side, reading){
@@ -10729,6 +10762,7 @@
         direction: ceDirection,
         condition: ceCondition
       });
+      ceSaveEntries();
 
       ceRadius = 0;
       ceSlewSide = null;
@@ -10910,6 +10944,7 @@
     });
 
     function initCabEntryTab(){
+      ceLoadEntries();
       ceRender();
     }
 

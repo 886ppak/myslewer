@@ -9794,3 +9794,56 @@ cranes get their own subsections as they're built.
   sequence is measurably more compact, not just reordered.
 
   CACHE_VERSION v230->v231, app version v6.4->v6.5.
+
+================================================================================
+75. Cab Entry -> "Lift Logger" rename, Load+Position card merge, local
+    persistence stopgap
+
+  Three-part request, all in one turn: (a) rename the tab's visible
+  label from "Cab Entry" to "Lift Logger" - only the tab-btn text
+  changed, internal ids/comments/console strings left alone since
+  they're not user-facing; (b) merge the Load card (Item Name, Weight)
+  and the Position card (Radius, Slew, side-select, and - since section
+  74 - Pick/Land/New-Old) into one single card, titled "Lift Details",
+  continuing the same up-top compaction thread as sections 73/74; (c)
+  make the session log survive a reload/tab-close on the same device,
+  explicitly as a stopgap - person was clear this is "for now until we
+  implement a back end", not a first step toward one, so it deliberately
+  stays a plain local mechanism rather than anything sync-shaped.
+
+  Merge: Item Name + Weight now sit in a new flex row
+  (.ce-name-weight-row) at the top of the merged card, Name given more
+  width (flex:2) than Weight (flex:1) since item names run longer than a
+  tonnage figure - followed immediately by the existing Radius/Slew
+  field row, side-select, and status row, all inside one <div
+  class="card">. The former separate Load/Position card wrappers are
+  gone; Slew Reference (dial) and Session Log below are untouched.
+
+  Persistence: added a versioned localStorage key
+  (myslewer-cabentry-lifts-v1) rather than reusing/extending anything
+  IndexedDB or Firestore-shaped, since the whole point is that this gets
+  thrown away wholesale once real shared-backend sync is chosen and
+  built, not grown into it - said so directly in a code comment so a
+  future me doesn't mistake it for the start of the sync layer. Two
+  functions: ceSaveEntries() (JSON-serializes {entries, seq}, try/catch
+  wrapped since localStorage can throw - private browsing, quota) called
+  right after every successful log-reading push; ceLoadEntries() (parses
+  it back, validates array/number types before trusting them, same
+  try/catch) called once from initCabEntryTab() before the first render.
+
+  Verified via Playwright (test_liftlogger_merge_persist.mjs): tab
+  button reads "Lift Logger"; the merged card's first three cards in the
+  tab are Lift Details / Slew Reference / Session Log in that order, and
+  Lift Details actually contains all seven inputs/controls (name,
+  weight, radius, slew, side-select, dir-toggle, cond-toggle); logged a
+  real entry, confirmed localStorage actually got written with that
+  entry's data; reloaded the page fresh (full navigation, not just a
+  re-render call) and confirmed the entry came back via ceLoadEntries()
+  with the correct count and content; cleared localStorage and reloaded
+  again to confirm the empty-log state still renders cleanly with no
+  stale references. Also re-ran the full existing Cab Entry regression
+  suite (defaults, field entry, log-with-no-name validation, two-entry
+  log with Old chip, 2D radar dot count, 3D panel load) clean, zero
+  console/page errors either run.
+
+  CACHE_VERSION v231->v232, app version v6.5->v6.6.

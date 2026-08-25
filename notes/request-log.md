@@ -150,3 +150,18 @@ a working record, not app content.
   790px after the dial move alone) at the same tablet viewport test -
   measurably more compact, not just reordered. Shipped to main
   (CACHE_VERSION v231, app v6.5).
+- Rename Cab Entry tab to "Lift Logger" (or similar); add persistence so
+  the lift log doesn't get wiped on reload - saved on-device for now,
+  as a stopgap until a real shared backend (still being decided) gets
+  built; merge the Load card (Name/Weight) and Position card into one
+  condensed card at the top so it flows better.
+  **Status: done** — tab button now reads "Lift Logger". Load + Position
+  merged into one "Lift Details" card (Name/Weight in a new top row,
+  then Radius/Slew/side-select/status below, unchanged otherwise). Added
+  localStorage-based persistence (myslewer-cabentry-lifts-v1) as an
+  explicit, code-commented stopgap - gets replaced wholesale, not
+  extended, once the real shared backend is chosen. Verified: rename,
+  merged card contents, log-then-reload restores entries correctly, and
+  clearing storage still renders a clean empty state - plus full
+  existing regression suite re-run clean. Shipped to main (CACHE_VERSION
+  v232, app v6.6).
