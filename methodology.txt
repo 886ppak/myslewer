@@ -10487,3 +10487,65 @@ cranes get their own subsections as they're built.
   suite re-run clean alongside it.
 
   CACHE_VERSION v239->v240, app version v6.13->v6.14.
+
+85. LTM 1160 outrigger 3D model: corrected export shipped
+
+  Follow-up to the "outrigger at 50%" diagnosis above. Once the fault
+  was confirmed to be the source GLB (beams baked into the mesh at an
+  under-extended pose, not an app bug), the remaining work was telling
+  the person exactly how far to push each beam in Onshape - a linear
+  push-in/push-out per corner, no angle available to them.
+
+  First measurement attempt used radial distance from the slew centre
+  (detectedR vs cadFleetData's r/angle). Pushing those amounts only
+  got the beams to ~93-95% of target, because the beam's real sliding
+  axis isn't collinear with the slew-centre radial line - a wrong
+  framing, not a wrong number. Recomputed as true 2D vector
+  displacement (more accurate, but still implied a 2-axis push). The
+  person corrected the actual mechanics: these outriggers only move
+  laterally in/out from a fixed mount point - longitudinal position
+  never changes. Confirmed that directly (currentLongitudinalMm
+  identical between the old and new model exports for every corner)
+  before trusting it.
+
+  Recomputed as pure lateral distance instead. The person's own
+  edge-of-crane formula ((span-width)/2) initially looked like it
+  disagreed with the app's span/2-from-centreline figure - it doesn't;
+  they're the same measurement from two different reference points,
+  and the "extend by" delta is identical either way since the constant
+  offset (half the carrier width) cancels in the subtraction. Also
+  had to independently verify GROUND_LAYOUT_DATA's rearSpan figure
+  (8306) after the person read 8316 off a fresh manual page - browsed
+  their real Nextcloud-hosted LTM 1160 manual directly to check rather
+  than assuming either number was right; the person self-corrected
+  ("8306 is correct, my mistake with 8316") before that check finished,
+  confirming the app's stored figure was right all along.
+
+  Final, stable per-corner numbers (extend by, lateral only, from the
+  model as it stood after the first correction pass): C1 +366mm,
+  C4 +367mm, C3 +660mm, C2 +777mm.
+
+  Before handing those numbers over the second time, audited all six of
+  the OTHER carrier models (1100/1110/1130/1250/1300/1650) with the
+  same edge-to-outrigger-foot-centre lateral measurement, to make sure
+  1160 was an isolated bad export and not a systemic issue. All six sit
+  within 1-43mm of target (99.96%-101.2%) - ordinary model-export/
+  detection noise, nothing else needed correcting.
+
+  Person pushed the beams by the four amounts above in Onshape and
+  supplied a new export. Re-measured the same way: all four corners
+  landed within 1mm of target (100.0-100.1%), C2 included despite it
+  being flagged as the largest/outlier correction. Visually confirmed
+  via 3D preview screenshot - all four beams symmetrically, fully
+  deployed. Swapped outrigger/models/ltm1160-carrier.glb to the
+  corrected export and shipped.
+
+  Every intermediate measurement in this investigation went through a
+  temporary window.__ceDebugLateral hook added to
+  refineCalibrationFromGeometry (vendor/carrier3d.js) and a matching
+  test GLB swap in outrigger/models/ - both reverted via `git checkout`
+  and confirmed clean via `git status`/md5sum after every single
+  iteration, so none of the debug scaffolding or intermediate test
+  files ever risked shipping alongside the real fix.
+
+  CACHE_VERSION v240->v241, app version v6.14->v6.15.

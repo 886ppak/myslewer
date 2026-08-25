@@ -343,3 +343,29 @@ a working record, not app content.
   without a corrected export (source CAD re-exported with outriggers at
   full extension) - nothing shipped this round, waiting on a replacement
   model file.
+
+## 2026-08-25
+
+- Follow-up on the LTM 1160 outrigger fix above: person had the source
+  .sat file, asked if it could be processed directly (declined - no CAD
+  tooling available, asked for a glTF/OBJ/FBX/STEP export instead via
+  Onshape), then a series of "how much does each leg need to extend"
+  requests as measurement methodology was corrected round by round
+  (radial from slew centre -> 2D vector -> pure lateral only, per the
+  person's correction that these beams only move in/out on a fixed
+  axis), plus a dimension dispute over GROUND_LAYOUT_DATA's rearSpan
+  (8306 vs a fresh 8316 manual read) that was independently checked
+  against the person's real Nextcloud-hosted OEM manual before the
+  person self-corrected ("8306 is correct, my mistake").
+  **Status: done, shipped.** Final corrected numbers handed over: C1
+  +366mm, C4 +367mm, C3 +660mm, C2 +777mm (lateral only, edge-
+  referenced, no diagonal/angle component). Also audited the other six
+  carrier models (1100/1110/1130/1250/1300/1650) with the same
+  measurement to confirm 1160 was an isolated bad export, not systemic
+  - all six within 1-43mm of target. Person pushed the beams and
+  supplied a new export; re-measured, all four corners landed within
+  1mm of target (100.0-100.1%), confirmed visually via 3D preview
+  screenshot. Swapped outrigger/models/ltm1160-carrier.glb to the
+  corrected file and shipped (CACHE_VERSION v240->v241, app v6.14-
+  >v6.15). See methodology.txt 85 for the full measurement-methodology
+  history.
