@@ -10675,3 +10675,89 @@ cranes get their own subsections as they're built.
   descending after the fix.
 
   CACHE_VERSION v242->v243, app version v6.16->v6.17.
+
+88. One-time invite tokens (QR/link) + closed the magic-link allowlist gap
+
+  Person had used the SafeDay app and wanted its "Invite a Colleague"
+  flow replicated - screenshots showed a per-user-generated, 30-minute,
+  single-use QR/SMS/email invite that lets a new person self-authorise
+  into the app, rather than an admin adding their email up front.
+  Explicit instruction: "build it but don't release it to user have it
+  hidden."
+
+  Before writing a line of it, checked exactly how the existing sign-in
+  gate works and found a real, pre-existing gap: only the Google sign-
+  in button's own handler ever checked googleAllowlist/{email} - the
+  magic-link and password paths had NO allowlist check anywhere,
+  relying entirely on whether a Firebase Auth account could be created/
+  signed into at all. Since Firebase's email-link sign-in auto-creates
+  a new account for any email with nothing gating it, this meant anyone
+  who knew the app's URL could already get in via "Use Sign-In Link",
+  no invite needed. Flagged this to the person before building anything
+  further, since a token-gated invite system built on top of a side
+  door that bypasses it entirely wouldn't accomplish much. Confirmed
+  first (Admin SDK, cross-checked against real signed-in accounts) that
+  all 8 real users already had a strict `allowed: true` googleAllowlist
+  entry regardless of which method they'd signed in with, so closing
+  the gap wouldn't lock anyone out - then centralised the allowlist
+  check into one function (enforceAllowlistOrRedeem) run from
+  onAuthStateChanged on EVERY sign-in method and every reload, removing
+  the old Google-only inline check as redundant. Also fixes a second,
+  related gap this uncovered: a revoked googleAllowlist entry (allowed
+  set back to false) previously only ever took effect for the Google
+  path too, since nothing else re-checked it on a later load either.
+
+  New inviteTokens/{token} collection (createdBy/createdAt/expiresAt/
+  used) plus a new self-service `create` rule on the existing
+  googleAllowlist/{email} collection (previously admin/Console-write-
+  only). Redemption is two sequential writes, deliberately ordered to
+  fail CLOSED rather than open if interrupted between them: the token
+  is marked used FIRST, tied to the redeemer's own uid+email via the
+  update rule's own precondition (resource.data.used == false,
+  evaluated against the true server document - this is what makes it
+  genuinely one-time-use under concurrent redemption, not just
+  sequential reuse), and only THEN can that same person's own
+  googleAllowlist self-grant succeed, gated on citing a token whose
+  usedByUid/usedByEmail match the requester exactly - never a token
+  someone else redeemed. No Cloud Function needed, same non-atomic-but-
+  sequential pattern already accepted for pools/invites elsewhere in
+  this file, just reordered so a crash mid-sequence burns the token
+  without ever granting access, rather than the reverse.
+
+  Verified in three layers before touching index.html: (1) a
+  comprehensive real-account REST test directly against the live
+  released rules - 13 checks covering the full matrix (valid redeem,
+  reuse rejected, forged self-grant citing someone else's redeemed
+  token rejected, expired rejected, garbage token rejected, unallow-
+  listed user can't even create a token, no-list-browsing preserved,
+  pre-existing allowlisted accounts unaffected) - all passing before
+  any client code was written against it; (2) a real end-to-end
+  Playwright run through the actual shipped UI (generate via the real
+  Admin Dashboard button, redeem via the real password sign-in form)
+  hit a sandbox-specific wall - this environment's outbound network
+  policy resets connections from a live Chromium instance to Google's
+  Identity Toolkit endpoint (confirmed via the proxy's own relay-
+  failure log, not assumed - a `ERR_CONNECTION_RESET` on the exact
+  identitytoolkit.googleapis.com origin, unrelated to any TLS/cert
+  problem), so the real-signed-in-user portion of that particular test
+  couldn't run in THIS sandbox specifically - doesn't reflect anything
+  about the real deployed app, which runs in an ordinary browser with
+  normal network access; (3) the admin-generation side (button -> real
+  QR render via the same vendor/qrcode.js the Share panel already uses
+  -> copy-to-clipboard -> live expiry countdown -> error path) fully
+  verified via the same mocked-window Playwright pattern used
+  throughout this admin dashboard - 12 checks, all passing. Full
+  existing regression suite re-run clean alongside it.
+
+  Hidden exactly as instructed: the "Invite a Colleague" card lives
+  ONLY inside the Admin Dashboard tab (already admin-gated, nobody else
+  can even see the tab exists), with no link to it from the Profile
+  panel or anywhere else a regular user would encounter it. The
+  underlying rules and window.__adminCreateInviteToken are written
+  against the intended END state though - inviteTokens.create already
+  permits ANY currently-allowlisted user, not just admins, matching
+  SafeDay's real "any user can invite a colleague" behaviour - so
+  actually releasing this later is a UI-only change (moving/adding a
+  button), no further rules redeploy needed.
+
+  CACHE_VERSION v243->v244, app version v6.17->v6.18.

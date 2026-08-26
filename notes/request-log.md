@@ -399,3 +399,28 @@ a working record, not app content.
   Verified across all 24 crane/boom-config/direction/location
   combinations with more than one weight option. Shipped to main
   (CACHE_VERSION v242->v243, app v6.16->v6.17). See methodology.txt 87.
+- "with the safeday app they had a way of inviting other users based on
+  a current user allow[ing] new user to scan a QR code or be given a
+  token... can you brainstorm a similar way to implement" (screenshots
+  of SafeDay's own "Invite a Colleague" QR flow supplied) - "build it
+  but don't release it to user have it hidden."
+  **Status: done, shipped (hidden).** Before building, found and
+  flagged a real pre-existing gap: only Google sign-in was ever
+  allowlist-checked, magic-link/password sign-in had no check at all.
+  Confirmed all 8 real users were already covered either way, then
+  closed that gap as part of this same change (person confirmed:
+  "close it now"). Built inviteTokens/{token} (30-min, single-use,
+  fail-closed one-time-use enforced by the rules themselves, not the
+  client) plus a new self-service googleAllowlist create rule gated on
+  a redeemed token. Verified with 13 real-account REST checks against
+  the live rules (reuse, forgery, expiry, no-token-no-access all
+  rejected correctly) and 12 UI checks on the admin generation side (QR
+  render, copy, expiry countdown). A full real-browser sign-in redemption
+  test hit a sandbox-only network policy wall (this environment blocks
+  live Chromium from reaching Google's Identity Toolkit directly) -
+  doesn't affect the real deployed app. "Invite a Colleague" lives only
+  inside the (already admin-only) Admin Dashboard tab for now, not
+  linked anywhere a regular user would see it - releasing it later is a
+  UI-only change, the rules already support any allowlisted user
+  generating one. Shipped to main (CACHE_VERSION v243->v244, app
+  v6.17->v6.18). See methodology.txt 88.

@@ -550,7 +550,7 @@
       sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, signOut
     } from './vendor/firebase/firebase-auth.js';
     import {
-      initializeFirestore, persistentLocalCache, doc, getDoc, setDoc,
+      initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, updateDoc,
       collection, getDocs, deleteDoc, query, where, addDoc, onSnapshot
     } from './vendor/firebase/firebase-firestore.js';
 
@@ -670,6 +670,17 @@
       // (same device that requested the link) or asking them to confirm
       // their email first (opened somewhere else - see LINK_EMAIL_STORAGE_KEY).
       const completingLink = isSignInWithEmailLink(auth, window.location.href);
+
+      // Captured once, up front, rather than re-read from
+      // window.location.search lazily inside enforceAllowlistOrRedeem
+      // below - the magic-link completion path strips the URL's query
+      // string entirely (window.history.replaceState down in
+      // completeEmailLinkSignIn) as part of dropping the link's own
+      // one-time code, and the exact ordering of that against
+      // onAuthStateChanged firing isn't something to rely on. Grabbing
+      // it here, before any sign-in flow has run, means it's always
+      // available regardless of what any later cleanup does to the URL.
+      const initialInviteToken = new URLSearchParams(window.location.search).get('invite');
 
       function completeEmailLinkSignIn(email) {
         statusEl.textContent = 'Completing sign-in…';
@@ -1116,6 +1127,31 @@
         return setDoc(doc(db, 'userAccess', uid), { startHidden: startHidden }, { merge: true });
       };
 
+      // Generates one 30-minute, single-use invite token (see
+      // firestore.rules' inviteTokens/{token} match block for the real
+      // enforcement) and returns both the raw token and the full
+      // shareable URL, so the caller can render a QR/link/copy button
+      // without having to know the app's own origin/path itself.
+      // Admin-only for now purely because the ONLY UI that calls this
+      // lives in the (already admin-gated) Admin Dashboard - the write
+      // rule itself already permits ANY currently-allowlisted user to
+      // generate one, matching SafeDay's real "any user can invite a
+      // colleague" behaviour, so exposing this to every user later is a
+      // UI-only change, no rules redeploy needed.
+      window.__adminCreateInviteToken = function () {
+        const uid = auth.currentUser.uid;
+        const tokenRef = doc(collection(db, 'inviteTokens'));
+        const token = tokenRef.id;
+        const now = Date.now();
+        const expiresAt = now + 30 * 60 * 1000;
+        return setDoc(tokenRef, { createdBy: uid, createdAt: now, expiresAt: expiresAt, used: false })
+          .then(() => ({
+            token: token,
+            expiresAt: expiresAt,
+            url: window.location.origin + window.location.pathname + '?invite=' + token
+          }));
+      };
+
       window.__adminSetMemberRole = function (poolId, uid, role) {
         return setDoc(doc(db, 'pools', poolId, 'members', uid), { role: role }, { merge: true });
       };
@@ -1195,13 +1231,87 @@
         });
       }
 
+      // Redeems a one-time invite token (see firestore.rules'
+      // inviteTokens/{token} + googleAllowlist create for the actual
+      // enforcement - this is just the two sequential client calls that
+      // rule expects, in the same fail-CLOSED order it was written
+      // against: mark the token used FIRST, tied to this exact
+      // uid+email, and only then attempt the googleAllowlist self-grant
+      // that cites it. Not reachable from anywhere in the UI yet - see
+      // methodology.txt for why the invite-generation side is admin-
+      // dashboard-only for now - but written against the real
+      // firestore.rules end state so nothing here needs revisiting once
+      // it is exposed.
+      function redeemInviteToken(token, user, email) {
+        const tokenRef = doc(db, 'inviteTokens', token);
+        return getDoc(tokenRef)
+          .then((snap) => {
+            if (!snap.exists() || snap.data().used === true || snap.data().expiresAt < Date.now()) return false;
+            return updateDoc(tokenRef, { used: true, usedByUid: user.uid, usedByEmail: email, usedAt: Date.now() })
+              .then(() => setDoc(doc(db, 'googleAllowlist', email), { allowed: true, grantedViaToken: token }))
+              .then(() => true)
+              .catch(() => false);
+          })
+          .catch(() => false);
+      }
+
+      // The one real access gate for every sign-in method - previously
+      // only the Google popup's own handler checked googleAllowlist
+      // inline, so a magic-link or password sign-in (an admin-created
+      // Auth account, or - for email link - a brand new one Firebase
+      // creates automatically on first use) could reach the app with NO
+      // allowlist check at all. Centralising it here, run on every
+      // onAuthStateChanged firing rather than just at the moment of a
+      // fresh sign-in, closes both that gap AND a second one: a
+      // person's access being revoked (googleAllowlist's `allowed` set
+      // back to false) previously only ever took effect for the Google
+      // path, since nothing else re-checked it on a later reload either.
+      // Confirmed safe before enforcing this everywhere: cross-checked
+      // every real signed-in account against googleAllowlist first (see
+      // methodology.txt) - all 8 already had a matching, allowed entry
+      // regardless of which method they'd signed in with, so nobody's
+      // access actually changes by turning this on.
+      function enforceAllowlistOrRedeem(user) {
+        const email = (user.email || '').toLowerCase();
+        if (!email) {
+          return signOut(auth).then(() => {
+            errorEl.textContent = 'That account has no email on it - sign-in method not supported here.';
+            errorEl.style.display = '';
+            return false;
+          });
+        }
+        return getDoc(doc(db, 'googleAllowlist', email))
+          .then((snap) => snap.exists() && snap.data().allowed === true)
+          .catch(() => false)
+          .then((alreadyAllowed) => {
+            if (alreadyAllowed) return true;
+            const redeemAttempt = initialInviteToken ? redeemInviteToken(initialInviteToken, user, email) : Promise.resolve(false);
+            return redeemAttempt.then((redeemed) => {
+              if (redeemed) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+                return true;
+              }
+              return signOut(auth).then(() => {
+                errorEl.textContent = initialInviteToken
+                  ? 'That invite link is invalid, expired, or already used - ask for a new one.'
+                  : 'That account isn’t set up for MYSLEWER - ask to be added, or use a different sign-in method.';
+                errorEl.style.display = '';
+                return false;
+              });
+            });
+          });
+      }
+
       onAuthStateChanged(auth, (user) => {
         if (user) {
-          gateEl.style.display = 'none';
-          loadTabRestrictions(user.uid);
-          loadProfile(user);
-          loadAdminStatus(user.uid);
-          ensureEmailRecorded(user);
+          enforceAllowlistOrRedeem(user).then((allowed) => {
+            if (!allowed) return;
+            gateEl.style.display = 'none';
+            loadTabRestrictions(user.uid);
+            loadProfile(user);
+            loadAdminStatus(user.uid);
+            ensureEmailRecorded(user);
+          });
           return;
         }
         // Confirmed signed-out (not just "still checking") - only now is
@@ -1269,35 +1379,18 @@
       googleBtn.addEventListener('click', () => {
         errorEl.style.display = 'none';
         googleBtn.disabled = true;
+        // The actual googleAllowlist check (plus invite-token redemption
+        // if the person got here via one) now happens centrally in
+        // enforceAllowlistOrRedeem, run from onAuthStateChanged for
+        // every sign-in method - see its own comment for why. Nothing
+        // left to do here on success beyond letting that fire; Firebase
+        // already created (or matched) an account for this Google
+        // identity the moment the popup completes either way, allowed or
+        // not - that check just decides whether they ever get past the
+        // gate to see anything, not whether the underlying Auth account
+        // exists.
         withTimeout(signInWithPopup(auth, new GoogleAuthProvider()), 60000)
-          .then(async (result) => {
-            const email = (result.user.email || '').toLowerCase();
-            // Firestore-backed allowlist (see methodology.txt) rather than
-            // a hardcoded array shipped in this file - keeps crew email
-            // addresses out of the public page source. Document ID IS the
-            // lowercased email (has to be, since - unlike the other two
-            // sign-in methods - no account, and so no uid, exists yet for
-            // a brand new Google identity until this popup already
-            // completed; email is the only thing available to check
-            // against beforehand). Security rules only let a signed-in
-            // user read the ONE doc matching their own token email, never
-            // list the collection, so this can't be used to enumerate who
-            // else is invited.
-            const allowSnap = await getDoc(doc(db, 'googleAllowlist', email));
-            if (!allowSnap.exists() || allowSnap.data().allowed !== true) {
-              // Firebase already created (or matched) an account for this
-              // Google identity by the time we get here - signing back out
-              // is the only lever available client-side. A stray, useless
-              // account is left sitting in the project's Users list, but
-              // it can never get past this check to see the app itself.
-              await signOut(auth);
-              errorEl.textContent = 'That Google account isn’t set up for MYSLEWER - ask to be added, or use the email/password option.';
-              errorEl.style.display = '';
-              return;
-            }
-            // Nothing else to do on success - onAuthStateChanged above
-            // handles hiding the gate once Firebase's own state updates.
-          })
+          .then(() => {})
           .catch((err) => {
             // auth/popup-closed-by-user and auth/cancelled-popup-request
             // both just mean the person backed out of the Google popup
@@ -1368,7 +1461,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.17</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.18</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2607,6 +2700,21 @@
         <p class="disclaimer" style="margin-top:0;">Promote a member to overseer (can view a pool's lift log without needing to log lifts themselves) in any pool you belong to.</p>
         <div class="profile-empty-msg" id="adminPoolsEmpty">You're not in any pool yet.</div>
         <div id="adminPoolsList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Invite a Colleague <span style="color:var(--text-muted); font-weight:500; text-transform:none;">(testing - not linked from anywhere yet)</span></div>
+        <p class="disclaimer" style="margin-top:0;">Generates a one-time link/QR code that lets someone sign in and get MYSLEWER access themselves, without adding their email here first. Valid for 30 minutes, single use.</p>
+        <button type="button" class="toolbar-btn" id="adminInviteGenerateBtn" onclick="adminGenerateInvite()">Generate Invite Link</button>
+        <div id="adminInviteResult" style="display:none; margin-top:14px;">
+          <div style="font-size:0.8rem; color:var(--text-muted); word-break:break-all; margin-bottom:10px;" id="adminInviteUrl"></div>
+          <div id="adminInviteQrWrap" style="max-width:200px; margin:0 auto 10px;"></div>
+          <div style="display:flex; gap:8px; justify-content:center;">
+            <button type="button" class="toolbar-btn" id="adminInviteCopyBtn" onclick="copyAdminInviteLink()">Copy Link</button>
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-top:8px;" id="adminInviteExpiry"></div>
+        </div>
+        <div style="display:none; color:var(--danger); font-size:0.85rem; margin-top:10px;" id="adminInviteError"></div>
       </div>
     </div>
 
@@ -9765,6 +9873,74 @@
         .catch(() => { select.value = previous; })
         .finally(() => { select.disabled = false; });
     });
+
+    // "Invite a Colleague" - see window.__adminCreateInviteToken (gate's
+    // module script) + firestore.rules' inviteTokens/{token} for the
+    // actual generation/enforcement. Only reachable from inside the
+    // Admin Dashboard right now - deliberately not linked from the
+    // Profile panel or anywhere a regular user would see it, per the
+    // explicit "build it, but keep it hidden for now" instruction. The
+    // QR itself reuses the exact same vendor/qrcode.js loader and
+    // render shape as the Share panel's own QR (loadQrcodeLib/
+    // renderShareQR above) rather than a second copy of that logic.
+    let adminInviteExpiryTimer = null;
+    function adminGenerateInvite() {
+      const btn = document.getElementById('adminInviteGenerateBtn');
+      const errEl = document.getElementById('adminInviteError');
+      const resultEl = document.getElementById('adminInviteResult');
+      errEl.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Generating…';
+      window.__adminCreateInviteToken()
+        .then(({ url, expiresAt }) => {
+          window.__lastAdminInviteUrl = url;
+          document.getElementById('adminInviteUrl').textContent = url;
+          resultEl.style.display = '';
+          loadQrcodeLib().then(() => {
+            const qr = qrcode(0, 'M');
+            qr.addData(url);
+            qr.make();
+            document.getElementById('adminInviteQrWrap').innerHTML = qr.createSvgTag({ scalable: true });
+          }).catch(() => {
+            document.getElementById('adminInviteQrWrap').innerHTML = '<div style="color:var(--text-muted); font-size:0.75rem;">QR code failed to load.</div>';
+          });
+          if (adminInviteExpiryTimer) clearInterval(adminInviteExpiryTimer);
+          const updateExpiry = () => {
+            const remainingMs = expiresAt - Date.now();
+            const expiryEl = document.getElementById('adminInviteExpiry');
+            if (remainingMs <= 0) {
+              expiryEl.textContent = 'Expired - generate a new one.';
+              clearInterval(adminInviteExpiryTimer);
+              return;
+            }
+            const mins = Math.floor(remainingMs / 60000);
+            const secs = Math.floor((remainingMs % 60000) / 1000);
+            expiryEl.textContent = `Expires in ${mins}:${String(secs).padStart(2, '0')}`;
+          };
+          updateExpiry();
+          adminInviteExpiryTimer = setInterval(updateExpiry, 1000);
+        })
+        .catch(() => {
+          errEl.textContent = 'Could not generate an invite link - try again.';
+          errEl.style.display = '';
+        })
+        .finally(() => {
+          btn.disabled = false;
+          btn.textContent = 'Generate Invite Link';
+        });
+    }
+
+    function copyAdminInviteLink() {
+      const url = window.__lastAdminInviteUrl;
+      if (!url) return;
+      const done = () => showToast('Link copied.');
+      const failed = () => showToast('Could not copy - select and copy the link manually.');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done).catch(failed);
+      } else {
+        failed();
+      }
+    }
 
     // Personal "declutter" tab menu - purely a per-device display
     // preference, stored in localStorage only, never Firestore. Separate
