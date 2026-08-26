@@ -9001,3 +9001,16 @@ cranes get their own subsections as they're built.
   the app. No beta-specific code involved.
 
   CACHE_VERSION v51-beta150->v51-beta151.
+
+69. Extend By Shackles: add Gunnebo Oblong Master Link M-2622-10
+
+  Shadowed from main - added the Gunnebo Grade 100 Oblong Master Link
+  (WLL 41.0t, Bar Diameter 45mm, Inside Length 340mm, weight 12.9kg) as
+  an ADDITIONAL item option in Extend By Shackles, alongside shackles.
+  Kept as its own MASTER_LINK_SIZES table rather than folded into
+  SHACKLE_SIZES, since that table's own sourcing comment is specifically
+  Green Pin's shackle catalog - mixing a different manufacturer/component
+  type in would misrepresent where every other row came from. No
+  beta-specific code involved.
+
+  CACHE_VERSION v51-beta151->v51-beta152.
