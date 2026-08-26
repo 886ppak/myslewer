@@ -10761,3 +10761,61 @@ cranes get their own subsections as they're built.
   button), no further rules redeploy needed.
 
   CACHE_VERSION v243->v244, app version v6.17->v6.18.
+
+89. Extend By Shackles: added the Gunnebo Oblong Master Link (M-2622-10)
+
+  Person supplied a full spec sheet (WLL 41.0t, proof load 102.5t,
+  Grade 100, Bar Diameter 45mm, Inside Length 340mm, weight 12.9kg) and
+  wanted it added to the "additional items" list in Extend By Shackles
+  - the same checklist SHACKLE_SIZES already populates.
+
+  Kept as its own table (MASTER_LINK_SIZES) rather than appended
+  straight into SHACKLE_SIZES - that table's own sourcing comment cites
+  Green Pin's shackle catalog specifically, digit-for-digit; folding in
+  a different manufacturer's different component type would misrepresent
+  where every other row actually came from. Same wll/b/f/weight shape
+  though (b = Bar Diameter, this component's own analogue to a shackle's
+  pin diameter; f = Inside Length, what it adds to the leg in series -
+  same convention SHACKLE_SIZES' own f already uses), so it plugs
+  straight into the existing combo-search math via a new
+  ADDITIONAL_ITEM_SIZES = SHACKLE_SIZES.concat(MASTER_LINK_SIZES).
+
+  Deliberately NOT added to the mandatory attachment/lug shackle dropdown
+  (still SHACKLE_SIZES only, via shackleSizesForWeight) - a master link
+  this size doesn't thread through a load's own attachment lug the way a
+  shackle's bow does, it only ever goes in series further up the leg.
+  Every OTHER place a WLL gets resolved back to its item (the additional-
+  items checklist, the ticked-size lookup in calcShackleExtend, the
+  "one more X would close this" shortfall suggestion, and the combo
+  table's own per-row description) now reads from ADDITIONAL_ITEM_SIZES
+  instead of SHACKLE_SIZES directly, so the master link participates
+  identically to a shackle everywhere an additional item can appear.
+
+  Added a `label` field (only the master link has one) so it renders as
+  "41t — Gunnebo Oblong Master Link M-2622-10" rather than silently
+  showing up as an unlabelled "41t" that would misleadingly read as just
+  another shackle size - the app has never had a shackle anywhere near
+  that WLL band, but there was no principled reason to assume it never
+  would, and mislabelling real rigging hardware isn't something to risk.
+  Also added `diameterLabel: 'bar'` (defaulting to 'pin' for every
+  existing shackle row) so the checklist correctly says "bar 45mm" for
+  the master link instead of misusing shackle terminology ("pin") for a
+  component that doesn't have one. Three user-facing strings that used
+  to say "shackle(s)" specifically (the checklist's own field label, the
+  combo table's column header, and the results disclaimer) were
+  generalised to "item(s)" now that the list can hold more than one kind
+  of component - re-read all three afterward to confirm nothing reads
+  oddly for the shackle-only case that's still the overwhelming majority
+  of real usage.
+
+  Verified: the master link appears in the checklist once load weight
+  and lug WLL both clear 41t, correctly disappears once either exceeds
+  it, participates in a real combo (lug 25t + 1 master link = 178+340 =
+  518mm, landing within tolerance of a 515mm target with no shortfall
+  warning), and ordinary shackle rows are completely unaffected (still
+  say "pin", not "bar"). Full existing shackle-mode regression suite
+  (combos, extend scenarios, shortfall messaging, UI-driven flow) re-run
+  clean alongside it - checklist count correctly grew from 5 to 6 items
+  in the one test whose fixture load weight/lug happen to clear 41t.
+
+  CACHE_VERSION v244->v245, app version v6.18->v6.19.

@@ -424,3 +424,20 @@ a working record, not app content.
   UI-only change, the rules already support any allowlisted user
   generating one. Shipped to main (CACHE_VERSION v243->v244, app
   v6.17->v6.18). See methodology.txt 88.
+- "id like to added this oblong to the extend by amount where we have
+  the shackles all in" - full Gunnebo Grade 100 Oblong Master Link
+  (M-2622-10) spec sheet supplied (WLL 41.0t, Bar Diameter 45mm, Inside
+  Length 340mm, weight 12.9kg).
+  **Status: done, shipped.** Added as its own MASTER_LINK_SIZES table
+  (kept separate from SHACKLE_SIZES since that one's sourcing comment
+  is specifically the Green Pin catalog) merged into a combined
+  ADDITIONAL_ITEM_SIZES used everywhere an "additional item" in Extend
+  By Shackles can appear - checklist, combo search, shortfall
+  suggestion, results table - but NOT the mandatory attachment/lug
+  dropdown (still shackle-only, physically correct). Labelled distinctly
+  ("41t — Gunnebo Oblong Master Link M-2622-10", "bar 45mm" not "pin")
+  so it can never be mistaken for an actual shackle size. Verified it
+  correctly appears/disappears by WLL, participates in a real combo,
+  and every existing shackle-mode test still passes unchanged. Shipped
+  to main (CACHE_VERSION v244->v245, app v6.18->v6.19). See
+  methodology.txt 89.

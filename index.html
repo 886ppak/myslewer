@@ -1461,7 +1461,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.18</span></h1>
+    <h1>MYSLEWER <span class="app-version">v6.19</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -1784,7 +1784,7 @@
           <input type="number" id="chain-shackle-target" step="1" min="0" placeholder="e.g. 350" oninput="calcShackleExtend()">
         </div>
         <div class="form-group" id="chain-shackle-available-group" style="margin-top:10px; display:none;">
-          <label>Additional Shackles You Have On Hand <span style="font-weight:400; text-transform:none; color:var(--text-muted);">— besides the attachment one above, tick whichever sizes are actually in the kit</span></label>
+          <label>Additional Items You Have On Hand <span style="font-weight:400; text-transform:none; color:var(--text-muted);">— besides the attachment shackle above, tick whichever shackles/links are actually in the kit</span></label>
           <div id="chain-shackle-available-list" style="margin-top:6px;"></div>
         </div>
       </div>
@@ -7584,6 +7584,34 @@
       { wll: 85,   b: 83, f: 329,   weight: 62 }
     ];
 
+    // Gunnebo Grade 100 Oblong Master Link, model M-2622-10 (person's own
+    // supplied spec sheet) - kept as its OWN table rather than folded into
+    // SHACKLE_SIZES above, since that table's own sourcing comment is
+    // specifically Green Pin's shackle catalog, digit-for-digit - mixing a
+    // different manufacturer's different component type into it would
+    // misrepresent where every OTHER row actually came from. Same wll/b/f/
+    // weight shape though, so it plugs into the exact same combo-math as
+    // an additional (never the mandatory attachment/lug) item - see
+    // ADDITIONAL_ITEM_SIZES below. b = Bar Diameter (D, 45mm), the master
+    // link's own analogue to a shackle's pin diameter; f = Inside Length
+    // (L, 340mm) - what it adds to the leg in series, same "adds to the
+    // leg" convention SHACKLE_SIZES' own f already uses. `label` marks it
+    // as a distinct item wherever it's rendered, rather than silently
+    // showing up as an unlabelled "41t" that would misleadingly read as
+    // just another shackle size in the list.
+    const MASTER_LINK_SIZES = [
+      { wll: 41, b: 45, f: 340, weight: 12.9, label: 'Gunnebo Oblong Master Link M-2622-10', diameterLabel: 'bar' }
+    ];
+
+    // Every item that can go into a leg as an ADDITIONAL piece (checked in
+    // the "what's in the kit" list, searched by the combo math) - shackles
+    // plus the master link above. Deliberately NOT used for the mandatory
+    // attachment/lug shackle (still SHACKLE_SIZES only, via
+    // shackleSizesForWeight) - a master link this size doesn't thread
+    // through a load's own attachment lug the way a shackle's bow does,
+    // it only ever goes in series further up the leg.
+    const ADDITIONAL_ITEM_SIZES = SHACKLE_SIZES.concat(MASTER_LINK_SIZES);
+
     // 'length' (original: current + desired length) or 'amount' (person's
     // own request: just say how much to shorten by, e.g. 500mm, without
     // needing to know/enter the current length at all). A third 'legs'
@@ -7689,16 +7717,16 @@
       const weight = parseFloat(document.getElementById('chain-shackle-weight').value);
       const lugWll = parseFloat(document.getElementById('chain-shackle-lug').value);
       const listEl = document.getElementById('chain-shackle-available-list');
-      const valid = shackleSizesForWeight(weight).filter(s => s.wll >= lugWll);
+      const valid = ADDITIONAL_ITEM_SIZES.filter(s => s.wll >= weight && s.wll >= lugWll);
       const prevChecked = new Set(
         Array.from(listEl.querySelectorAll('input[type=checkbox]:checked')).map(el => el.dataset.wll)
       );
       listEl.innerHTML = valid.map(s => `
         <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; cursor:pointer; font-size:0.85rem;">
           <input type="checkbox" data-wll="${s.wll}" ${prevChecked.has(String(s.wll)) ? 'checked' : ''} onchange="calcShackleExtend()" style="width:auto; cursor:pointer;">
-          ${s.wll}t (pin ${s.b}mm, adds ${s.f}mm)
+          ${s.wll}t${s.label ? ` — ${s.label}` : ''} (${s.diameterLabel || 'pin'} ${s.b}mm, adds ${s.f}mm)
         </label>
-      `).join('') || '<div class="disclaimer">No shackle sizes clear this weight - check the load weight above.</div>';
+      `).join('') || '<div class="disclaimer">No sizes clear this weight - check the load weight above.</div>';
       calcShackleExtend();
     }
 
@@ -7808,7 +7836,7 @@
 
       const lug = SHACKLE_SIZES.find(s => s.wll === lugWll);
       const tickedWlls = Array.from(document.querySelectorAll('#chain-shackle-available-list input[type=checkbox]:checked')).map(el => parseFloat(el.dataset.wll));
-      const tickedSizes = SHACKLE_SIZES.filter(s => tickedWlls.includes(s.wll));
+      const tickedSizes = ADDITIONAL_ITEM_SIZES.filter(s => tickedWlls.includes(s.wll));
 
       const combos = bestShackleExtendCombos(target, lug.f, lug.weight, tickedSizes, pitch);
       const best = combos[0];
@@ -7828,8 +7856,8 @@
         // that's already available would be nonsense, since the search
         // above already tried every count of every ticked size and this
         // was the best it found.
-        const closer = SHACKLE_SIZES.filter(s => s.wll >= weight && s.wll >= lugWll && s.f >= -best.diff && !tickedWlls.includes(s.wll)).sort((a, b) => a.f - b.f)[0];
-        shortfallNote = `<div class="fail-box">Short of target by ${Math.abs(best.diff).toFixed(1)}mm with the sizes ticked as available.${closer ? ` One more ${closer.wll}t shackle would close this (not currently ticked).` : ' No untoggled size would close this in one more shackle either.'}</div>`;
+        const closer = ADDITIONAL_ITEM_SIZES.filter(s => s.wll >= weight && s.wll >= lugWll && s.f >= -best.diff && !tickedWlls.includes(s.wll)).sort((a, b) => a.f - b.f)[0];
+        shortfallNote = `<div class="fail-box">Short of target by ${Math.abs(best.diff).toFixed(1)}mm with the sizes ticked as available.${closer ? ` One more ${closer.wll}t${closer.label ? ` (${closer.label})` : ''} would close this (not currently ticked).` : ' No untoggled size would close this in one more shackle either.'}</div>`;
       }
 
       // Ranked, not just "the one best answer" - fewest additional
@@ -7838,7 +7866,10 @@
       // self-contained combo, not a diff against the row above it.
       const comboRows = combos.map((c, idx) => {
         const additionalDesc = Object.keys(c.counts).length
-          ? Object.entries(c.counts).map(([wll, count]) => `${count}&times;${wll}t`).join(' + ')
+          ? Object.entries(c.counts).map(([wll, count]) => {
+              const item = ADDITIONAL_ITEM_SIZES.find(s => s.wll === parseFloat(wll));
+              return `${count}&times;${wll}t${item && item.label ? ` (${item.label})` : ''}`;
+            }).join(' + ')
           : 'none';
         return `<tr>
           <td style="text-align:left;">${idx === 0 ? '<b>#1 (best)</b>' : '#' + (idx + 1)}</td>
@@ -7860,14 +7891,14 @@
         </table>
         <table style="margin-top:0.75rem;">
           <thead>
-            <tr><th style="text-align:left;">Combo</th><th style="text-align:left;">Additional Shackles</th><th>Links Removed</th><th>Final Length Added</th><th>Diff from Target</th><th>Combo Weight</th></tr>
+            <tr><th style="text-align:left;">Combo</th><th style="text-align:left;">Additional Items</th><th>Links Removed</th><th>Final Length Added</th><th>Diff from Target</th><th>Combo Weight</th></tr>
           </thead>
           <tbody>
             ${comboRows}
           </tbody>
         </table>
         ${shortfallNote}
-        <div class="disclaimer">Ranked by fewest additional shackles first (simplest rigging), precision breaking ties among combos already close to target. Combo Weight is every shackle in the leg (attachment + additional), by their own catalog mass - factor this into the crane's load chart alongside the load itself, same as any other rigging gear. Assumes shackles are married bow-to-pin in series (each contributes its own inside length, "f"), and that every shackle in the chain - not just the attachment one - is rated for the full load weight. Always cross-check WLL and pin fit against the actual gear before rigging.</div>`;
+        <div class="disclaimer">Ranked by fewest additional items first (simplest rigging), precision breaking ties among combos already close to target. Combo Weight is every shackle/link in the leg (attachment + additional), by their own catalog mass - factor this into the crane's load chart alongside the load itself, same as any other rigging gear. Assumes each item is connected in series (each contributes its own inside length, "f"), and that every item in the chain - not just the attachment shackle - is rated for the full load weight. Always cross-check WLL and pin/bar fit against the actual gear before rigging.</div>`;
     }
 
     // Same formula as the reference spreadsheet, same field names:
