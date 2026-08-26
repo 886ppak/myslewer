@@ -10819,3 +10819,37 @@ cranes get their own subsections as they're built.
   in the one test whose fixture load weight/lug happen to clear 41t.
 
   CACHE_VERSION v244->v245, app version v6.18->v6.19.
+
+90. Extend By Shackles: clarify the attachment shackle isn't restated in
+    the combo table
+
+  Follow-up question after shipping the master link (section 89): "say
+  we go with option #1 is it 2x17t 1x oblong because I need to included
+  the attachment shackle or is this included?" - confirmed the Additional
+  Items column was never restating the attachment shackle (it's counted
+  separately in the score() function's own lugF/lugWeight, always on top
+  of whatever's in that column), so combo #1 in their example genuinely
+  meant 2×17t + 1×oblong total, not 1×17t + 1×oblong. Person's own
+  follow-up: "can we put that in the addition items column somehow...
+  might get missed by a beginner user or first-time rigger."
+
+  Appended a muted parenthetical to every row's own Additional Items
+  cell - "(plus the Nt attachment shackle above)" - rather than only
+  documenting it once, separately, in the Attachment Shackle info box
+  above the table. The person's own reasoning was right: a first-time
+  rigger scanning DOWN a list of different additional-item counts is
+  exactly the situation where a CONSTANT (the attachment shackle never
+  changes row to row) is easiest to mentally drop, especially once
+  they've stopped looking at the box above. Applied to the "none" row
+  too (no additional items ticked at all) - that case needed the
+  reminder just as much, arguably more, since "none" on its own could
+  read as "no shackle needed" rather than "no ADDITIONAL shackle beyond
+  the attachment one."
+
+  Verified via both a targeted test (the exact scenario from the
+  person's own screenshot - load 15t, lug 17t, 17t+41t ticked, target
+  610mm - reproduces "1×17t + 1×41t... (plus the 17t attachment shackle
+  above)") and a check that the "none" case shows the note too. Full
+  existing shackle-mode regression suite re-run clean alongside it.
+
+  CACHE_VERSION v245->v246, app version v6.19->v6.20.

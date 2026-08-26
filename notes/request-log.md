@@ -441,3 +441,17 @@ a working record, not app content.
   and every existing shackle-mode test still passes unchanged. Shipped
   to main (CACHE_VERSION v244->v245, app v6.18->v6.19). See
   methodology.txt 89.
+- "cool cool can we put that in the addition items coloum somehow
+  stating in brackets or something like including the 17 ton for
+  attachment point... cuz it might get missed by a beginner user or
+  first-time rigger" - follow-up after confirming the Additional Items
+  column never restated the attachment shackle (combo #1's "1×17t +
+  1×41t" meant 2×17t total once the separately-shown attachment
+  shackle is added in).
+  **Status: done, shipped.** Every combo row (including the "none"
+  row) now shows a muted "(plus the Nt attachment shackle above)" note
+  right in the Additional Items cell, so the full physical shackle
+  count is impossible to miss without cross-referencing the info box
+  above. Verified against the exact scenario from the person's own
+  screenshot. Shipped to main (CACHE_VERSION v245->v246, app
+  v6.19->v6.20). See methodology.txt 90.
