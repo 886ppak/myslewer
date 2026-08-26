@@ -5847,13 +5847,22 @@
       // shackles first (simplest rigging), precision only breaking ties
       // among combos that are already close enough. Each row is a full
       // self-contained combo, not a diff against the row above it.
+      // Appended to every row's own "Additional Items" cell, not just
+      // shown once above the table - a first-time rigger's eye lands on
+      // THIS column to see what to grab, and the mandatory attachment
+      // shackle (constant across every combo, so easy to mentally drop
+      // once you're scanning down a list of DIFFERENT additional counts)
+      // is exactly the piece most likely to get missed if it only ever
+      // appeared once, separately, above. Person's own explicit call -
+      // said this needed to be impossible to miss for a beginner.
+      const attachmentNote = ` <span style="color:var(--text-muted); font-weight:400;">(plus the ${lugWll}t attachment shackle above)</span>`;
       const comboRows = combos.map((c, idx) => {
-        const additionalDesc = Object.keys(c.counts).length
+        const additionalDesc = (Object.keys(c.counts).length
           ? Object.entries(c.counts).map(([wll, count]) => {
               const item = ADDITIONAL_ITEM_SIZES.find(s => s.wll === parseFloat(wll));
               return `${count}&times;${wll}t${item && item.label ? ` (${item.label})` : ''}`;
             }).join(' + ')
-          : 'none';
+          : 'none') + attachmentNote;
         return `<tr>
           <td style="text-align:left;">${idx === 0 ? '<b>#1 (best)</b>' : '#' + (idx + 1)}</td>
           <td style="text-align:left;">${additionalDesc}</td>

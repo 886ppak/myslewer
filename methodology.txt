@@ -9014,3 +9014,13 @@ cranes get their own subsections as they're built.
   beta-specific code involved.
 
   CACHE_VERSION v51-beta151->v51-beta152.
+
+70. Extend By Shackles: clarify attachment shackle in the combo table
+
+  Shadowed from main - combo rows only listed the ADDITIONAL items,
+  leaving the mandatory attachment/lug shackle unstated and easy for a
+  first-time user to miss. Added a muted "(plus the Nt attachment
+  shackle above)" note to each combo row. No beta-specific code
+  involved.
+
+  CACHE_VERSION v51-beta152->v51-beta153.
