@@ -9106,3 +9106,26 @@ cranes get their own subsections as they're built.
   beta-specific code involved.
 
   CACHE_VERSION v51-beta154->v51-beta155.
+
+73. Fix "Hide Rear Outrigger Box" hiding the entire chassis
+
+  Shadowed from main - person's report right after the toggle-move
+  shipped there, screenshot attached: checking the box hid nearly the
+  whole carrier body, leaving just axles/wheels/outrigger beams. Of the
+  9 mesh names read off Onshape (section 71), "Part 16" was wrong -
+  its own world-space bounding box spans 19 of the whole carrier's
+  20-unit front-to-rear length, i.e. it's the main chassis frame, not
+  a rear-only component. The other 8 all sit tightly within 3 units of
+  the rear extreme - genuinely small, genuinely the rear outrigger box.
+  Dropped Part 16 from PART_GROUPS.1650.rearOutriggerBox (now 8
+  entries). Verified directly against the scene graph (temporary debug
+  hook, removed before shipping) plus a real before/after screenshot
+  pair: chassis, cab, wheels and the other three outrigger legs stay
+  fully visible, only the intended rear leg's own box geometry hides.
+  Unlike main, the buggy 9-entry version DID reach this branch's live
+  Pages site first (section 71's port, pushed to both beta-trial and
+  myslewer-beta's own main before this bug was found) - shipping this
+  fix promptly rather than treating it as lower-priority just because
+  it was caught on main first. No beta-specific code involved.
+
+  CACHE_VERSION v51-beta155->v51-beta156.

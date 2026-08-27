@@ -196,12 +196,16 @@ function onFrame(timestamp, frame) {
 // stored exactly as they appear in the GLB node ("Part 6", space not
 // underscore); normalizePartName below handles either form at runtime
 // in case GLTFLoader sanitizes spaces to underscores when it builds the
-// scene graph. 1650 rear outrigger box confirmed against the shipped
-// ltm1650-carrier.glb (9 distinct Part_N nodes, no overlap with any
-// other component) - see methodology.txt.
+// scene graph. 1650 rear outrigger box: "Part 16" was wrong and has
+// been dropped - its own world-space bounding box spans 19 of the
+// whole carrier's 20-unit length (front to rear), i.e. it's the main
+// chassis frame, not a rear-only component; checking the box hid the
+// entire body. The remaining 8 all sit tightly clustered at the rear
+// end - genuinely localized, genuinely the rear outrigger box. See
+// methodology.txt.
 const PART_GROUPS = {
   1650: {
-    rearOutriggerBox: ['Part 6', 'Part 7', 'Part 9', 'Part 15', 'Part 16', 'Part 17', 'Part 18', 'Part 19', 'Part 21']
+    rearOutriggerBox: ['Part 6', 'Part 7', 'Part 9', 'Part 15', 'Part 17', 'Part 18', 'Part 19', 'Part 21']
   }
 };
 
