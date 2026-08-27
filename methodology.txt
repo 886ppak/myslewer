@@ -9024,3 +9024,39 @@ cranes get their own subsections as they're built.
   involved.
 
   CACHE_VERSION v51-beta152->v51-beta153.
+
+71. LTM 1650 rear outrigger box: real show/hide toggle
+
+  Hand-ported from main (couldn't cherry-pick cleanly - main's version
+  is anchored to the admin-only "Identify Parts" click-to-inspect tool,
+  which depends on window.__isAdmin from the Firebase Auth system beta
+  intentionally doesn't have; Identify Parts itself wasn't worth
+  porting since it'd be permanently inert here with no admin flag ever
+  set). What DID come over: carrier3d.js's PART_GROUPS table (currently
+  just 1650 -> rearOutriggerBox -> 9 confirmed "Part N" node names) and
+  window.__carrier3dSetPartGroupVisible(modelKey, groupKey, visible),
+  plus a real (non-admin) "Hide Rear Outrigger Box" checkbox on the 3D
+  carrier preview, shown only when window.__carrier3dGetPartGroups
+  reports a group for the selected crane. No auth/admin dependency
+  anywhere in this feature itself - safe and complete on its own.
+
+  Also brought the routine curated-shadow set current with main as
+  part of this pass: LTM 1160 outrigger 3D model beam-extension fix,
+  the Driving w/ Equipment weight-dropdown sort fix, and both Extend By
+  Shackles additions (Gunnebo Oblong Master Link, attachment-shackle
+  note) - all self-contained, no auth/admin dependency, cherry-picked
+  cleanly bar the routine sw.js CACHE_VERSION conflict and this
+  branch's own methodology.txt/request-log.md divergence (beta doesn't
+  track request-log.md at all - dropped on every cherry-pick, same as
+  it's never existed here). Explicitly did NOT bring over anything
+  built on the Firebase Auth system added to main a long time back
+  (Admin Dashboard, Firestore-backed permissions, invite tokens, shared
+  Lift Logger pools, Cab Entry) - beta-trial has never had that system
+  and doesn't have a Firebase project/hosting configured for it; a
+  naive full resync would have grafted the whole login system onto
+  beta for the first time and likely locked out every beta user (no
+  googleAllowlist entries exist for a beta audience). Flagged this
+  architecture split to the person before doing any of this rather
+  than guessing silently.
+
+  CACHE_VERSION v51-beta153->v51-beta154.

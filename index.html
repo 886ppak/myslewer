@@ -873,6 +873,9 @@
           <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:0.75rem; text-transform:none; margin-left:8px;">
             <input type="checkbox" id="carrier-3d-show-mat-edges-target" onchange="onMatEdgeToggle()" style="width:auto; cursor:pointer;"> Target Mat Marks
           </label>
+          <label id="carrier-3d-hide-outrigger-box-label" style="display:none; align-items:center; gap:6px; cursor:pointer; font-size:0.75rem; text-transform:none; margin-left:8px;">
+            <input type="checkbox" id="carrier-3d-hide-outrigger-box-toggle" onchange="toggleCarrier3DPartGroup('rearOutriggerBox', this.checked)" style="width:auto; cursor:pointer;"> Hide Rear Outrigger Box
+          </label>
         </div>
         <div class="cwt-zoom-hint" id="carrier-3d-target-empty-hint" style="display:none; margin-top:6px;">No target positions to show right now — enter a shift above, and make sure the resulting spot wouldn't clip the chassis.</div>
         <div id="carrier-3d-wrap" style="display:none; position:relative; width:100%; height:420px; border-radius:8px; overflow:hidden; background:#0f172a; margin-top:10px;">
@@ -2726,7 +2729,7 @@
 
     // Single source of truth for vendor/carrier3d.js's cache-busting query,
     // same reasoning as CWT3D_VERSION above.
-    const CARRIER3D_VERSION = 49;
+    const CARRIER3D_VERSION = 50;
 
     // Single source of truth for vendor/armeasure.js's cache-busting query
     // (Chain Shortening's "Mark Cut Point in AR"), same reasoning as
@@ -6564,9 +6567,34 @@
         syncCarrier3DOutriggers();
         onMatEdgeToggle();
         updateARButtonVisibility(modelKey, 'carrier-3d-ar-btn', 'carrier-3d-ar-anchor');
+        updatePartGroupToggleVisibility(modelKey);
       };
       if (window.__carrier3dActivate) activate();
       else import(`./vendor/carrier3d.js?v=${CARRIER3D_VERSION}`).then(activate);
+    }
+
+    // Real show/hide toggle for a component built up from real Onshape
+    // part names (see carrier3d.js's own PART_GROUPS) - currently just
+    // the LTM 1650's rear outrigger box, confirmed against the shipped
+    // ltm1650-carrier.glb. More groups/models to follow the same way.
+    function toggleCarrier3DPartGroup(groupKey, hidden) {
+      const modelKey = document.getElementById('cad-crane').value;
+      if (window.__carrier3dSetPartGroupVisible) window.__carrier3dSetPartGroupVisible(modelKey, groupKey, !hidden);
+    }
+
+    // Shows/hides the "Hide Rear Outrigger Box" checkbox depending on
+    // whether the currently-selected crane has any mapped part groups,
+    // and resets it to unchecked (part visible) - otherwise switching
+    // cranes could leave a stale hidden-part state the checkbox no
+    // longer reflects.
+    function updatePartGroupToggleVisibility(modelKey) {
+      const label = document.getElementById('carrier-3d-hide-outrigger-box-label');
+      const checkbox = document.getElementById('carrier-3d-hide-outrigger-box-toggle');
+      if (!label || !checkbox) return;
+      const groups = window.__carrier3dGetPartGroups ? window.__carrier3dGetPartGroups(modelKey) : [];
+      const hasGroup = groups.includes('rearOutriggerBox');
+      label.style.display = hasGroup ? 'inline-flex' : 'none';
+      checkbox.checked = false;
     }
 
     function toggleCarrier3DLayout() {
