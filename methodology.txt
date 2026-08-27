@@ -9129,3 +9129,21 @@ cranes get their own subsections as they're built.
   it was caught on main first. No beta-specific code involved.
 
   CACHE_VERSION v51-beta155->v51-beta156.
+
+74. Revert the rear outrigger box hide feature entirely
+
+  Shadowed from main - person asked to remove the whole feature
+  outright (checkbox mapping still read backwards after the merge
+  attempt, and Part_16's own geometry sticking out visually detached
+  once the legs beside it hide looked bad regardless of direction).
+  Removed PART_GROUPS, normalizePartName,
+  window.__carrier3dGetPartGroups and window.__carrier3dSetPartGroupVisible
+  from carrier3d.js, and every call site in index.html
+  (REAR_OUTRIGGER_BOX_MODELS, the standalone checkbox,
+  toggleCarrier3DPartGroup). Confirmed via a direct diff against this
+  branch's own pre-feature commit (dad9faa~1) that carrier3d.js is now
+  byte-identical to before this feature ever landed here, and
+  index.html's only remaining difference is the CARRIER3D_VERSION
+  bump. No beta-specific code involved.
+
+  CACHE_VERSION v51-beta156->v51-beta157.

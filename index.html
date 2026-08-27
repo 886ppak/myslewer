@@ -2726,7 +2726,7 @@
 
     // Single source of truth for vendor/carrier3d.js's cache-busting query,
     // same reasoning as CWT3D_VERSION above.
-    const CARRIER3D_VERSION = 50;
+    const CARRIER3D_VERSION = 51;
 
     // Single source of truth for vendor/armeasure.js's cache-busting query
     // (Chain Shortening's "Mark Cut Point in AR"), same reasoning as
@@ -2969,17 +2969,6 @@
     // out - so "box off" is the normal starting state to show, not the
     // exception. See methodology.txt for the full primary-source trail.
     const SLIDING_BEAM_BOX_DEPTH_MM = { '1650': 1270 };
-
-    // Cranes with a real component -> Part_N mapping built up via the
-    // (admin-only) Identify Parts tool - see carrier3d.js's own
-    // PART_GROUPS, which this list mirrors. Kept as a plain constant
-    // here (rather than only reading window.__carrier3dGetPartGroups)
-    // because renderCarrier3DSlewToggles below has to decide whether to
-    // show the "Hide Rear Outrigger Box" checkbox BEFORE carrier3d.js
-    // has necessarily been dynamically imported yet - this panel
-    // renders as soon as a crane's picked, independent of whether "Show
-    // 3D Carrier Model" has ever been clicked.
-    const REAR_OUTRIGGER_BOX_MODELS = ['1650'];
 
     // TEST DATA - LTM 1110-5.1 only, built as a proof-of-concept before this
     // tab goes live. Unlike the Counterweight Combinations PDFs, this
@@ -6409,21 +6398,9 @@
         `<label style="display:flex; align-items:center; gap:6px; margin-top:6px; cursor:pointer; font-size:0.75rem;">
           <input type="checkbox" id="carrier-3d-show-ground-layout" onchange="onGroundLayoutToggle()" style="width:auto; cursor:pointer;">
           Show ground layout marks (paint-out dimensions)
-        </label>` +
-        (REAR_OUTRIGGER_BOX_MODELS.includes(modelKey) ? `
-        <label style="display:flex; align-items:center; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--border-color); cursor:pointer; font-size:0.75rem;">
-          <input type="checkbox" id="carrier-3d-hide-outrigger-box-toggle" onchange="toggleCarrier3DPartGroup('rearOutriggerBox', this.checked, 'sc-crane')" style="width:auto; cursor:pointer;">
-          Hide rear outrigger box (3D model only)
-        </label>` : '');
+        </label>`;
       onSlewCircleToggle();
       onGroundLayoutToggle();
-      // New checkbox above always starts unticked (innerHTML rebuild),
-      // so explicitly re-show the group in the 3D model too - otherwise
-      // switching away from a hidden-box crane and back could leave the
-      // model itself still hidden while the checkbox reads unticked.
-      if (REAR_OUTRIGGER_BOX_MODELS.includes(modelKey) && window.__carrier3dSetPartGroupVisible) {
-        window.__carrier3dSetPartGroupVisible(modelKey, 'rearOutriggerBox', true);
-      }
     }
 
     // Colors reused from SLEW_CIRCLE_COLORS - purely cosmetic, no meaning
@@ -6590,18 +6567,6 @@
       };
       if (window.__carrier3dActivate) activate();
       else import(`./vendor/carrier3d.js?v=${CARRIER3D_VERSION}`).then(activate);
-    }
-
-    // Real show/hide toggle for a component built up from real Onshape
-    // part names (see carrier3d.js's own PART_GROUPS) - currently just
-    // the LTM 1650's rear outrigger box, confirmed against the shipped
-    // ltm1650-carrier.glb. Lives in Crane Layout's slew-toggles panel
-    // (renderCarrier3DSlewToggles), next to the other rear-figure
-    // checkboxes it matches - craneSelectId parameterized since that
-    // panel uses sc-crane, not Support Pad Placement's cad-crane.
-    function toggleCarrier3DPartGroup(groupKey, hidden, craneSelectId) {
-      const modelKey = document.getElementById(craneSelectId).value;
-      if (window.__carrier3dSetPartGroupVisible) window.__carrier3dSetPartGroupVisible(modelKey, groupKey, !hidden);
     }
 
     function toggleCarrier3DLayout() {

@@ -192,44 +192,6 @@ function onFrame(timestamp, frame) {
   renderer.render(scene, camera);
 }
 
-// Real component -> Part_N mappings, one crane model at a time - names
-// stored exactly as they appear in the GLB node ("Part 6", space not
-// underscore); normalizePartName below handles either form at runtime
-// in case GLTFLoader sanitizes spaces to underscores when it builds the
-// scene graph. 1650 rear outrigger box: "Part 16" was wrong and has
-// been dropped - its own world-space bounding box spans 19 of the
-// whole carrier's 20-unit length (front to rear), i.e. it's the main
-// chassis frame, not a rear-only component; checking the box hid the
-// entire body. The remaining 8 all sit tightly clustered at the rear
-// end - genuinely localized, genuinely the rear outrigger box. See
-// methodology.txt.
-const PART_GROUPS = {
-  1650: {
-    rearOutriggerBox: ['Part 6', 'Part 7', 'Part 9', 'Part 15', 'Part 17', 'Part 18', 'Part 19', 'Part 21']
-  }
-};
-
-function normalizePartName(name) {
-  return (name || '').replace(/_/g, ' ').trim();
-}
-
-// Which part groups (if any) are mapped for a given crane model - lets
-// index.html show/hide the toggle UI per-model without duplicating
-// PART_GROUPS itself.
-window.__carrier3dGetPartGroups = function (modelKey) {
-  return Object.keys(PART_GROUPS[modelKey] || {});
-};
-
-window.__carrier3dSetPartGroupVisible = function (modelKey, groupKey, visible) {
-  const root = modelCache[modelKey];
-  const group = PART_GROUPS[modelKey] && PART_GROUPS[modelKey][groupKey];
-  if (!root || !group) return;
-  const wanted = new Set(group.map(normalizePartName));
-  root.traverse((obj) => {
-    if (wanted.has(normalizePartName(obj.name))) obj.visible = visible;
-  });
-};
-
 function resizeRenderer() {
   const wrap = document.getElementById(currentWrapId);
   if (!renderer || !wrap || wrap.clientWidth === 0) return;
