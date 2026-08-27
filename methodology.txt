@@ -11082,3 +11082,49 @@ cranes get their own subsections as they're built.
   location (only one element with that id anywhere in the page now).
 
   CACHE_VERSION v249->v250, app version v6.23->v6.24.
+
+95. Fix "Hide Rear Outrigger Box" hiding the entire chassis
+
+  Person's report right after moving the toggle to Crane Layout,
+  screenshot attached: checking the box hid nearly the whole carrier
+  body, leaving just axles/wheels/outrigger beams. This is the real
+  correctness bug the earlier sections' "9 distinct Part_N nodes, no
+  overlap" framing missed - the 9 mesh names DID all resolve to real,
+  distinct nodes (that part was true), but "distinct" and "actually
+  localized to the rear outrigger box" are different claims, and only
+  the first one got checked before shipping.
+
+  Diagnosed by computing each of the 9 candidate parts' own world-space
+  bounding box (temporary debug hook exposing modelCache, same pattern
+  as every prior investigation, removed before shipping) and comparing
+  against the whole model's bbox. Whole carrier: 20 units front-to-rear
+  (Z axis, frontAtMinZ:true for 1650 so min Z = front, max Z = rear).
+  8 of the 9 parts sit tightly within 3 units of the rear extreme -
+  genuinely small, genuinely rear-only. "Part 16" alone spans 19 of
+  those 20 units, front to rear - not a rear component at all, it's
+  the main chassis frame. Checking the box hid it along with the
+  other 8, which is exactly what the screenshot showed.
+
+  Root cause, one level up: mesh1856_mesh (the person's own number
+  "1856" from CAD Assistant) resolves correctly to node "Part 16" per
+  the literal name lookup - the resolution logic itself wasn't wrong.
+  Either that specific mesh got included in error when the person
+  selected the rear outrigger box in Onshape (a big adjoining part
+  caught by a box-select), or "Part 16" is one single real Onshape
+  part that happens to BE the frame and just happened to also be
+  adjacent to/touching the actual outrigger box selection. Either way,
+  its own geometry proves it doesn't belong in this group - dropped it.
+
+  Fix: removed 'Part 16' from PART_GROUPS.1650.rearOutriggerBox in
+  carrier3d.js, now 8 entries. Verified two ways: (1) the same bbox
+  computation confirms all 8 remaining parts stay small and
+  rear-clustered, (2) a real before/after screenshot pair with the
+  checkbox toggled shows the full chassis, cab, wheels and other three
+  outrigger legs staying fully visible - only one rear leg's own
+  extended/box geometry disappears, replaced by its mount plate. This
+  is the first time this feature's own verification checked WHAT
+  actually got hidden geometrically, rather than only whether the
+  toggle fired without errors - worth remembering for the next model's
+  part list.
+
+  CACHE_VERSION v250->v251, app version v6.24->v6.25.

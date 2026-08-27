@@ -308,12 +308,18 @@ function identifyAtPoint(clientX, clientY) {
 // __carrier3dSetPartGroupVisible normalizes both sides before comparing
 // so it doesn't matter whether GLTFLoader sanitizes spaces to
 // underscores when it builds the runtime scene graph or not.
-// 1650 rear outrigger box confirmed against the shipped
-// ltm1650-carrier.glb (9 distinct Part_N nodes, no overlap with any
-// other identified component) - see methodology.txt.
+// 1650 rear outrigger box: of the 9 mesh names the person read off
+// Onshape, "Part 16" was WRONG and has been dropped - its own
+// world-space bounding box spans 19 of the whole carrier's 20-unit
+// length (front to rear, per frontAtMinZ), i.e. it's the main chassis
+// frame, not a rear-only component. Checking the box hid the entire
+// body, confirmed by the person's own screenshot. The remaining 8 all
+// sit tightly clustered at the rear end (within 3 units of the max-Z/
+// rear extreme) - genuinely localized, genuinely the rear outrigger
+// box. See methodology.txt.
 const PART_GROUPS = {
   1650: {
-    rearOutriggerBox: ['Part 6', 'Part 7', 'Part 9', 'Part 15', 'Part 16', 'Part 17', 'Part 18', 'Part 19', 'Part 21']
+    rearOutriggerBox: ['Part 6', 'Part 7', 'Part 9', 'Part 15', 'Part 17', 'Part 18', 'Part 19', 'Part 21']
   }
 };
 

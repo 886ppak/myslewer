@@ -531,3 +531,19 @@ a working record, not app content.
   before, all 9 nodes flip correctly, nothing else touched. Shipped to
   main (CACHE_VERSION v249->v250, app v6.23->v6.24). See
   methodology.txt 94.
+- "that didn't work it took away the body of the crane aswell" (with
+  screenshot showing the whole chassis gone, just axles/wheels/legs
+  left)
+  **Status: root-caused, fixed, shipped.** One of the 9 "confirmed"
+  parts, "Part 16", was never actually part of the rear outrigger box -
+  its own world-space bounding box spans 19 of the whole carrier's 20
+  units front-to-rear, i.e. it's the main chassis frame. The other 8
+  are all genuinely small and rear-clustered. Removed Part 16 from
+  PART_GROUPS.1650.rearOutriggerBox. Verified with a real before/after
+  screenshot pair: chassis, cab, wheels and the other three outrigger
+  legs all stay intact, only the intended rear leg's own box geometry
+  hides. Shipped to main (CACHE_VERSION v250->v251, app v6.24->v6.25).
+  See methodology.txt 95 for the fuller root-cause writeup - the
+  earlier "9 distinct nodes" verification checked that the numbers
+  resolved to real, separate parts, but never checked that each one
+  was actually small/localized, which is the gap that let this ship.
