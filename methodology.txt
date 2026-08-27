@@ -11038,3 +11038,47 @@ cranes get their own subsections as they're built.
   to behave differently for real.
 
   CACHE_VERSION v248->v249, app version v6.22->v6.23.
+
+94. Move the rear outrigger box toggle into Crane Layout
+
+  Person's feedback right after shipping section 93: they went looking
+  for "Hide Rear Outrigger Box" and expected to find it in Crane
+  Layout, next to the existing "Include sliding beam box in rear figure
+  (+1.27m)" toggle - not where it actually landed (Support Pad
+  Placement's own toolbar). Makes sense in hindsight: both toggles are
+  about the same rear-of-carrier geometry, and Crane Layout's slew-
+  toggles panel (renderCarrier3DSlewToggles) is where every other
+  rear-figure checkbox already lives (Include tool box, Include sliding
+  beam box) - Support Pad Placement never had a reason-based home for
+  it, it just happened to be where Identify Parts was built first.
+
+  Moved rather than duplicated: pulled the checkbox out of the
+  carrier-3d-toolbar block (Support Pad Placement, cad-crane), added it
+  into renderCarrier3DSlewToggles's own template string (Crane Layout,
+  sc-crane), styled to match the existing rear-figure checkboxes it
+  sits below, gated on a new plain REAR_OUTRIGGER_BOX_MODELS constant
+  rather than window.__carrier3dGetPartGroups - that panel can render
+  before carrier3d.js has ever been dynamically imported (it's shown as
+  soon as a crane's picked, independent of whether "Show 3D Carrier
+  Model" has been clicked), so gating on a function that might not
+  exist yet would have hidden the checkbox on first paint.
+
+  toggleCarrier3DPartGroup() picked up a third parameter (craneSelectId)
+  since Crane Layout's crane select is sc-crane, not cad-crane - the
+  old hardcoded cad-crane read would have silently read the wrong
+  dropdown from the new location. Also added an explicit re-show call
+  at the end of renderCarrier3DSlewToggles (mirroring the existing
+  onSlewCircleToggle()/onGroundLayoutToggle() calls there) - the
+  checkbox always starts unticked on every crane-switch rebuild
+  (innerHTML replace), so without this a box hidden on a previous visit
+  to 1650 could stay hidden in the 3D model itself after switching away
+  and back, even though the fresh checkbox reads unticked.
+
+  Verified directly against the real scene graph (temporary debug hook,
+  removed before shipping, same as section 93's own verification): all
+  9 mapped nodes visible by default in the new location, correctly flip
+  invisible/visible on check/uncheck, checkbox confirmed absent for an
+  unmapped crane (1110) and gone from its old Support Pad Placement
+  location (only one element with that id anywhere in the page now).
+
+  CACHE_VERSION v249->v250, app version v6.23->v6.24.

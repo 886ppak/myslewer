@@ -518,3 +518,16 @@ a working record, not app content.
   methodology.txt 93. Next: same treatment (tap-collect in Identify
   Parts, or read off Onshape directly) for the combi box / rear tool
   boxes and the other crane models.
+- "so where do 8 find this toggle I want it to be in the crane
+  position tab INCLUDE SLIDING BEAM BOX IN REAR FIGURE (+1.27M)"
+  **Status: moved, shipped.** The toggle had landed in Support Pad
+  Placement's toolbar (where Identify Parts happened to be built), not
+  Crane Layout where the person expected it, next to the existing rear-
+  figure checkboxes (Include tool box, Include sliding beam box). Moved
+  (not duplicated) into Crane Layout's own slew-toggles panel, styled
+  to match, with toggleCarrier3DPartGroup() updated to read the correct
+  crane select (sc-crane, not cad-crane) for that location. Re-verified
+  directly against the scene graph in its new home - same result as
+  before, all 9 nodes flip correctly, nothing else touched. Shipped to
+  main (CACHE_VERSION v249->v250, app v6.23->v6.24). See
+  methodology.txt 94.
