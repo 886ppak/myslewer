@@ -10971,3 +10971,70 @@ cranes get their own subsections as they're built.
   suite alongside them.
 
   CACHE_VERSION v247->v248, app version v6.21->v6.22.
+
+93. Real show/hide toggle: LTM 1650 rear outrigger box
+
+  Person went into Onshape/CAD Assistant directly on the 1650 assembly
+  and read off the mesh names making up the rear outrigger box: 1505,
+  648, 4623, 1359, 6803, 1856, 5992, 1481, 672 - asked to test these
+  against the app's own model. Parsed the shipped
+  outrigger/models/ltm1650-carrier.glb binary directly (12-byte header +
+  JSON/BIN chunks, no browser needed): each number is a literal
+  "mesh{N}_mesh" name on a gltf.meshes[] entry (a separate array from
+  gltf.nodes[], each mesh carrying its own name distinct from whatever
+  node references it) - not a node/mesh array index, which is what was
+  tried first and correctly came back "out of range" every time. Once
+  resolved as names instead, each of the 9 traced to a mesh index, then
+  to the one node directly referencing that mesh, and all 9 landed on 9
+  DISTINCT "Part N" nodes (no overlap) - confirmed both that the numbers
+  are real and that the box is genuinely built from 9 separate named
+  occurrences, not a smaller set read multiple times. Root node in the
+  file ("98037277_001") matches what's visible in Onshape too, so both
+  sides are confirmed looking at the same underlying model. Person then
+  confirmed these "Part N" names are Onshape's own part naming (not
+  invented by the app) - correct: node.name is read straight off the
+  GLB's JSON with no renaming anywhere in the loader.
+
+  With a confirmed, real component -> Part_N mapping in hand, built the
+  actual show/hide feature this was always heading toward (see section
+  91's own header comment) rather than just reporting the mapping back:
+  carrier3d.js gets a PART_GROUPS table (modelKey -> groupKey -> list of
+  "Part N" names) plus window.__carrier3dSetPartGroupVisible(modelKey,
+  groupKey, visible), which traverses the loaded scene root and sets
+  .visible on every node whose name matches (Object3D.visible=false
+  also skips its children during render traversal, so this correctly
+  hides the mesh(es) under each matched node too, not just the empty
+  wrapper). Matching normalizes both the stored names and the runtime
+  node names (underscore<->space) before comparing, since it was never
+  independently re-confirmed whether GLTFLoader sanitizes "Part 6" to
+  "Part_6" at runtime or leaves it as-is - normalizing both sides makes
+  that question irrelevant rather than guessing. index.html adds a
+  "Hide Rear Outrigger Box" checkbox next to Identify Parts, shown only
+  when window.__carrier3dGetPartGroups(modelKey) actually has a group
+  for the selected crane (so far just 1650) - kept as a live query
+  against carrier3d.js's own table rather than a duplicated model list
+  in index.html, so there's exactly one place a future crane's mapping
+  gets added. Deliberately NOT admin-gated like Identify Parts - this
+  one's a real user-facing feature now that the mapping is confirmed,
+  Identify Parts stays the admin-only tool for building the next one.
+
+  Verified directly against the real loaded scene graph (temporary
+  debug hook exposing modelCache, removed before shipping, same
+  pattern as every other investigation this session): all 9 mapped
+  nodes present and visible by default, all 9 correctly flip to
+  invisible on check and back to visible on uncheck, and a scoped check
+  across every other "Part N" node in the file confirms nothing outside
+  the group gets touched. Toggle-visibility gating confirmed correct
+  both ways (hidden for 1110, which has no mapped group; shown for
+  1650). One test scenario - closing and reopening the 3D view against
+  a second crane inside the same run - repeatedly hung this sandbox's
+  software-rendered Chromium on the second WebGL toggle-button click;
+  isolated to that specific click regardless of this change (identical
+  hang on an unmodified toggleCarrier3D() call), so treated as the same
+  known environment limitation as the software-WebGL issues logged
+  earlier this session, not a regression - the reopen path reuses the
+  exact same activate() closure as the already-working AR-button
+  visibility call sitting right next to it, so there's no reason for it
+  to behave differently for real.
+
+  CACHE_VERSION v248->v249, app version v6.22->v6.23.

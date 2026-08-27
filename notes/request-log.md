@@ -495,3 +495,26 @@ a working record, not app content.
   distinction test plus the existing regression suite, both clean.
   Shipped to main (CACHE_VERSION v247->v248, app v6.21->v6.22). See
   methodology.txt 92.
+- "1505, 648,4623,1359,6803,1856,5992,1481,672 are all the meshes that
+  make up the rear outrigger box for the 650t crane can you test?"
+  followed by screenshots of Onshape/CAD Assistant's mesh list, then
+  confirmation these are Onshape's own part names.
+  **Status: confirmed and shipped.** Parsed the real shipped
+  ltm1650-carrier.glb directly - all 9 numbers are literal
+  "mesh{N}_mesh" names (not array indices, which was tried first and
+  correctly failed), each resolving to one of 9 DISTINCT "Part N"
+  nodes: Part 6, 7, 9, 15, 16, 17, 18, 19, 21. Same root node
+  ("98037277_001") as in the person's own Onshape session, confirming
+  both sides are looking at the same model. With a confirmed mapping
+  in hand, built the actual feature this was heading toward rather
+  than just reporting it: a real (not admin-gated) "Hide Rear
+  Outrigger Box" checkbox on the 1650's 3D carrier preview, backed by
+  a new PART_GROUPS table in carrier3d.js and
+  window.__carrier3dSetPartGroupVisible(). Verified directly against
+  the loaded scene graph: all 9 nodes correctly flip visible/invisible
+  together, nothing outside the group gets touched, and the checkbox
+  only appears for cranes with a mapped group (currently just 1650).
+  Shipped to main (CACHE_VERSION v248->v249, app v6.22->v6.23). See
+  methodology.txt 93. Next: same treatment (tap-collect in Identify
+  Parts, or read off Onshape directly) for the combi box / rear tool
+  boxes and the other crane models.

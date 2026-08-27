@@ -302,6 +302,42 @@ function identifyAtPoint(clientX, clientY) {
   if (window.__carrier3dOnPartIdentified) window.__carrier3dOnPartIdentified(partName);
 }
 
+// Real component -> Part_N mappings built up via Identify Parts (see
+// above), one crane model at a time. Names are stored exactly as they
+// appear in the GLB node ("Part 6", space not underscore) -
+// __carrier3dSetPartGroupVisible normalizes both sides before comparing
+// so it doesn't matter whether GLTFLoader sanitizes spaces to
+// underscores when it builds the runtime scene graph or not.
+// 1650 rear outrigger box confirmed against the shipped
+// ltm1650-carrier.glb (9 distinct Part_N nodes, no overlap with any
+// other identified component) - see methodology.txt.
+const PART_GROUPS = {
+  1650: {
+    rearOutriggerBox: ['Part 6', 'Part 7', 'Part 9', 'Part 15', 'Part 16', 'Part 17', 'Part 18', 'Part 19', 'Part 21']
+  }
+};
+
+function normalizePartName(name) {
+  return (name || '').replace(/_/g, ' ').trim();
+}
+
+// Which part groups (if any) are mapped for a given crane model - lets
+// index.html show/hide the toggle UI per-model without duplicating
+// PART_GROUPS itself.
+window.__carrier3dGetPartGroups = function (modelKey) {
+  return Object.keys(PART_GROUPS[modelKey] || {});
+};
+
+window.__carrier3dSetPartGroupVisible = function (modelKey, groupKey, visible) {
+  const root = modelCache[modelKey];
+  const group = PART_GROUPS[modelKey] && PART_GROUPS[modelKey][groupKey];
+  if (!root || !group) return;
+  const wanted = new Set(group.map(normalizePartName));
+  root.traverse((obj) => {
+    if (wanted.has(normalizePartName(obj.name))) obj.visible = visible;
+  });
+};
+
 function resizeRenderer() {
   const wrap = document.getElementById(currentWrapId);
   if (!renderer || !wrap || wrap.clientWidth === 0) return;
