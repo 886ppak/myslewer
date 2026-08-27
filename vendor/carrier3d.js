@@ -35,6 +35,15 @@ const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('./vendor/three/draco/');
 
 let renderer = null, scene = null, camera = null, controls = null;
+let raycaster = null, mouse = null;
+// "Identify Parts" mode (admin-only, see index.html's toggleCarrier3DIdentifyMode)
+// - lets someone tap any mesh in the model and see which node it belongs
+// to, so a real Part_N -> real-world-component mapping (rear outrigger
+// box, combi box, etc.) can be built up per crane model without guessing
+// by position. Off by default and inert (onCanvasClick below no-ops
+// immediately) unless explicitly turned on.
+let identifyModeActive = false;
+let identifyHighlightMeshes = [];
 let currentModelKey = null;
 let animating = false;
 let outriggerGroup = null;
@@ -166,6 +175,10 @@ function ensureRenderer(wrapId, labelId) {
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
 
+  raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2();
+  renderer.domElement.addEventListener('click', onCanvasClick);
+
   window.addEventListener('resize', resizeRenderer);
 
   if (!animating) {
@@ -190,6 +203,73 @@ function onFrame(timestamp, frame) {
     controls.update();
   }
   renderer.render(scene, camera);
+}
+
+// Removes whatever wireframe overlays a previous identify-mode click
+// added, before either adding new ones or leaving identify mode
+// entirely - these are temporary child nodes added directly onto the
+// model's own meshes (see onCanvasClick below), never left behind.
+function clearIdentifyHighlight() {
+  identifyHighlightMeshes.forEach((m) => { if (m.parent) m.parent.remove(m); });
+  identifyHighlightMeshes = [];
+}
+
+// Toggled from index.html's toggleCarrier3DIdentifyMode (admin-only
+// button) - lets someone click any part of the currently-loaded carrier
+// model and see which GLB node it belongs to, with a bright wireframe
+// outline confirming exactly what got hit. Exists so a real Part_N ->
+// real-world-component mapping (rear outrigger box, combi box, rear
+// tool boxes, etc, one crane at a time) can be built up from clicks
+// instead of guessed at by position - see methodology.txt.
+window.__carrier3dSetIdentifyMode = function (active) {
+  identifyModeActive = active;
+  if (!active) clearIdentifyHighlight();
+};
+
+function onCanvasClick(ev) {
+  if (!identifyModeActive || !currentModelKey) return;
+  const root = modelCache[currentModelKey];
+  if (!root) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const meshes = [];
+  root.traverse((obj) => { if (obj.isMesh) meshes.push(obj); });
+  const hits = raycaster.intersectObjects(meshes, false);
+  clearIdentifyHighlight();
+  if (!hits.length) {
+    if (window.__carrier3dOnPartIdentified) window.__carrier3dOnPartIdentified(null);
+    return;
+  }
+  const hitMesh = hits[0].object;
+  // The identifier that matters is the PARENT group's name (see
+  // refineCalibrationFromGeometry's own comment above on why: each real
+  // Onshape occurrence exports as exactly one parent node, one level up
+  // from the mesh(es) actually rendered) - a bare mesh name is usually
+  // an uninformative default like "Mesh" or a numeric index, not
+  // whatever the GLB export actually calls the occurrence.
+  const partName = (hitMesh.parent && hitMesh.parent.name) || hitMesh.name || '(unnamed)';
+  // Highlight EVERY mesh under that same parent, not just the one
+  // actually hit - a single Part_N occurrence can export as more than
+  // one mesh (e.g. separate materials on the same part), and all of
+  // them belong to the one component being identified. A wireframe
+  // overlay rather than a material colour swap deliberately - these
+  // exports commonly share one material instance (e.g. "yellow paint")
+  // across many unrelated parts, so recolouring it would highlight
+  // every other part using that same material too, not just the one
+  // clicked.
+  const siblingMeshes = (hitMesh.parent ? hitMesh.parent.children : [hitMesh]).filter((c) => c.isMesh);
+  siblingMeshes.forEach((m) => {
+    const wire = new THREE.LineSegments(
+      new THREE.WireframeGeometry(m.geometry),
+      new THREE.LineBasicMaterial({ color: 0x10b981, depthTest: false })
+    );
+    wire.renderOrder = 999;
+    m.add(wire);
+    identifyHighlightMeshes.push(wire);
+  });
+  if (window.__carrier3dOnPartIdentified) window.__carrier3dOnPartIdentified(partName);
 }
 
 function resizeRenderer() {

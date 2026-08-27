@@ -455,3 +455,24 @@ a working record, not app content.
   above. Verified against the exact scenario from the person's own
   screenshot. Shipped to main (CACHE_VERSION v245->v246, app
   v6.19->v6.20). See methodology.txt 90.
+- "are you able to show/hide certain parts in the 3d model? eg the
+  1650 rear outrigger box?" -> "what if I could tell you all the parts
+  names... finding all the part numbers for the other models for the
+  Combi box or two rear tool boxes" -> "yeah go ahead build it".
+  **Status: done, shipped.** Checked the actual GLB before answering -
+  parts are named generically (Part_1..Part_28), no descriptive names
+  to hang show/hide on directly. Built an admin-only "Identify Parts"
+  click-to-inspect mode in the 3D Carrier Preview instead: tap any part
+  in the model, see its real GLB node name plus a wireframe highlight
+  confirming exactly what got hit, so the person can build a real
+  Part_N -> real-component mapping per crane model themselves. Hit a
+  genuine sandbox-only testing wall (this environment's software-WebGL
+  Chromium doesn't deliver synthetic mouse clicks to this canvas at
+  all, confirmed with a bare listener and zero app code) - verified the
+  actual logic correct via direct MouseEvent dispatch instead, which
+  reliably reproduces "Tapped: Part_16" on the 1650. Full regression
+  suite clean. Shipped to main (CACHE_VERSION v246->v247, app
+  v6.20->v6.21). See methodology.txt 91. Next step is the person's own:
+  use this to collect real part numbers for the rear outrigger box,
+  combi box, and rear tool boxes across each model, which then unlocks
+  the actual show/hide feature this was building toward.

@@ -10853,3 +10853,66 @@ cranes get their own subsections as they're built.
   existing shackle-mode regression suite re-run clean alongside it.
 
   CACHE_VERSION v245->v246, app version v6.19->v6.20.
+
+91. 3D Carrier Preview: admin-only "Identify Parts" click-to-inspect mode
+
+  Person asked whether individual parts of the 3D carrier model could be
+  shown/hidden (e.g. the 1650's rear outrigger box), for a future
+  measurement-clarity feature. Checked the actual GLB first rather than
+  assuming: Three.js can toggle any mesh's visibility fine, but the
+  1650 export's parts are all named generically ("Part_1" through
+  "Part_28"), same issue already hit once with the outrigger-foot
+  detection - no descriptive names to hang a "hide the rear outrigger
+  box" feature off. Person's own proposal: they'll identify the real
+  Part_N for each component themselves (rear outrigger box, combi box,
+  rear tool boxes, etc, per crane model) if given a tool to do it with,
+  rather than this app guessing by position the way the outrigger-foot
+  calibration has to.
+
+  Built as a click-to-identify mode rather than requiring position-
+  based detective work: an admin-only "Identify Parts" toggle (same
+  admin-gating pattern as the Admin Dashboard tab, revealed in
+  loadAdminStatus alongside it) in the Support Pad Placement 3D
+  toolbar. Tap any visible part of the currently-loaded model and a
+  readout shows its real GLB node name (e.g. "Tapped: Part_16"), with a
+  bright wireframe outline confirming exactly what got hit.
+
+  Reused the raycasting pattern already proven in cwt3d.js (the
+  counterweight 3D viewer) rather than inventing a new one -
+  carrier3d.js's own top-of-file comment explicitly noted it
+  deliberately skipped click-selection/highlighting when first built,
+  since the carrier didn't need it; this is the first time it does.
+  One deliberate deviation from cwt3d.js's own highlight approach
+  though: cwt3d.js recolours a clicked mesh's OWN material directly,
+  which works there because each counterweight plate has its own
+  distinct material already (they're individually selectable slots).
+  Carrier exports commonly share ONE material instance (e.g. "yellow
+  paint") across many unrelated parts, so recolouring it here would
+  highlight every other part using that same material too, not just
+  the one clicked - used a temporary wireframe overlay (added as a
+  child of each hit mesh, removed on the next click or on leaving
+  identify mode) instead, which never touches the model's own materials
+  at all. Highlights every mesh under the same parent group, not just
+  whichever individual mesh the ray actually hit - a real Onshape
+  occurrence can export as more than one mesh (different materials on
+  the same part), and all of them belong to the one component being
+  identified.
+
+  Verification hit a genuine sandbox-only wall worth recording: this
+  environment's software-WebGL Chromium doesn't reliably deliver
+  Playwright's OS-level synthetic mouse clicks to this canvas -
+  confirmed by attaching a bare click listener with zero app code
+  involved and finding even THAT never fired via page.mouse.click()
+  here. Not a real bug (an ordinary browser on real hardware doesn't
+  have this problem) and not this feature's own code - proved the
+  actual click-handling/raycasting/highlight logic correct instead by
+  dispatching a real MouseEvent directly at the canvas
+  (canvas.dispatchEvent(new MouseEvent('click', {...}))), bypassing
+  Playwright's OS-level mouse positioning entirely: reliably reproduces
+  "Tapped: Part_16" for the 1650 model, every run. All UI-level checks
+  (button admin-gated, hidden by default, readout show/hide, active-
+  state styling, toggling off leaves no errors on a later click) plus
+  the actual identify flow now pass clean using that same dispatch
+  approach. Full existing regression suite re-run clean alongside it.
+
+  CACHE_VERSION v246->v247, app version v6.20->v6.21.
