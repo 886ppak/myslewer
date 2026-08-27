@@ -606,3 +606,22 @@ a working record, not app content.
   separate, harmless tool, not part of what was reverted. Shipped to
   main (CACHE_VERSION v252->v253, app v6.26->v6.27). See
   methodology.txt 98.
+- "for the extend by shackle to make a leg length difference I thought
+  about it and I don't think the attachment shackle should be included
+  to make up the difference as all the other point will need to use
+  shackle to attach as well so this then will negate that shackle from
+  the equation and in turn not effect the length difference?"
+  **Status: confirmed correct, fixed.** The math previously counted
+  the mandatory attachment shackle's own length toward reaching
+  target - fine if target means "total leg build-up," wrong if target
+  means "how much longer than another leg" (which also has its own
+  same-size attachment shackle, cancelling out of the difference).
+  bestShackleExtendCombos() now scores the additional items alone;
+  removed the now-unused lugF parameter. Clarified both the
+  "Extension Needed" field label and the "Attachment adds" result row
+  so the not-counted-toward-target relationship is visible in the UI.
+  Re-verified against section 64's own original worked example
+  (load 20t, lug 25t, target 348mm, only 25t ticked) - now 2 additional
+  25t shackles / 0 links / +8mm (was 1 additional before, since the
+  lug used to cover part of the target itself). Shipped to main
+  (CACHE_VERSION v253->v254, app v6.27->v6.28). See methodology.txt 99.

@@ -11317,3 +11317,46 @@ cranes get their own subsections as they're built.
   entry.
 
   CACHE_VERSION v252->v253, app version v6.26->v6.27.
+
+99. Extend By Shackles: target no longer counts the attachment shackle
+
+  Person's own question, worked through rather than just implemented on
+  faith: "for the extend by shackle to make a leg length difference...
+  the attachment shackle shouldn't be included to make up the
+  difference, as all the other points will need a shackle to attach as
+  well - so this negates that shackle from the equation." Correct, and
+  worth tracing why: section 64's original design verified target
+  against rawTotal = lug.f + additional items' f combined - meaning the
+  mandatory attachment shackle's own length counted toward closing the
+  target gap. That's fine if target means "total build-up length for a
+  leg assembled from scratch," but wrong if target means "how much
+  longer this leg needs to be than a normal one" - every leg gets its
+  own attachment shackle regardless of whether it's being extended, so
+  a same-size lug is present on both the extended leg and whatever
+  it's being compared against and cancels out of any leg-to-leg
+  difference. Counting it toward target let the additional items
+  undershoot the real difference by however long the lug itself is
+  (178mm on a 25t lug, i.e. a whole shackle's worth of error on a
+  routine case).
+
+  Fix: bestShackleExtendCombos() now scores rawTotal = additionalAdded
+  only - the lug is still shown (Attachment Shackle/Attachment adds
+  rows), still charged into Combo Weight, still a mandatory single
+  pick, just no longer part of what has to reach target. Removed the
+  now-unused lugF parameter entirely rather than leaving it dead.
+  Clarified both the "Extension Needed" field's own label and the
+  "Attachment adds" result row so the not-counted-toward-target
+  relationship is visible in the UI, not just in this file - the same
+  "make it impossible to miss for a beginner" standard section 90 set
+  for the attachment shackle generally.
+
+  Verified against the exact same worked example from section 64's own
+  original verification (load 20t, lug 25t, target 348mm, only 25t
+  ticked) - now returns 2 additional 25t shackles / 0 links / +8mm
+  (previously 1 additional / 0 links / +8mm, since the lug's own 178mm
+  used to cover roughly half the target on its own). Also re-verified
+  the shortfall-warning path still fires correctly once the ticked
+  sizes genuinely can't reach a much larger target, using the new
+  additional-items-only ceiling.
+
+  CACHE_VERSION v253->v254, app version v6.27->v6.28.
