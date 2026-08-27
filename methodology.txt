@@ -11203,3 +11203,75 @@ cranes get their own subsections as they're built.
 
   No code change - documentation only, so no CACHE_VERSION/app-version
   bump for this entry (nothing in index.html or sw.js moved).
+
+97. Merge "Hide Rear Outrigger Box" into the sliding beam box checkbox;
+    identify the real "stray mesh" as Part_16 itself (not a bug)
+
+  Two requests in one message. First: the person went back into
+  Onshape/CAD Assistant on "Part 16" (per section 95's finding) and
+  confirmed for themselves that selecting it highlights the whole
+  carrier - independent confirmation of the same conclusion, not just
+  taking the earlier bounding-box math on faith. They separately found
+  what looked like a leftover "stray mesh" still showing after the fix
+  (screenshot circling a small floating box near where the hidden leg
+  used to sit) and asked how to find/fix it.
+
+  Investigated by enumerating every "Part N" node in the file (not just
+  the 9 originally read off Onshape - all 28) and checking each one's
+  own world-space bounding box for anything else small and rear-
+  clustered that got missed. Two candidates (Part 26, Part 27) sat
+  right at the edge of the known cluster but turned out, once isolated
+  and rendered alone, to be tiny unrelated fittings - not a match.
+  Settled it definitively by raycasting directly at the exact circled
+  pixel location in a live render (the same mechanism Identify Parts
+  itself uses, called directly via window.__carrier3dSetIdentifyMode -
+  no admin UI needed for a script) - the stray piece is Part_16 itself.
+  Not a second bug: it's the SAME frame we deliberately keep visible,
+  just a piece of its own geometry that now reads as visually detached
+  from the main mass since the outrigger legs that used to bridge the
+  visual gap are hidden. Nothing to change - hiding it would reproduce
+  section 95's whole-chassis bug.
+
+  Also surfaced a real methodological lesson mid-investigation: the
+  person pulled up Onshape's own part tree directly and found the
+  carrier's big body-shell part is actually named "id2__$" there (an
+  unrenamed part, auto-labelled with its raw internal ID rather than a
+  clean "Part N" name), while Onshape's OWN "Part 16" is a separate,
+  different part from GLB's "Part 16". This means the GLB export's
+  "Part N" node names are NOT reliably the same numbering as what's
+  shown in Onshape's own tree - there's an export-time relabeling
+  happening, not a 1:1 name passthrough. Cross-referencing a number
+  read off Onshape's tree against the GLB's own node names is
+  therefore NOT reliable on its own (as sections 93/95 both
+  eventually found the hard way) - raycasting/Identify Parts directly
+  against the live app's own model is the only fully trustworthy
+  method going forward, since it never depends on Onshape's naming at
+  all.
+
+  Second request: merge the rear-outrigger-box visibility into the
+  EXISTING "Include sliding beam box in rear figure" checkbox instead
+  of keeping a separate "Hide Rear Outrigger Box" toggle - one fewer
+  control, and it matches the real physical relationship (fitting the
+  sliding beam box replaces/covers the standard rear outrigger box).
+  Confirmed the exact mapping with the person first rather than
+  guessing a second time in one session: unticked (the existing
+  default, unchanged) = standard box shown, smaller rear clearance
+  figure (no +1.27m); ticked = sliding beam box fitted, standard box
+  hidden in the 3D model, bigger rear clearance figure (+1.27m folds
+  in, exactly as it already did). Removed the standalone checkbox,
+  toggleCarrier3DPartGroup(), and the render-time reset block entirely
+  - onSlewCircleToggle() (already firing on this checkbox's onchange,
+  and already called once at the end of every crane-switch rebuild)
+  now also calls window.__carrier3dSetPartGroupVisible(modelKey,
+  'rearOutriggerBox', !includeSlidingBeamBox) alongside its existing
+  clearance-figure math, so one checkbox now drives both outcomes from
+  a single source of truth instead of two separately-maintained ones.
+
+  Verified directly (evaluate-triggered checkbox changes, not real
+  clicks - faster and avoids this sandbox's slow WebGL click path):
+  unticked -> all 8 rear-outrigger nodes visible; ticked -> all 8
+  hidden; unticked again -> all 8 back; and a spy on
+  window.__carrier3dSetSlewCircles confirmed the rear clearance figure
+  grows by exactly 1270mm when ticked, matching SLIDING_BEAM_BOX_DEPTH_MM.
+
+  CACHE_VERSION v251->v252, app version v6.25->v6.26.

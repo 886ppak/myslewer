@@ -564,3 +564,27 @@ a working record, not app content.
   code and its pre-shared-pool Lift Logger, so a future strip can lift
   real working code instead of rebuilding it from memory. Doc-only, no
   version bump.
+- "I've also found a stray mesh too for the 650 rear Outrigger box...
+  mesh1856_mesh" plus later "the part that is stray is actually called
+  part 16" (with an Onshape screenshot showing a part named "id2__$")
+  and "I would also like this toggle to hide the outrigger box to be
+  the one I've set above include sliding beam box... it doesn't need
+  its separate toggle"
+  **Status: investigated and resolved, both parts.** The "stray mesh"
+  turned out to be Part_16 itself (confirmed by raycasting the exact
+  circled spot directly in the live app) - not a second bug, just a
+  piece of the same correctly-kept-visible frame that now looks
+  detached since the legs beside it are hidden. Also surfaced a real
+  gotcha worth remembering: Onshape's own part tree names don't
+  reliably match the GLB export's "Part N" node names (confirmed via
+  the person's own Onshape screenshot showing a differently-named
+  part) - cross-referencing labels between the two isn't trustworthy,
+  direct raycasting against the live model is. Second part: merged the
+  standalone "Hide Rear Outrigger Box" checkbox into the existing
+  "Include sliding beam box in rear figure" one - confirmed the exact
+  mapping with the person first (unticked = box shown, smaller
+  clearance figure; ticked = box hidden, bigger figure, matching the
+  real fitting relationship) rather than guess again. Verified
+  directly: visibility flips correctly both ways, and the clearance
+  figure grows by exactly 1270mm when ticked. Shipped to main
+  (CACHE_VERSION v251->v252, app v6.25->v6.26). See methodology.txt 97.
