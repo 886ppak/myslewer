@@ -547,3 +547,20 @@ a working record, not app content.
   earlier "9 distinct nodes" verification checked that the numbers
   resolved to real, separate parts, but never checked that each one
   was actually small/localized, which is the gap that let this ship.
+- "how hard is it to say in the future if I want to run another beta
+  to remove the firebase all stuff to allow it to function as is now?
+  can we just write something in the methodology to make a point of
+  how to go about removing it?"
+  **Status: written.** Added methodology.txt 96 - a HOWTO for stripping
+  Firebase Auth to spin up a future no-login beta, ahead of the current
+  myslewer-beta's own planned shutdown. Core fact documented: every
+  auth-dependent feature (Admin Dashboard, invite tokens, Profile,
+  shared Lift Logger pools, per-user tab permissions, Cab Entry) is
+  downstream of one `<script type="module">` block - nothing else in
+  the app touches Firebase. Also pushed a "beta-trial-final" branch
+  (both remotes - a plain git tag got rejected with a 403 by this
+  session's push credentials, a branch worked, same durable-pointer
+  effect) preserving beta-trial's actual working trial-gate/Welcome-tab
+  code and its pre-shared-pool Lift Logger, so a future strip can lift
+  real working code instead of rebuilding it from memory. Doc-only, no
+  version bump.

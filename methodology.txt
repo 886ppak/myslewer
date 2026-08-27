@@ -11128,3 +11128,78 @@ cranes get their own subsections as they're built.
   part list.
 
   CACHE_VERSION v250->v251, app version v6.24->v6.25.
+
+96. HOWTO: spin up a future no-login beta channel (strip Firebase Auth)
+
+  Written on request, ahead of myslewer-beta's own planned shutdown
+  (~1 week out as of this entry) - a reference for the NEXT time a
+  beta/trial channel is wanted, so it doesn't need to be re-derived
+  from scratch or re-discovered the hard way (see section 71/93's own
+  "beta-trial is 235 commits behind and it's not just staleness, it
+  never got Firebase Auth at all" surprise). Keep this entry updated
+  if the app's auth surface changes shape significantly after it's
+  written - treat it as a starting point, not a guaranteed-current diff.
+
+  THE CORE FACT TO REMEMBER: main's whole Firebase Authentication
+  system (sign-in gate, Firestore, googleAllowlist, invite tokens,
+  Admin Dashboard, Profile panel, shared Lift Logger pools, per-user
+  tab permissions/userAccess, Cab Entry's owner-only gating) was built
+  as a single connected system, all downstream of one thing - the
+  `<script type="module">` block at the top of index.html (currently
+  ~line 545-1468) that imports vendor/firebase/*.js, shows/hides
+  #access-gate, and calls onAuthStateChanged. Nothing else in the app
+  (every crane-calculation tab: Load Chart Finder, Chain Shortening,
+  Crane Positioning, Counterweight, Reeving, Driving w/ Equipment,
+  Assembly Plans, etc.) touches Firebase at all - that's the whole
+  reason beta-trial could exist as a real, working, simpler product for
+  this long without any of it. Removing Firebase Auth is NOT a
+  scattered app-wide job - it's "remove one module + everything that
+  was deliberately built on top of it", not "audit every tab".
+
+  WHAT TO ACTUALLY DO, IN ORDER:
+  1. Replace the module script block with a trial-expiry gate + Welcome
+     tab - beta-trial ALREADY HAS a working one, no need to design a
+     new one. See the "beta-trial-final" BRANCH (pushed to both the
+     myslewer and myslewer-beta remotes as part of this entry,
+     specifically so it survives the repo's own shutdown/deletion -
+     commit 5d0cce0d88221ca292f053ee947014803ee144f4 as of this
+     writing; a git TAG was tried first but this session's push
+     credentials rejected tag refs with a 403 while branch refs worked
+     fine, so a branch is what actually exists - fine either way, it's
+     just a durable pointer to the same commit) - pull its index.html
+     and lift the trial-gate script + #trial-expired-overlay markup +
+     Welcome tab wholesale, then set a new TRIAL_EXPIRES date.
+  2. Remove every window.__ function this module exposed and its
+     calling UI: window.__isAdmin and the Admin Dashboard tab,
+     window.__profile* and the Profile tab, window.__pools* and the
+     shared Lift Logger pool UI (revert Lift Logger to its pre-pool,
+     localStorage-only version - also already sitting in beta-trial's
+     own history, since beta never got the pools feature either - same
+     beta-trial-final branch), window.__admin* (invite tokens,
+     per-user tab toggles), window.__directoryList.
+  3. Cab Entry is owner-only via the same userAccess/{uid} opt-in
+     pattern as Service Fill/Assembly Plans (section covering "owner-
+     only crane load-position logger") - either drop the tab entirely
+     or make it unconditionally visible, a real decision each time
+     depending on who the new beta audience is, not something to just
+     default one way silently.
+  4. Drop vendor/firebase/*.js and firestore.rules from the new build -
+     nothing left references them once step 1-2 are done. Update
+     sw.js's APP_SHELL list to match whatever tabs/files actually got
+     removed (see sw.js's own top-of-file comment for why this list
+     has to stay accurate - a stale entry is exactly how past caching
+     bugs happened, see methodology.txt 10.28/61/62).
+  5. Confirm via a plain grep for "firebase" and "window.__isAdmin"
+     across index.html afterward - zero hits (besides comments
+     explaining the history, if any are kept) means the strip is
+     actually complete, not just visually gone from the tabs someone
+     happened to click through.
+
+  WHY NOT JUST CHERRY-PICK MAIN'S HISTORY THE USUAL WAY: every future
+  main commit built on the auth system (which is most day-to-day work
+  once it exists) would conflict or silently reintroduce the
+  dependency - this is a from-scratch strip against whatever main
+  looks like at the time, not an incremental sync.
+
+  No code change - documentation only, so no CACHE_VERSION/app-version
+  bump for this entry (nothing in index.html or sw.js moved).
