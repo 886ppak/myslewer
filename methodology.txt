@@ -11275,3 +11275,45 @@ cranes get their own subsections as they're built.
   grows by exactly 1270mm when ticked, matching SLIDING_BEAM_BOX_DEPTH_MM.
 
   CACHE_VERSION v251->v252, app version v6.25->v6.26.
+
+98. Revert the rear outrigger box hide feature entirely
+
+  Person's verdict after section 97's merge: the checkbox mapping
+  still read backwards to them in practice ("when I selected it
+  disappears - it should be there"), and separately, Part_16's own
+  geometry sticking out looking visually detached once the legs beside
+  it hide (see section 97's own investigation - confirmed to be Part_16
+  itself, not a bug) "makes the model look stupid" regardless of which
+  direction the checkbox goes. Asked to remove the whole feature and
+  return to how the 3D carrier preview looked before any of this
+  started (sections 91-97).
+
+  Reverted completely rather than trying a third mapping/fix: removed
+  PART_GROUPS, normalizePartName, window.__carrier3dGetPartGroups and
+  window.__carrier3dSetPartGroupVisible from carrier3d.js entirely, and
+  every call site/constant in index.html (REAR_OUTRIGGER_BOX_MODELS,
+  the onSlewCircleToggle tie-in). Confirmed via a direct diff against
+  the commit immediately before section 93 first added this feature
+  (4004415~1) that carrier3d.js is now byte-identical to its pre-
+  feature state, and index.html's only remaining differences are the
+  version-number bumps this whole saga generated - no leftover trace
+  of the feature's code anywhere. The (admin-only) Identify Parts tool
+  itself was NOT removed - it's a separate, harmless diagnostic tool
+  that doesn't do any hiding on its own, still useful for the next
+  attempt at this or a similar feature on a different component
+  (combi box, etc.) if one's ever wanted again with more certain part
+  data.
+
+  Verified live: no "Hide Rear Outrigger Box" checkbox anywhere,
+  window.__carrier3dGetPartGroups/SetPartGroupVisible no longer exist,
+  Identify Parts still present and untouched, and the "Include sliding
+  beam box" checkbox's rear-clearance-figure math (the ONLY thing it
+  should do now) still works exactly as it did before any of this -
+  confirmed the +1.27m still folds in correctly on check.
+
+  Sections 91-97 stay in this file as an accurate record of what was
+  tried and why it didn't work out, rather than being deleted - the
+  actual code they describe no longer exists in the app as of this
+  entry.
+
+  CACHE_VERSION v252->v253, app version v6.26->v6.27.

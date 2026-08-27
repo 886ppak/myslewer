@@ -588,3 +588,21 @@ a working record, not app content.
   directly: visibility flips correctly both ways, and the clearance
   figure grows by exactly 1270mm when ticked. Shipped to main
   (CACHE_VERSION v251->v252, app v6.25->v6.26). See methodology.txt 97.
+- "The included sliding bean box logic is backwards... it should be
+  selected on by default so the Box ticked and it should be showing...
+  I want to remove all of what we just did with that. stray PC makes
+  the model looks stupid so revert it back to how it was prior to us
+  trying to hide the Outrigger box and we will just leave it as it was
+  previously"
+  **Status: fully reverted.** Removed the whole rear-outrigger-box hide
+  feature - PART_GROUPS, window.__carrier3dGetPartGroups/
+  SetPartGroupVisible from carrier3d.js, and every call site in
+  index.html. Confirmed via a direct diff against the pre-feature
+  commit that carrier3d.js is now byte-identical to before any of this
+  started, and index.html's only remaining differences are version
+  bumps. The "Include sliding beam box" checkbox is back to doing
+  exactly what it did originally (rear clearance figure math only, no
+  3D visibility tie-in). Identify Parts (admin-only) left in place -
+  separate, harmless tool, not part of what was reverted. Shipped to
+  main (CACHE_VERSION v252->v253, app v6.26->v6.27). See
+  methodology.txt 98.
