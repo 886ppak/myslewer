@@ -177,7 +177,17 @@ function ensureRenderer(wrapId, labelId) {
 
   raycaster = new THREE.Raycaster();
   mouse = new THREE.Vector2();
-  renderer.domElement.addEventListener('click', onCanvasClick);
+  // pointerdown/pointerup with a movement threshold, NOT a plain 'click'
+  // listener - a real finger tap almost always has a few pixels of
+  // movement between touchstart and touchend, especially on a model
+  // someone's actively trying to rotate/orient, and browsers suppress
+  // synthesizing a 'click' event after enough touch movement (their own
+  // tap-vs-scroll/drag disambiguation, not something OrbitControls
+  // controls). A mouse click barely moves, so it worked fine in testing;
+  // a real phone tap on the 1110 (or any model) reliably wouldn't have.
+  // See methodology.txt.
+  renderer.domElement.addEventListener('pointerdown', onCanvasPointerDown);
+  renderer.domElement.addEventListener('pointerup', onCanvasPointerUp);
 
   window.addEventListener('resize', resizeRenderer);
 
@@ -226,13 +236,33 @@ window.__carrier3dSetIdentifyMode = function (active) {
   if (!active) clearIdentifyHighlight();
 };
 
-function onCanvasClick(ev) {
+// Tracked in pointerdown, consumed (and cleared) in pointerup - see
+// onCanvasPointerUp's own comment on why this is a tap-vs-drag check
+// rather than a plain 'click' listener.
+let identifyPointerDownPos = null;
+const IDENTIFY_TAP_MOVE_THRESHOLD_PX = 10;
+
+function onCanvasPointerDown(ev) {
+  if (ev.button !== 0) return; // primary button/touch contact only - not a right-click pan gesture
+  identifyPointerDownPos = { x: ev.clientX, y: ev.clientY };
+}
+
+function onCanvasPointerUp(ev) {
+  const downPos = identifyPointerDownPos;
+  identifyPointerDownPos = null;
+  if (!downPos || ev.button !== 0) return;
+  const movedPx = Math.hypot(ev.clientX - downPos.x, ev.clientY - downPos.y);
+  if (movedPx > IDENTIFY_TAP_MOVE_THRESHOLD_PX) return; // was an orbit/pan drag, not a tap
+  identifyAtPoint(ev.clientX, ev.clientY);
+}
+
+function identifyAtPoint(clientX, clientY) {
   if (!identifyModeActive || !currentModelKey) return;
   const root = modelCache[currentModelKey];
   if (!root) return;
   const rect = renderer.domElement.getBoundingClientRect();
-  mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-  mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+  mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
   const meshes = [];
   root.traverse((obj) => { if (obj.isMesh) meshes.push(obj); });

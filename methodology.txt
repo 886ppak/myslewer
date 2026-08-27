@@ -10916,3 +10916,58 @@ cranes get their own subsections as they're built.
   approach. Full existing regression suite re-run clean alongside it.
 
   CACHE_VERSION v246->v247, app version v6.20->v6.21.
+
+92. Identify Parts: fixed taps not registering on a real phone
+
+  Person's real-world report right after shipping section 91: "I'm
+  tapping parts and it's not doing anything on the 110t" (LTM 1110-5.1).
+  Checked the actual model first - the 1110's carrier GLB has 9,926
+  meshes across 289 parts, vastly more than the 1650's 28, so initially
+  suspected a raycasting-performance problem on that specific model.
+  Measured it directly (headless, same environment): the raycast itself
+  only takes ~95ms even against that many meshes, and a synthetic click
+  event correctly resolved "Part_2" - the mechanism works in principle,
+  ruling out sheer mesh count as the cause.
+
+  The real cause: onCanvasClick was wired to a plain 'click' listener.
+  A real finger tap on a touchscreen almost never lands in EXACTLY the
+  same pixel between touchstart and touchend - and a browser only
+  synthesizes a 'click' event after a touch sequence if the movement
+  stayed under its own internal threshold (its tap-vs-scroll/drag
+  disambiguation, not something this app or OrbitControls controls).
+  On a 3D model someone's actively trying to orient to find a specific
+  part, that tiny bit of drift is close to guaranteed - so on a real
+  phone the browser was very likely never firing 'click' at all, while
+  a mouse click in testing (near-zero movement) always did, which is
+  exactly why this passed every check before shipping and then failed
+  immediately on a real device.
+
+  Fixed by tracking pointerdown/pointerup directly instead of relying
+  on 'click' synthesis: record the pointerdown position, and on
+  pointerup only treat it as an identify-tap if the movement since
+  pointerdown was under 10px - anything past that is an orbit/pan drag,
+  not a tap, and is correctly ignored. pointerdown/pointerup (not
+  separate mouse/touch listeners) covers mouse, touch and pen uniformly
+  through the one Pointer Events API. Primary button/contact only
+  (button !== 0 is ignored) so a right-click pan gesture on desktop
+  can't accidentally register as an identify tap either.
+
+  Verification needed its own update to match: the old tests dispatched
+  a synthetic 'click' event directly, which no longer exists to
+  dispatch anything TO. Rewrote the tap helper to dispatch a real
+  pointerdown+pointerup pair instead - which also let the test suite
+  finally cover the exact failure mode being fixed: added a dedicated
+  check dispatching a pointerdown+pointerup pair with 60/40px of
+  movement between them, confirming that's correctly rejected as a
+  drag rather than misidentified as a tap. Hit one more synthetic-
+  dispatch-only artifact while doing this: OrbitControls' own
+  pointerdown handler calls setPointerCapture(pointerId), which throws
+  when the pointerId comes from a JS-constructed PointerEvent rather
+  than a genuine OS-tracked pointer - impossible on a real device
+  (every real pointerdown carries a valid id), so filtered out of the
+  test's own error-checking rather than either ignored outright or
+  mistaken for a real regression. All 10 checks (including the real
+  tap-vs-drag distinction) pass clean, plus the existing regression
+  suite alongside them.
+
+  CACHE_VERSION v247->v248, app version v6.21->v6.22.

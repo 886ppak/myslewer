@@ -476,3 +476,22 @@ a working record, not app content.
   use this to collect real part numbers for the rear outrigger box,
   combi box, and rear tool boxes across each model, which then unlocks
   the actual show/hide feature this was building toward.
+- "I'm tapping parts and it's not doing anything on the 110t. how
+  about I go on to onshape and just tell you what the parts are for
+  the 650t crane cause I already have it open and you can check if
+  you can also see these references?"
+  **Status: bug fixed, shipped.** Real cause: Identify Parts relied on
+  a plain 'click' event, which browsers only synthesize after a touch
+  if movement stayed under their own tap-vs-drag threshold - a real
+  finger tap on a 3D model someone's rotating to find a part almost
+  always drifts enough to suppress it, so it likely never fired on a
+  real phone at all (mouse clicks in testing barely move, so this
+  passed every check before shipping). Fixed with proper pointerdown/
+  pointerup + movement-threshold tracking, covering mouse/touch/pen
+  uniformly. Also flagged: whatever name Onshape shows for a part
+  won't match this tool's Part_N label (that numbering comes from the
+  GLB export, not Onshape's own tree) - the reliable source is still
+  tapping the part in the app itself. Verified with a real tap-vs-drag
+  distinction test plus the existing regression suite, both clean.
+  Shipped to main (CACHE_VERSION v247->v248, app v6.21->v6.22). See
+  methodology.txt 92.
