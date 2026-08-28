@@ -11398,3 +11398,17 @@ cranes get their own subsections as they're built.
   with no further code change.
 
   CACHE_VERSION v254->v255, app version v6.28->v6.29.
+
+  Deliberately NOT shadowed to beta-trial. Attempting the routine
+  cherry-pick surfaced that beta-trial's index.html has no Firebase Auth
+  at all (9,193 lines vs main's 12,433, zero firebase/getAuth/
+  onAuthStateChanged references) - a genuinely no-login trial build with
+  no admin/userAccess system to check xPctHAccess against. Porting this
+  commit as-is would leave the tab either dead code (never granted,
+  since nothing ever sets window.__x650Access true there) or, if ported
+  ungated, visible to literally anyone on the beta channel who selects
+  the LTM 1650 - directly against the whole point of this session's
+  request (gating exactly because the plans take real work to produce
+  and shouldn't go to "any random"). Confirmed with the person: skip
+  beta for this feature entirely for now, revisit once real diagram
+  content exists and/or beta gets its own access model.
