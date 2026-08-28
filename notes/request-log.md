@@ -684,3 +684,16 @@ a working record, not app content.
   but a plain <img> stays pinned at its own natural size regardless of
   how big the wrap gets. Shipped to main (CACHE_VERSION v257->v258, app
   v7.0->v7.1). See methodology.txt 103.
+- "for the x percentage h tab. I've also uploaded four extra PDFs of
+  just single sided. Layouts being, for example, d s a, meaning driver
+  side reverse. So if we can upload those and move the two bigger ones
+  for just sixty nine and in line... when it says reverse, it's meaning
+  sixty nine in the PDFs."
+  **Status: shipped.** Added a second toggle (Driver Side / Passenger
+  Side / Combined) alongside the existing Inline/69 orientation toggle -
+  6 diagrams total sharing one image/zoom/fullscreen wrap. Combined (the
+  original two full drawings) moved from being the only option to the
+  third, de-prioritized one; Driver Side/Inline is now the default.
+  Confirmed each new PDF against the matching half of the original
+  combined drawings by cross-checking LICCON box values. Shipped to main
+  (CACHE_VERSION v258->v259, app v7.1->v7.2). See methodology.txt 104.

@@ -4,7 +4,7 @@
 // reeving diagrams (see CONTENT_CACHE below) — those persist across updates
 // so a crew doesn't lose offline access to plans they've already viewed just
 // because an app update shipped.
-const CACHE_VERSION = 'myslewer-v258';
+const CACHE_VERSION = 'myslewer-v259';
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 
 // Fetched-on-demand content (reeving diagrams, etc). Fixed name, never
@@ -78,6 +78,10 @@ const APP_SHELL = [
   './counterweight/img/ltr1220-cwt-exploded.png',
   './cad/x650-inline.jpg',
   './cad/x650-69.jpg',
+  './cad/x650-ds-inline.jpg',
+  './cad/x650-ds-69.jpg',
+  './cad/x650-ps-inline.jpg',
+  './cad/x650-ps-69.jpg',
   './reeving/manifest.json',
   './vendor/carrier3d.js',
   './vendor/cabentry3d.js'

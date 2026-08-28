@@ -11518,3 +11518,40 @@ cranes get their own subsections as they're built.
   Fixes both Assembly Plans and X%H at once, being a shared-class rule.
 
   CACHE_VERSION v257->v258, app version v7.0->v7.1.
+
+104. X%H: single-side diagrams (Driver Side / Passenger Side) added
+
+  Person uploaded 4 more PDFs alongside the original two combined
+  drawings - D-S-I, D-S-R, P-S-I, P-S-R (Driver Side/Passenger Side x
+  Inline/Reverse), each a standalone single-page extract of one "half"
+  of the original combined inline/69 drawings (confirmed by matching
+  each new PDF's LICCON box values against the corresponding half of
+  the original combined PDFs - exact match). Driver Side = the detached
+  rear outrigger box's own trailer; Passenger Side = the crane itself.
+  Person confirmed "Reverse" in these four = "69" in the original
+  combined-drawing naming, so R/I map onto the existing 69/inline
+  orientation toggle unchanged.
+
+  Restructured the X%H panel with a second toggle: Driver Side /
+  Passenger Side / Combined (the two original full drawings, moved from
+  being the only option to now the third, de-prioritized option) x the
+  existing Inline/69 toggle - 3x2 = 6 diagrams total, all served through
+  the SAME image element/zoom-pan/fullscreen wrap rather than building a
+  second wrap instance for "Combined" (X650_DIAGRAMS keyed by
+  {ds,ps,combined} x {inline,'69'}, renderX650Diagram() swaps img.src
+  and resets zoom on either toggle changing) - avoids duplicating the
+  ~70-line zoom-gesture block a third time, unlike Assembly Plans/X%H
+  which do have their own separate instances each (see entry 102's
+  comment on why three call sites wasn't worth abstracting over - six
+  images sharing one wrap is a different case, not a change of mind on
+  that reasoning). Defaults to Driver Side/Inline - Combined is now last
+  in the toggle rather than the only option, per the person's own "move
+  the two bigger ones" request. Kept "Driver Side"/"Passenger Side" as
+  the on-screen labels verbatim (the person's own naming), same
+  treatment as "Inline"/"69" already get.
+
+  Converted all 4 new renders to JPG (2400px wide, quality 88, ~260KB
+  each) into ./cad/x650-{ds,ps}-{inline,69}.jpg, added to sw.js's
+  APP_SHELL alongside the existing two.
+
+  CACHE_VERSION v258->v259, app version v7.1->v7.2.
