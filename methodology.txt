@@ -11412,3 +11412,47 @@ cranes get their own subsections as they're built.
   and shouldn't go to "any random"). Confirmed with the person: skip
   beta for this feature entirely for now, revisit once real diagram
   content exists and/or beta gets its own access model.
+
+101. X%H sub-tab: real diagram images dropped in (no further code change)
+
+  Person plotted both LTM 1650 mud maps out of AutoCAD LT to PDF and
+  flagged the line weight as "really thick." Investigated the delivered
+  PDF's own content stream and got this wrong the first time - read the
+  raw PDF "w" (line width) operators without resolving the coordinate
+  transform matrix AutoCAD's plot driver wraps around them, which gave
+  wildly inflated numbers (4-12pt) and a wrong diagnosis blaming a
+  "3500x2400mm banner sheet fit to Letter" scaling issue. Also wrongly
+  assumed "3500x2400" was a sheet size at all - it's the bog mat
+  dimensions, per the person's own correction. Re-checked properly
+  (PyMuPDF's get_drawings(), which resolves the full CTM chain rather
+  than reading raw operators) and the ACTUAL page-space stroke widths
+  were already fine (hairline to ~0.5mm, standard AutoCAD lineweight
+  values) - nothing was actually wrong with the file I'd been sent, my
+  analysis method was the bug. Worth remembering for next time: PDF line
+  widths set via the "w" operator are in whatever coordinate space is
+  active at that point in the content stream, not automatically in page
+  points - always resolve through the CTM (or use a tool that already
+  does, like get_drawings()) before drawing conclusions from raw stream
+  text.
+
+  Separately, the person fixed and re-uploaded both PDFs regardless.
+  Re-downloaded, rendered, and confirmed both look correct - crisp thin
+  lines, correct mirrored outrigger-box/hook-block/support-pad order
+  between the inline and 69 orientations. Converted to JPG (2400px wide,
+  quality 88, ~320KB each) and dropped straight into
+  ./cad/x650-inline.jpg and ./cad/x650-69.jpg - the exact paths
+  X650_DIAGRAMS (index.html) already pointed at from entry 100, so no
+  code change was needed, only the asset files themselves plus adding
+  both to sw.js's APP_SHELL (same "actively-edited content" reasoning as
+  the counterweight diagrams - these were already corrected once this
+  session, so CONTENT_CACHE's never-updates behaviour would risk exactly
+  the stale-diagram bug methodology.txt 10.28 describes on the next
+  correction).
+
+  X%H sub-tab is now fully functional end to end (still needs
+  xPctHAccess granted per-person from the Admin Dashboard, and the LTM
+  1650 selected, per entry 100).
+
+  CACHE_VERSION v255->v256, app version v6.29->v6.30. Note: v6.30 is
+  this major's cap - the next bump rolls to v7.0 per the version-number
+  rule.

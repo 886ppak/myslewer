@@ -4,7 +4,7 @@
 // reeving diagrams (see CONTENT_CACHE below) — those persist across updates
 // so a crew doesn't lose offline access to plans they've already viewed just
 // because an app update shipped.
-const CACHE_VERSION = 'myslewer-v255';
+const CACHE_VERSION = 'myslewer-v256';
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 
 // Fetched-on-demand content (reeving diagrams, etc). Fixed name, never
@@ -52,6 +52,13 @@ const CONTENT_CACHE = 'app-content-v1';
 // carrier model it loads (outrigger/models/ltm1110-carrier.glb) is
 // already covered by carrier3d.js's own reasoning above (stable OEM
 // export, correctly left in CONTENT_CACHE) - it's the exact same file.
+//
+// cad/x650-inline.jpg and cad/x650-69.jpg (the X%H sub-tab's mud maps)
+// get the same counterweight-diagram treatment for the same reason -
+// these were already corrected once this same session (a line-weight
+// export issue), so treating them as stable/CONTENT_CACHE from day one
+// would risk exactly the stale-diagram bug methodology.txt 10.28
+// describes the first time a future correction ships.
 const APP_SHELL = [
   './',
   './index.html',
@@ -69,6 +76,8 @@ const APP_SHELL = [
   './counterweight/img/ltm1300-cwt-exploded.png',
   './counterweight/img/ltm1300-cwt-uk-exploded.png',
   './counterweight/img/ltr1220-cwt-exploded.png',
+  './cad/x650-inline.jpg',
+  './cad/x650-69.jpg',
   './reeving/manifest.json',
   './vendor/carrier3d.js',
   './vendor/cabentry3d.js'

@@ -646,3 +646,18 @@ a working record, not app content.
   uploaded yet" fallback until the real files are dropped in. Shipped
   to main (CACHE_VERSION v254->v255, app v6.28->v6.29). See
   methodology.txt 100.
+- "okay iv fixed both of the pdfs now they are good to go"
+  (After flagging thick line weights on the plotted LTM 1650 PDFs -
+  investigated and corrected my own analysis error along the way: my
+  first read of the PDF's raw line-width data was wrong, and the actual
+  embedded lineweights were fine all along. Person fixed and re-uploaded
+  the PDFs regardless.)
+  **Status: shipped, X%H sub-tab now fully functional.** Re-downloaded
+  both fixed PDFs, rendered and confirmed clean thin lines with correct
+  mirrored orientation between inline/69. Converted to JPG and dropped
+  into ./cad/x650-inline.jpg and ./cad/x650-69.jpg - the exact paths the
+  tab already pointed at, so no code change needed, just the asset files
+  plus adding both to sw.js's APP_SHELL so a future correction can't get
+  stuck in stale cache. Shipped to main (CACHE_VERSION v255->v256, app
+  v6.29->v6.30 - the cap for this major, next bump rolls to v7.0). See
+  methodology.txt 101.
