@@ -661,3 +661,13 @@ a working record, not app content.
   stuck in stale cache. Shipped to main (CACHE_VERSION v255->v256, app
   v6.29->v6.30 - the cap for this major, next bump rolls to v7.0). See
   methodology.txt 101.
+- "um is there any way to allow zooming and panning and full screening
+  the mud map and in your your description before toogle can be
+  removed"
+  **Status: shipped.** Added pinch-zoom/pan and a fullscreen button to
+  the X%H mud map, reusing Assembly Plans' own zoom/pan pattern and the
+  app's existing generic fullscreen plumbing (no new CSS/logic needed
+  for either). Removed the descriptive paragraph above the orientation
+  toggle. Shipped to main (CACHE_VERSION v256->v257, app v6.30->v7.0 -
+  the version cap was reached last push, so this one rolls to the next
+  major). See methodology.txt 102.

@@ -1477,7 +1477,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v6.30</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.0</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2088,21 +2088,25 @@
       <div id="cad-panel-x650" style="display:none;">
       <div class="card">
         <div class="card-title">LTM 1650-8.1 — 3-Outrigger Self-Assembly (X%H)</div>
-        <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;">
-          Mud map for self-assembling the rear outrigger box off the 3rd (centre rear) support leg, for a WA 12-tonne/axle transport job where the outrigger box and hook block have to travel separately. Toggle to match how the prime mover's cab is facing relative to the crane's own driving cab.
-        </div>
         <div class="mode-toggle" id="x650-orientation-toggle" style="margin-bottom:14px;">
           <button class="mode-btn active" id="x650-orientation-inline" onclick="setX650Orientation('inline')">Inline</button>
           <button class="mode-btn" id="x650-orientation-69" onclick="setX650Orientation('69')">69 (Facing)</button>
         </div>
-        <div id="x650-diagram-wrap" style="text-align:center;">
-          <img id="x650-diagram-img" src="" alt="X%H mud map" style="display:none; max-width:100%; border-radius:8px;"
-               onload="document.getElementById('x650-diagram-placeholder').style.display='none'; this.style.display='';"
-               onerror="this.style.display='none'; document.getElementById('x650-diagram-placeholder').style.display='';">
+        <div id="x650-diagram-wrap" class="assembly-image-wrap">
+          <div id="x650-zoom-inner" class="assembly-zoom-inner">
+            <img id="x650-diagram-img" src="" alt="X%H mud map" style="display:none;"
+                 onload="document.getElementById('x650-diagram-placeholder').style.display='none'; this.style.display='';"
+                 onerror="this.style.display='none'; document.getElementById('x650-diagram-placeholder').style.display='';">
+          </div>
           <div id="x650-diagram-placeholder" style="padding:40px 16px; color:var(--text-muted); font-size:0.85rem; border:1px dashed var(--border); border-radius:8px;">
             Diagram not uploaded yet for this orientation.
           </div>
+          <button type="button" class="carrier3d-fullscreen-btn" data-wrap="x650-diagram-wrap" onclick="toggleWrapFullscreen('x650-diagram-wrap')" title="Fullscreen" aria-label="Fullscreen">
+            <svg class="fs-icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+            <svg class="fs-icon-compress" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg>
+          </button>
         </div>
+        <div class="cwt-zoom-hint">Pinch to zoom, drag to pan when zoomed in. Double-tap to zoom in/out.</div>
       </div>
       </div>
       <!-- /cad-panel-x650 -->
@@ -3603,9 +3607,9 @@
     // X%H sub-tab: LTM 1650-only 3-outrigger self-assembly mud map,
     // toggled between the two prime-mover cab orientations ("inline" =
     // same direction as the crane's driving cab, "69" = facing it - see
-    // methodology.txt). Real diagram files still pending - the img's own
-    // onerror (see the HTML) falls back to the placeholder text until
-    // they're dropped in at these paths, so this is safe to ship now.
+    // methodology.txt). The img's own onerror (see the HTML) falls back
+    // to the placeholder text if a path ever goes missing, but both
+    // diagrams are real, live files as of methodology.txt 101.
     let x650Orientation = 'inline';
     const X650_DIAGRAMS = { inline: './cad/x650-inline.jpg', '69': './cad/x650-69.jpg' };
     function setX650Orientation(orientation) {
@@ -3616,6 +3620,108 @@
       document.getElementById('x650-diagram-placeholder').style.display = '';
       img.style.display = 'none';
       img.src = X650_DIAGRAMS[orientation];
+      x650ZoomReset();
+    }
+
+    // Pinch-to-zoom/pan + fullscreen on the mud map - these are big,
+    // detailed A0-format drawings (see methodology.txt 101), unreadable
+    // on a phone at fit-to-card size without this. Same pattern as
+    // Assembly Plans' own assemblyZoom/initAssemblyZoomGestures (this
+    // codebase duplicates this per-feature rather than sharing one
+    // generic instance - see that function's own comment on why:
+    // scoped event listeners per wrap element, not worth abstracting
+    // over for three call sites). Fullscreen itself just reuses the
+    // existing generic toggleWrapFullscreen(wrapId)/.carrier3d-
+    // fullscreen-btn plumbing (see its own comment) - nothing new
+    // needed there beyond giving this wrap the same class/markup.
+    let x650Zoom = { scale: 1, panX: 0, panY: 0 };
+
+    function x650ApplyZoom() {
+      const inner = document.getElementById('x650-zoom-inner');
+      if (inner) inner.style.transform = `translate(${x650Zoom.panX}px, ${x650Zoom.panY}px) scale(${x650Zoom.scale})`;
+    }
+
+    function x650ZoomReset() {
+      x650Zoom = { scale: 1, panX: 0, panY: 0 };
+      x650ApplyZoom();
+    }
+
+    function x650ZoomAround(cx, cy, factor) {
+      const newScale = Math.min(6, Math.max(1, x650Zoom.scale * factor));
+      const actualFactor = newScale / x650Zoom.scale;
+      x650Zoom.panX = cx - (cx - x650Zoom.panX) * actualFactor;
+      x650Zoom.panY = cy - (cy - x650Zoom.panY) * actualFactor;
+      x650Zoom.scale = newScale;
+      if (x650Zoom.scale <= 1.001) { x650Zoom.panX = 0; x650Zoom.panY = 0; x650Zoom.scale = 1; }
+      x650ApplyZoom();
+    }
+
+    function initX650ZoomGestures() {
+      const wrap = document.getElementById('x650-diagram-wrap');
+      if (!wrap) return;
+      const pointers = new Map();
+      let pinchStartDist = 0, pinchStartScale = 1;
+      let dragStartX = 0, dragStartY = 0, dragStartPanX = 0, dragStartPanY = 0;
+      let lastTapTime = 0;
+
+      const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+      wrap.addEventListener('pointerdown', (e) => {
+        wrap.setPointerCapture(e.pointerId);
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        if (pointers.size === 2) {
+          const pts = Array.from(pointers.values());
+          pinchStartDist = dist(pts[0], pts[1]);
+          pinchStartScale = x650Zoom.scale;
+        } else if (pointers.size === 1) {
+          const rect = wrap.getBoundingClientRect();
+          const now = Date.now();
+          if (now - lastTapTime < 300) {
+            if (x650Zoom.scale > 1) {
+              x650ZoomReset();
+            } else {
+              x650ZoomAround(e.clientX - rect.left, e.clientY - rect.top, 2.5);
+            }
+            lastTapTime = 0;
+          } else {
+            lastTapTime = now;
+          }
+          dragStartX = e.clientX; dragStartY = e.clientY;
+          dragStartPanX = x650Zoom.panX; dragStartPanY = x650Zoom.panY;
+        }
+      });
+
+      wrap.addEventListener('pointermove', (e) => {
+        if (!pointers.has(e.pointerId)) return;
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        if (pointers.size === 2) {
+          const pts = Array.from(pointers.values());
+          const newDist = dist(pts[0], pts[1]);
+          if (pinchStartDist > 0) {
+            x650Zoom.scale = Math.min(6, Math.max(1, pinchStartScale * (newDist / pinchStartDist)));
+            x650ApplyZoom();
+          }
+        } else if (pointers.size === 1 && x650Zoom.scale > 1) {
+          x650Zoom.panX = dragStartPanX + (e.clientX - dragStartX);
+          x650Zoom.panY = dragStartPanY + (e.clientY - dragStartY);
+          x650ApplyZoom();
+        }
+      });
+
+      function endPointer(e) {
+        pointers.delete(e.pointerId);
+        if (pointers.size === 1) {
+          const remaining = Array.from(pointers.values())[0];
+          dragStartX = remaining.x; dragStartY = remaining.y;
+          dragStartPanX = x650Zoom.panX; dragStartPanY = x650Zoom.panY;
+        }
+        if (x650Zoom.scale <= 1.001) { x650Zoom.panX = 0; x650Zoom.panY = 0; x650Zoom.scale = 1; x650ApplyZoom(); }
+      }
+      wrap.addEventListener('pointerup', endPointer);
+      wrap.addEventListener('pointercancel', endPointer);
+      wrap.addEventListener('pointerleave', endPointer);
     }
 
     // Combined visibility check for the X%H sub-tab button: opt-in access
@@ -12401,6 +12507,7 @@
     updateZoomReadout();
     updateCompassUI();
     initReeveZoomGestures();
+    initX650ZoomGestures();
     checkOfflineContentStatus(); // covers first load - switchTab() (which also calls this) only runs on a later click, and it updates every .cache-all-status span regardless of which tab is currently active
 
     // Reveal the three fullscreen buttons only where the Fullscreen API is

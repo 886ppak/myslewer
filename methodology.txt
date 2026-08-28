@@ -11456,3 +11456,35 @@ cranes get their own subsections as they're built.
   CACHE_VERSION v255->v256, app version v6.29->v6.30. Note: v6.30 is
   this major's cap - the next bump rolls to v7.0 per the version-number
   rule.
+
+102. X%H sub-tab: pinch-zoom/pan + fullscreen, drop the intro paragraph
+
+  Person's own follow-up once the real diagrams were in: these are big,
+  detailed A0-format drawings (see entry 101) - unreadable on a phone at
+  fit-to-card size, so asked for zoom/pan/fullscreen the same as other
+  reference images in the app get. Reused Assembly Plans' own
+  assemblyZoom/initAssemblyZoomGestures pattern verbatim under an x650-
+  prefixed copy (this codebase already duplicates this per-feature -
+  Assembly Plans, Reeving Plans, CWT plates each have their own scoped
+  instance rather than one shared generic implementation, since each
+  needs its own pointer-event listeners scoped to its own wrap element)
+  - x650Zoom/x650ApplyZoom/x650ZoomReset/x650ZoomAround/
+  initX650ZoomGestures, wired to the same .assembly-image-wrap/
+  .assembly-zoom-inner CSS classes so it inherits the existing pinch/
+  drag/double-tap behaviour with zero new CSS. Fullscreen needed nothing
+  new either - toggleWrapFullscreen()/.carrier3d-fullscreen-btn was
+  already fully generic (keyed by wrapId/data-wrap), so the X%H wrap
+  just got the same button markup and picked up the existing reveal-if-
+  supported logic (querySelectorAll('.carrier3d-fullscreen-btn')) for
+  free. Zoom resets on every orientation switch, same as Assembly Plans
+  resets on every length/type change - a person switching Inline<->69
+  shouldn't land on the new image still zoomed/panned to wherever the
+  old one was.
+
+  Also removed the descriptive paragraph above the toggle per the
+  person's request - the toggle buttons and the diagram itself speak
+  for themselves without it.
+
+  CACHE_VERSION v256->v257, app version v6.30->v7.0 (cap reached at
+  v6.30 per the version-number rule - this is the roll to the next
+  major, not a routine bump).
