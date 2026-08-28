@@ -671,3 +671,16 @@ a working record, not app content.
   toggle. Shipped to main (CACHE_VERSION v256->v257, app v6.30->v7.0 -
   the version cap was reached last push, so this one rolls to the next
   major). See methodology.txt 102.
+- "is there a reason when you full screen it? it's not sitting centred
+  of the full screen. it's up in the top Centre" (with a screenshot of
+  the X%H mud map fullscreened, sitting small and top-pinned against a
+  large black area)
+  **Status: fixed - and it also fixed the same latent bug in Assembly
+  Plans, which shares the same wrap/zoom classes and had never been
+  reported there.** Added a :fullscreen CSS rule for
+  .assembly-image-wrap's <img> (width/height:100% + object-fit:contain)
+  - the existing 3D-viewer fullscreen rule only stretches the wrap
+  itself, which works for those because a 3D canvas fills its container,
+  but a plain <img> stays pinned at its own natural size regardless of
+  how big the wrap gets. Shipped to main (CACHE_VERSION v257->v258, app
+  v7.0->v7.1). See methodology.txt 103.

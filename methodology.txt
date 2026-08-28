@@ -11488,3 +11488,33 @@ cranes get their own subsections as they're built.
   CACHE_VERSION v256->v257, app version v6.30->v7.0 (cap reached at
   v6.30 per the version-number rule - this is the roll to the next
   major, not a routine bump).
+
+103. Fullscreened mud map/assembly drawings pinned top-left, not centred
+
+  Person reported the X%H fullscreen view sitting up in the top-centre
+  of the screen instead of filling/centring properly. Real bug, and not
+  X%H-specific - it was always latent in Assembly Plans too, since both
+  share .assembly-image-wrap/.assembly-zoom-inner and this was never
+  exercised/reported there before. Root cause: the existing :fullscreen
+  CSS (carrier-3d-wrap etc.) forces the WRAP to 100vw/100vh, which is
+  enough for those three because their content is a 3D canvas absolutely
+  positioned to fill the wrap - but an <img> is a normal block child
+  sized by its own aspect ratio (width:100%; height:auto per
+  .assembly-zoom-inner img), not stretched by its container, so forcing
+  the wrap bigger just left the image pinned at its pre-fullscreen
+  natural size in the top-left corner of a much bigger box.
+
+  Fix: width/height:100% + object-fit:contain on the img itself while
+  fullscreened - the same letterboxing technique this file already uses
+  for the counterweight diagram wrap (methodology.txt 10.26), just
+  scoped under :fullscreen/:-webkit-full-screen so it only applies there
+  and leaves the normal in-card display (width:100%; height:auto)
+  untouched. Centres and scales the image to fit the screen regardless
+  of its own aspect ratio, with zero changes needed to the zoom/pan
+  gesture code - pan math already reads the wrap's live
+  getBoundingClientRect() at gesture time rather than anything cached
+  from before fullscreen was entered.
+
+  Fixes both Assembly Plans and X%H at once, being a shared-class rule.
+
+  CACHE_VERSION v257->v258, app version v7.0->v7.1.
