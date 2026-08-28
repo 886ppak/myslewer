@@ -123,9 +123,10 @@ service cloud.firestore {
     // Own-doc read stays exactly as it always has. Added for Stage 3: an
     // admin may get/list any user's doc (to build the dashboard's user
     // list) and write any user's flags (to toggle them) - the SAME
-    // three booleans applyFeatureAccess() in index.html already reads
-    // (serviceFillAccess, assemblyPlansAccess, cabEntryAccess) plus the
-    // existing `hidden` map, nothing new added to what a flag can mean.
+    // booleans applyFeatureAccess() in index.html already reads
+    // (serviceFillAccess, assemblyPlansAccess, cabEntryAccess,
+    // xPctHAccess) plus the existing `hidden` map, nothing new added to
+    // what a flag can mean.
     match /userAccess/{uid} {
       allow get: if request.auth != null && (request.auth.uid == uid || isAdmin());
       allow list: if request.auth != null && isAdmin();

@@ -625,3 +625,24 @@ a working record, not app content.
   25t shackles / 0 links / +8mm (was 1 additional before, since the
   lug used to cover part of the target itself). Shipped to main
   (CACHE_VERSION v253->v254, app v6.27->v6.28). See methodology.txt 99.
+- "id also like this tab to be gated where I can select who see it via
+  the admin panel as it takes a lot of work for me to come up with
+  these plans so I don't want to hand them out to any random"
+  (Following on from planning a new "X%H" sub-tab under Crane
+  Positioning for LTM 1650 3-outrigger self-assembly mud maps - real
+  DXF/AutoCAD files the person produced, still awaiting clean exported
+  images.)
+  **Status: gating + tab shell shipped, diagram content still
+  pending.** Added a fourth opt-in access flag, xPctHAccess, matching
+  serviceFillAccess/assemblyPlansAccess/cabEntryAccess's exact pattern
+  (applyFeatureAccess, __adminListUsers, ADMIN_TAB_TOGGLES - now
+  toggleable per-user from the Admin Dashboard same as the other three).
+  New "X%H" sub-tab (sibling of Crane Layout/Support Pad Placement)
+  stays hidden unless BOTH that flag is granted AND the LTM 1650 is the
+  crane actually selected on either of Crane Positioning's crane
+  selects. Content is a toggle switch (mode-toggle, same pattern used
+  throughout the app) between "Inline" and "69 (Facing)" cab
+  orientations, each showing a diagram image with a graceful "not
+  uploaded yet" fallback until the real files are dropped in. Shipped
+  to main (CACHE_VERSION v254->v255, app v6.28->v6.29). See
+  methodology.txt 100.

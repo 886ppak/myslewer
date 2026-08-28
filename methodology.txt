@@ -11360,3 +11360,41 @@ cranes get their own subsections as they're built.
   additional-items-only ceiling.
 
   CACHE_VERSION v253->v254, app version v6.27->v6.28.
+
+100. X%H sub-tab: admin-gated scaffold under Crane Positioning
+
+  New request: a place to hang real-world LTM 1650 3-outrigger self-
+  assembly mud maps (rear outrigger box + hook block travel separately
+  under WA's 12-tonne/axle transport limit, assembled off a 3rd centre
+  rear support leg, outriggers extended in two stages around bog mat
+  placement - person's own description). Person wants this admin-gated
+  per-user rather than visible to everyone, since the plans themselves
+  take real effort to produce ("I don't want to hand them out to any
+  random") - same reasoning as the existing opt-in tabs, just applied
+  to a sub-tab instead of a top-level one.
+
+  Added a fourth opt-in flag, xPctHAccess, following serviceFillAccess/
+  assemblyPlansAccess/cabEntryAccess's exact pattern (applyFeatureAccess,
+  __adminListUsers, ADMIN_TAB_TOGGLES) with one addition: the sub-tab
+  button (Crane Positioning's "X%H", sibling of Crane Layout/Support Pad
+  Placement) also has to stay hidden unless the LTM 1650 is the crane
+  actually selected - nobody else's plans exist for any other model.
+  window.__updateX650TabVisibility() checks both conditions together
+  (window.__x650Access, set cross-scope from the module script's
+  applyFeatureAccess, AND either crane select - cad-crane or sc-crane -
+  reading '1650'), called on every model change (calcCAD/
+  onSlewClearanceCraneChange) and once access itself loads in. Not
+  folded into computeGrantedKeys/OPTIN_KEY_TO_TABKEY - those exist for
+  the personal declutter/reorder menu, which only covers top-level tabs;
+  a sub-tab has no equivalent "hide from my menu" feature to seed.
+
+  Content itself is still a placeholder - toggle switch between "Inline"
+  and "69 (Facing)" cab orientations (mode-toggle/mode-btn, same
+  segmented-switch pattern used everywhere else in the app), each
+  pointing at an <img> with its own onerror fallback to a "Diagram not
+  uploaded yet" message, so this ships safely now and the real diagrams
+  (still pending from the person - see the DXF review session) can just
+  be dropped in at ./cad/x650-inline.jpg and ./cad/x650-69.jpg later
+  with no further code change.
+
+  CACHE_VERSION v254->v255, app version v6.28->v6.29.
