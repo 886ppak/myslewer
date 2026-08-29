@@ -1068,3 +1068,22 @@ a working record, not app content.
   end, now correctly reading 56% instead of 55.4%. Shipped to main
   (CACHE_VERSION v275->v276, app v7.18->v7.19, CARRIER3D_VERSION
   58->59). See methodology.txt 122.
+- "56%, up from 55.43 wouldn't you round down since it's below .5? I'm
+  just asking what your logic is here" - explained the ceiling
+  reasoning (never leave the plate short of the mark). Then "What is
+  the difference in millimeters that these two...going to fifty six
+  versus going to fifty five?" - worked it out for the real example:
+  55%~2024mm (15mm short), 56%~2059mm (20mm past), 34.8mm gap between
+  them. Then: "I think let's base it off what gets closest to the
+  difference."
+  **Status: shipped.** outriggerPercentForTarget switched from
+  Math.ceil (always up) to Math.round (nearest) - the worked example
+  now correctly reads 55%, not 56%. Deliberately left Load Chart
+  Finder's own always-round-up radius lookup untouched - different
+  tool, different risk (under-reading a load chart's real capacity vs
+  minimizing a paint-mark's absolute error), not an inconsistency.
+  Verified with a pure-math test confirming genuine nearest-rounding
+  in both directions plus an independent mm-error check on the real
+  worked example. Disclaimer text updated to match. Shipped to main
+  (CACHE_VERSION v276->v277, app v7.19->v7.20; carrier3d.js untouched,
+  CARRIER3D_VERSION stays 59). See methodology.txt 123.
