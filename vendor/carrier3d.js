@@ -347,6 +347,47 @@ window.__carrier3dSetPartGroupVisible = function (modelKey, groupKey, visible) {
   });
 };
 
+// 50%-outrigger-span reference toggle for the 1650, applied to the SAME
+// loaded model rather than shipping a second 45MB GLB just to show it at
+// a different span (see methodology.txt 106/107 - a person's own
+// separately-built 50%-span model was used to confirm these numbers,
+// then not shipped itself). Each corner's parts (same idea as
+// PART_GROUPS, but position instead of visibility) shift along their own
+// local X by exactly 1.74m, sign per corner - verified against that
+// reference model with nothing left to interpretation: every one of
+// these 12 parts' local X changes by exactly +-1.74000 and NOTHING else
+// (Y/Z translation and the full rotation submatrix are bit-identical
+// between normal and 50% span), so a plain per-part position.x offset is
+// the complete, exact transform - no rotation or multi-axis math needed.
+const OUTRIGGER_50PCT_DELTA_M = 1.74;
+const OUTRIGGER_CORNER_PARTS = {
+  1650: {
+    C1: { parts: ['Part 6', 'Part 19', 'Part 15'], sign: -1 },
+    C2: { parts: ['Part 14', 'Part 11', 'Part 12'], sign: -1 },
+    C3: { parts: ['Part 4', 'Part 8', 'Part 13'], sign: 1 },
+    C4: { parts: ['Part 7', 'Part 9', 'Part 17'], sign: 1 }
+  }
+};
+
+// Base (normal-span) local X is captured into userData the first time a
+// part is touched, not assumed to be 0 - every one of these parts sits
+// somewhere off-centerline already (see the person's own carrierWidthB/2
+// figures elsewhere in this app), so restoring "off" has to mean "back
+// to its real original position," not "back to zero."
+window.__carrier3dSetOutrigger50Pct = function (modelKey, enabled) {
+  const root = modelCache[modelKey];
+  const corners = OUTRIGGER_CORNER_PARTS[modelKey];
+  if (!root || !corners) return;
+  Object.values(corners).forEach(({ parts, sign }) => {
+    const wanted = new Set(parts.map(normalizePartName));
+    root.traverse((obj) => {
+      if (!wanted.has(normalizePartName(obj.name))) return;
+      if (obj.userData.__normalSpanX === undefined) obj.userData.__normalSpanX = obj.position.x;
+      obj.position.x = obj.userData.__normalSpanX + (enabled ? sign * OUTRIGGER_50PCT_DELTA_M : 0);
+    });
+  });
+};
+
 function resizeRenderer() {
   const wrap = document.getElementById(currentWrapId);
   if (!renderer || !wrap || wrap.clientWidth === 0) return;

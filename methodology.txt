@@ -11640,3 +11640,39 @@ cranes get their own subsections as they're built.
   Crane Layout's 3D preview, once the no-go-zone data itself exists and
   the actual overlay/interaction design is settled) is a separate,
   later piece of work - this entry is asset staging only.
+
+107. Superseding 106: runtime transform instead of a second GLB
+
+  Person's own correction, immediately after 106 shipped: didn't want a
+  second 45MB file at all - "if we could reuse the 1 1650 model to do
+  the whole work flow would be much better." Right call - doubling the
+  download for a reference view most people won't open every session
+  isn't worth it when the actual change (a pure per-part translation, no
+  rotation/other axis involved - see entry 106's own verification) is
+  small enough to just apply at runtime instead.
+
+  Removed outrigger/models/ltm1650-carrier-50pct.glb entirely (deleted
+  from the repo, not just unwired) and removed sw.js's now-unnecessary
+  mention of it. Replaced with window.__carrier3dSetOutrigger50Pct
+  (carrier3d.js) - translates OUTRIGGER_CORNER_PARTS' twelve parts (same
+  four corners as the person's own C1-C4 lists from entry 105) along
+  their own local X by +-1.74m, restoring each part's real captured
+  original position (not zero) when toggled off. New checkbox "Show 50%
+  outrigger span (reference)" added to Crane Layout, next to Hide Rear
+  Outrigger Box, gated the same way (OUTRIGGER_50PCT_MODELS, mirroring
+  REAR_OUTRIGGER_BOX_MODELS).
+
+  Verified the transform is exact, not approximate, before wiring
+  anything up: re-loaded both the normal-span model and the person's
+  now-deleted 50%-span reference file one more time and confirmed, for
+  all 12 parts, normalSpanX + sign*1.74 equals the reference file's real
+  50%-span X to 6 decimal places. Only after that check passed was the
+  reference file actually deleted - the real numbers came from it, the
+  file itself just isn't needed once they're baked into carrier3d.js.
+
+  This checkbox is a real, working, standalone feature now (visually
+  previews the 50% span) even before the no-go-zone radius data exists -
+  that overlay is still a separate, later piece of work layered on top.
+
+  CACHE_VERSION v260->v261, app version v7.3->v7.4, CARRIER3D_VERSION
+  53->54.

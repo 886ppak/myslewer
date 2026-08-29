@@ -720,3 +720,19 @@ a working record, not app content.
   zone radius data itself exists. Shipped to main (CACHE_VERSION
   v259->v260, app v7.2->v7.3, CARRIER3D_VERSION 52->53). See
   methodology.txt 105-106.
+- "hold on I only want to add only the 1 model . remember I asked if
+  you could mod the normal one to retract the out riggers to 50% yes we
+  have a separate model there with it done but I want to save on data
+  Megabytes so if we could reuse the 1 1650 model to do the whole work
+  flow would be much better"
+  **Status: fixed - second GLB removed, runtime transform in its
+  place.** Deleted ltm1650-carrier-50pct.glb entirely. Added
+  window.__carrier3dSetOutrigger50Pct in carrier3d.js, which shifts the
+  12 outrigger parts (already identified for entry 105's box work) by
+  +-1.74m on the SAME loaded model - re-verified the transform against
+  the (now-deleted) reference file one more time before removing it, to
+  6 decimal places on all 12 parts, so nothing was taken on faith.
+  Added a "Show 50% outrigger span (reference)" checkbox in Crane
+  Layout next to Hide Rear Outrigger Box. Shipped to main
+  (CACHE_VERSION v260->v261, app v7.3->v7.4, CARRIER3D_VERSION 53->54).
+  See methodology.txt 107.

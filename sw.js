@@ -4,7 +4,7 @@
 // reeving diagrams (see CONTENT_CACHE below) — those persist across updates
 // so a crew doesn't lose offline access to plans they've already viewed just
 // because an app update shipped.
-const CACHE_VERSION = 'myslewer-v260';
+const CACHE_VERSION = 'myslewer-v261';
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 
 // Fetched-on-demand content (reeving diagrams, etc). Fixed name, never
@@ -109,11 +109,11 @@ const APP_SHELL = [
 // A person who's never viewed the 3D preview never had a stale copy to
 // begin with, so this is a no-op for them; a person who had, gets a
 // fresh fetch the next time they open it, same as first-ever viewing it
-// would. ltm1650-carrier-50pct.glb (the 50%-outrigger-span reference
-// build, for the planned no-go-zone overlay) isn't listed here - it's a
-// brand new filename nothing could already have cached, so there's no
-// staleness to purge yet; add it here too once it's actually wired into
-// a feature and gets its first post-ship correction.
+// would. The planned 50%-outrigger-span reference view (no-go-zone
+// overlay) does NOT get a second GLB file at all in the end - it's a
+// runtime translation applied to this same model's outrigger parts
+// instead (carrier3d.js's own OUTRIGGER_CORNER_PARTS), specifically to
+// avoid doubling this download for everyone. See methodology.txt 106/107.
 const CONTENT_CACHE_INVALIDATE = [
   './outrigger/models/ltm1650-carrier.glb'
 ];
