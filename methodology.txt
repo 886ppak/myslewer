@@ -12380,3 +12380,49 @@ cranes get their own subsections as they're built.
   untouched, CARRIER3D_VERSION stays 58. 6 of 7 cranes now covered;
   1110 needs the corner-aware extension before its own confirmed plate
   width can be safely added.
+
+121. LTM 1110-5.1 - corner-aware front/rear extension, last of the 7 cranes
+
+  Person: "yeah cant you still work out the math for the c2/c3 legs
+  based on 100% being 7m and c1/c4 100% being 8.3?" - confirming
+  exactly the two figures already pulled from this crane's own manual
+  page 58 ("Support base... Wide/Variable... Rear c1/c4... Front
+  c2/c3... 7.9m x 8.3m V 7.0m... 0-100%").
+
+  Built the corner-aware extension flagged as needed in methodology.txt
+  120: OUTRIGGER_STAGE_TABLE_BY_SIDE (only '1110' populated) holds
+  independent front (C2/C3: 0%->2.40m, 100%->7.00m) and rear (C1/C4:
+  0%->2.40m, 100%->8.30m) tables, both sourced from the SAME Technical
+  Data chapter as every other crane's entry - NOT the old front-only
+  OUTRIGGER_STAGE_TABLE['1110'] (that one stays exactly as it was,
+  still correctly serving the unrelated Driving w/ Equipment feature).
+  outriggerPercentForTarget gained a new isFront parameter: when a
+  crane has a BY_SIDE override it picks front or rear, otherwise it's
+  silently ignored and every other crane falls back to its one shared
+  table exactly as before. computeMatMarkingData() derives isFront from
+  leg.quadrant.startsWith('F') - the same quadrant-prefix convention
+  calcCAD()'s own accurateLateralX() already uses for front/rear span
+  selection, not a new one invented for this. Added SUPPORT_PLATE_WIDTH_M
+  ['1110'] = 0.5 (500mm, confirmed from the same manual page), now
+  safe since the front-only-table bug this was blocked on no longer
+  exists.
+
+  Verification, two stages:
+  1. Pure-math test: front and rear round-trip correctly across their
+     own full ranges; front and rear give genuinely DIFFERENT
+     distances for the same % (proving two independent tables, not one
+     shared by accident) while correctly converging at 0% (both start
+     from the same retracted 2.40m); a target reachable on the rear
+     side but beyond the front side's own max correctly resolves on
+     rear and returns null on front (proving the out-of-range clamp is
+     properly per-side); every other crane (1650/1130/1100) confirmed
+     byte-identical regardless of what's passed for isFront.
+  2. Full wiring test: two legs on the SAME crane, one tagged
+     quadrant 'FR' (front) and one 'RR' (rear), same pad size and
+     similar centerline distances - the two rows resolved to genuinely
+     different, independently hand-verified percentages (39.1%/60.9%
+     front vs 41.5%/58.5% rear), confirming leg.quadrant correctly
+     selects the right table end to end, not just in isolation.
+
+  CACHE_VERSION v274->v275, app version v7.17->v7.18. carrier3d.js
+  untouched, CARRIER3D_VERSION stays 58. All 7 cranes now covered.

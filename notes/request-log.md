@@ -1025,3 +1025,26 @@ a working record, not app content.
   expected numbers. Shipped to main (CACHE_VERSION v273->v274, app
   v7.16->v7.17; carrier3d.js untouched, CARRIER3D_VERSION stays 58).
   See methodology.txt 120.
+- "yeah cant you still work out the math for the c2/c3 legs based on
+  100% being 7m and c1/c4 100% being 8.3?" (LTM 1110, the one crane
+  held back from the previous round over its asymmetric front/rear
+  support base)
+  **Status: shipped.** Built the corner-aware extension: a new
+  OUTRIGGER_STAGE_TABLE_BY_SIDE holds independent front (C2/C3:
+  0-2.40m to 100%-7.00m) and rear (C1/C4: 0-2.40m to 100%-8.30m)
+  tables for the 1110, both from the same Technical Data source as
+  every other crane's entry. outriggerPercentForTarget now takes an
+  isFront parameter (harmlessly ignored by every other crane, which
+  keeps using its one shared table exactly as before), and
+  computeMatMarkingData() derives it from leg.quadrant - the same
+  front/rear convention already used elsewhere in this file, not a
+  new one. Added the 1110's own confirmed 500mm plate width now that
+  it's safe. Verified with a pure-math test (front/rear round-trips,
+  confirmed the two tables give genuinely different results and
+  correctly converge only at 0%, confirmed per-side out-of-range
+  clamping, confirmed zero effect on every other crane) and a full
+  wiring test with two legs on the same crane (one front, one rear)
+  landing on independently hand-checked, different percentages.
+  Shipped to main (CACHE_VERSION v274->v275, app v7.17->v7.18;
+  carrier3d.js untouched, CARRIER3D_VERSION stays 58). All 7 cranes
+  now covered. See methodology.txt 121.

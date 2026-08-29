@@ -1521,7 +1521,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.17</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.18</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -6786,16 +6786,35 @@
     // them a square plate (length == width), but never assumed to be
     // the same size across models, and each pulled from its own real
     // source rather than copied from a sibling crane.
-    // LTM 1110-5.1 deliberately has NO entry yet - its own Technical
-    // Data support base table is genuinely asymmetric front/rear (rear
-    // c1/c4 up to 8.3m, front c2/c3 up to 7.0m, at the SAME 100% figure)
-    // and this app's own OUTRIGGER_STAGE_TABLE['1110'] only has the
-    // front-axle reading (see that table's own comment) -
-    // outriggerPercentForTarget has no per-corner front/rear awareness
-    // yet, so adding this crane's plate width now would silently apply
-    // the front-only table to the rear corners too, which is wrong.
-    // Needs that corner-aware extension built first, not just data.
-    const SUPPORT_PLATE_WIDTH_M = { '1650': 0.7, '1100': 0.5, '1130': 0.55, '1160': 0.6, '1250': 0.6, '1300': 0.6 };
+    // LTM 1110-5.1's own 500mm plate, now safe to include now that
+    // outriggerPercentForTarget is corner-aware (see
+    // OUTRIGGER_STAGE_TABLE_BY_SIDE and its own isFront parameter
+    // below) - front/rear no longer share one table for this crane.
+    const SUPPORT_PLATE_WIDTH_M = { '1650': 0.7, '1100': 0.5, '1130': 0.55, '1160': 0.6, '1250': 0.6, '1300': 0.6, '1110': 0.5 };
+
+    // Per-side override for the rare crane whose support base isn't
+    // symmetric front/rear - only the 1110 so far. Sourced from the
+    // SAME "1.03 Technical data > 3 Support > 3.1 Support base" chapter
+    // as every OUTRIGGER_STAGE_TABLE entry above, NOT from the Driving
+    // w/ Equipment chart's own front-only spot reading
+    // (OUTRIGGER_STAGE_TABLE['1110'] itself, which only captures one
+    // pinned stage - 55%/5.00m front - see that table's own comment).
+    // This crane's own Technical Data table gives the real 0-100%
+    // continuous range independently for each side (its own "Variable"
+    // support-base row): front (C2/C3) 2.40m at 0% up to 7.00m at
+    // 100%, rear (C1/C4) 2.40m at 0% up to 8.30m at 100% - both sides
+    // start from the same retracted width and diverge as they extend.
+    // Only 2 points per side, same as LRT 1100's own table - can't
+    // independently cross-check linearity the way the 1650's 5-point
+    // table could, but the manual's own "Variable...0-100%" wording
+    // confirms this is a continuous hydraulic support base, not a
+    // stepped/pinned one, so linear is the correct model here too.
+    const OUTRIGGER_STAGE_TABLE_BY_SIDE = {
+      '1110': {
+        front: [[0, 2.40], [100, 7.00]],
+        rear: [[0, 2.40], [100, 8.30]]
+      }
+    };
 
     // "Outrigger as a tape measure" - person's own field technique,
     // worked through and confirmed step by step before building this:
@@ -6826,8 +6845,14 @@
     // is ever actually load-rated at. This one is for a temporary,
     // no-load positioning check only, always verified on site against
     // the crane's own live LICCON percentage readout.
-    function outriggerPercentForTarget(modelKey, targetOuterEdgeMm) {
-      const stages = OUTRIGGER_STAGE_TABLE[modelKey];
+    //
+    // isFront picks the correct table for a crane with an asymmetric
+    // front/rear support base (OUTRIGGER_STAGE_TABLE_BY_SIDE) - ignored
+    // (harmlessly) for every other crane, which just falls back to its
+    // one shared OUTRIGGER_STAGE_TABLE entry.
+    function outriggerPercentForTarget(modelKey, targetOuterEdgeMm, isFront) {
+      const bySide = OUTRIGGER_STAGE_TABLE_BY_SIDE[modelKey];
+      const stages = bySide ? (isFront ? bySide.front : bySide.rear) : OUTRIGGER_STAGE_TABLE[modelKey];
       const plateM = SUPPORT_PLATE_WIDTH_M[modelKey];
       const data = SLEW_CLEARANCE_DATA[modelKey];
       if (!stages || stages.length < 2 || !plateM || !data || typeof targetOuterEdgeMm !== 'number') return null;
@@ -9527,6 +9552,14 @@
         const halfPadMm = leg.pad.width / 2;
         const insideMm = edgeToCenterMm - halfPadMm;
         const outsideMm = edgeToCenterMm + halfPadMm;
+        // Front vs rear corner (C2/C3 vs C1/C4), NOT the same thing as
+        // `side` above (left/right) - only matters for a crane with an
+        // asymmetric support base (OUTRIGGER_STAGE_TABLE_BY_SIDE, only
+        // the 1110 so far); harmlessly ignored by
+        // outriggerPercentForTarget for every other crane. Same
+        // quadrant-prefix convention already used by calcCAD()'s own
+        // accurateLateralX().
+        const isFront = leg.quadrant ? leg.quadrant.startsWith('F') : true;
         return {
           id: leg.id, side, y, edgeXMm: side * halfB, padLengthMm: leg.pad.length,
           edgeToCenterMm, insideMm, outsideMm,
@@ -9534,8 +9567,8 @@
           // own comment. Recomputed fresh every call (same as everything
           // else in this function), so changing pad width/length live
           // recalculates these too - no separate wiring needed.
-          insidePct: outriggerPercentForTarget(modelKey, insideMm),
-          outsidePct: outriggerPercentForTarget(modelKey, outsideMm)
+          insidePct: outriggerPercentForTarget(modelKey, insideMm, isFront),
+          outsidePct: outriggerPercentForTarget(modelKey, outsideMm, isFront)
         };
       });
     }
@@ -9552,11 +9585,13 @@
       const headerRow = document.getElementById('cad-mat-marking-header-row');
       const data = computeMatMarkingData();
       // Extra "outrigger as tape measure" column only for a crane with
-      // confirmed plate-width + stage-table data (currently just the
-      // 1650) - hidden entirely rather than shown full of dashes for
-      // every other crane, same dynamic-column pattern already used for
-      // the 360° Slew Clearance table's rear-clearance columns.
-      const showPctCol = !!(SUPPORT_PLATE_WIDTH_M[modelKey] && OUTRIGGER_STAGE_TABLE[modelKey]);
+      // confirmed plate-width + stage-table data (the shared
+      // OUTRIGGER_STAGE_TABLE, or a per-side override for an asymmetric
+      // crane like the 1110 - either is enough) - hidden entirely
+      // rather than shown full of dashes for every other crane, same
+      // dynamic-column pattern already used for the 360° Slew Clearance
+      // table's rear-clearance columns.
+      const showPctCol = !!(SUPPORT_PLATE_WIDTH_M[modelKey] && (OUTRIGGER_STAGE_TABLE[modelKey] || OUTRIGGER_STAGE_TABLE_BY_SIDE[modelKey]));
       while (headerRow.children.length > 4) headerRow.removeChild(headerRow.lastChild);
       if (showPctCol && headerRow.children.length === 4) {
         const th = document.createElement('th');
