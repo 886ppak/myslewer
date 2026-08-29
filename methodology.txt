@@ -11555,3 +11555,88 @@ cranes get their own subsections as they're built.
   APP_SHELL alongside the existing two.
 
   CACHE_VERSION v258->v259, app version v7.1->v7.2.
+
+105. Hide Rear Outrigger Box, take two: real fix this time
+
+  Person re-exported the LTM 1650 carrier model with the body and rear
+  outrigger box genuinely separated as distinct parts this time (the
+  first attempt's fatal flaw - see entry 73/95 - was that "Part 16" back
+  then was actually the whole chassis frame, not a rear component).
+  Gave the exact part IDs per corner and for the box:
+    C1: 6, 19, 15   C2: 14, 11, 12   C3: 4, 8, 13   C4: 7, 9, 17
+    Rear outrigger box: 7, 21, 9, 19, 16, 18, 15, 17
+  (the C-corner lists turned out to matter for a separate, parallel
+  piece of work - see entry 106 - the box list is what this entry is
+  about).
+
+  Before touching anything, re-ran the exact same verification method
+  that caught the FIRST model's bug - loaded the new GLB (pygltflib) and
+  checked every one of the 8 box parts' own world-space bounding box
+  against the whole model's extent. Every one is small - the biggest
+  spans ~9% of the model's length (vs. the old bad "Part 16" at ~95%).
+  Confirmed for real, not just taken on faith - CAD part numbering isn't
+  stable across re-exports, so "Part 16" in the new file being small and
+  legitimate while "Part 16" in the old file was the whole chassis isn't
+  a contradiction, just two different real parts that happen to share a
+  number.
+
+  Reintroduced the feature by reapplying the exact same code that
+  existed right after the FIRST fix (commit 1534e72, before the later
+  ill-advised merge into the sliding beam box checkbox that caused its
+  own complaints and the eventual full revert) - PART_GROUPS/
+  normalizePartName/window.__carrier3dGetPartGroups/
+  window.__carrier3dSetPartGroupVisible in carrier3d.js,
+  REAR_OUTRIGGER_BOX_MODELS + the checkbox in
+  renderCarrier3DSlewToggles + toggleCarrier3DPartGroup in index.html -
+  same standalone "Hide rear outrigger box (3D model only)" checkbox in
+  Crane Layout's slew-toggles panel, own thing again, NOT merged into
+  the sliding beam box checkbox this time (that merge, not the toggle
+  itself, is what the person originally objected to).
+
+  Swapped outrigger/models/ltm1650-carrier.glb for the new model
+  (confirmed still Draco-compressed, same ~45MB as before - not the
+  83MB uncompressed export from earlier in this session). Since this is
+  the one carrier GLB that just stopped being "stable, unedited" content
+  (the assumption the rest of the fleet's GLBs are correctly cached
+  under), added a CONTENT_CACHE_INVALIDATE purge in sw.js specifically
+  for this file - NOT a full APP_SHELL precache entry, which would have
+  forced a 45MB download on every visitor's install regardless of
+  whether they ever open the 3D preview. The purge means anyone who'd
+  already cached the OLD model gets a fresh fetch next time they view
+  it, rather than silently keeping the old file (which would have
+  reintroduced the exact whole-chassis bug, since old-"Part 16" and
+  new-"Part 16" are different parts).
+
+  Could not do a full live-browser verification (the app's own sign-in
+  gate blocks Playwright without real credentials) - relied on the
+  bounding-box check above plus reusing verbatim the exact code that
+  was already confirmed working before the unrelated merge broke things.
+
+  CACHE_VERSION v259->v260, app version v7.2->v7.3, CARRIER3D_VERSION
+  52->53.
+
+106. Fifty-percent-outrigger reference model: staged, not yet wired up
+
+  Same conversation, second file: LTM1650CARRIERX%(50%).glb, a build of
+  the same carrier model with all four outrigger corners already
+  retracted/extended to the 50% span position - for the no-go-zone
+  radius overlay idea discussed earlier (varying safe radius by slew
+  angle on half outriggers, still waiting on the real angle/radius data
+  from the person). Checked it against the plain model before assuming
+  anything: every one of C1-C4's parts has moved by exactly 1.74m
+  (1740mm) - precisely the figure worked out together earlier in this
+  session (C2/C3 pull in from 100%, C1/C4 push out from 0%) - so the
+  person's own Onshape work already matches the math, confirmed, not
+  just trusted.
+
+  Added as outrigger/models/ltm1650-carrier-50pct.glb (also Draco-
+  compressed, ~45MB) - staged in the repo but deliberately NOT wired
+  into CARRIER_MODELS or any live code path yet. That constant's key is
+  the same modelKey used across FOOTPRINTS/SLEW_CLEARANCE_DATA/
+  cadFleetData/CARRIER_CALIBRATION - adding a fake extra "crane" key
+  with a matching 3D model but no matching entries anywhere else risks
+  quiet breakage in code that assumes a CARRIER_MODELS key means a full
+  per-model dataset exists. Real integration (a dedicated toggle in
+  Crane Layout's 3D preview, once the no-go-zone data itself exists and
+  the actual overlay/interaction design is settled) is a separate,
+  later piece of work - this entry is asset staging only.

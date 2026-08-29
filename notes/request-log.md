@@ -697,3 +697,26 @@ a working record, not app content.
   Confirmed each new PDF against the matching half of the original
   combined drawings by cross-checking LICCON box values. Shipped to main
   (CACHE_VERSION v258->v259, app v7.1->v7.2). See methodology.txt 104.
+- "Yeah. Swap the model for the new one. And remember that tool we made
+  last night where we toggled the box on and off, the outrigger box for
+  the measurements. I would like to reintroduce it since now the model
+  is fixed. And then in the background... do the works for the fifty
+  percent outriggers using that same model just so that we can
+  implement the new no go zone radius thing."
+  **Status: model swapped and box toggle rebuilt; 50% model staged, not
+  yet wired to a feature.** Verified the new model's part separation is
+  genuinely clean (bounding-box check on all 8 box parts, same method
+  that caught the original bug) before touching any code. Reintroduced
+  the standalone "Hide rear outrigger box" checkbox in Crane Layout,
+  reusing the exact code from right after the first fix (before the
+  merge-into-sliding-beam-box change that caused the original
+  complaint) with the new part list. Swapped in the new GLB; added a
+  targeted stale-cache purge for it in sw.js rather than a full
+  precache entry (45MB - didn't want to force that download on every
+  visitor). Separately verified the person's own 50%-outrigger model
+  matches the 1740mm figures from earlier in this session exactly;
+  staged it in the repo as ltm1650-carrier-50pct.glb but didn't wire it
+  into any UI yet - that's real integration work for once the no-go-
+  zone radius data itself exists. Shipped to main (CACHE_VERSION
+  v259->v260, app v7.2->v7.3, CARRIER3D_VERSION 52->53). See
+  methodology.txt 105-106.

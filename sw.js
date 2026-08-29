@@ -4,7 +4,7 @@
 // reeving diagrams (see CONTENT_CACHE below) — those persist across updates
 // so a crew doesn't lose offline access to plans they've already viewed just
 // because an app update shipped.
-const CACHE_VERSION = 'myslewer-v259';
+const CACHE_VERSION = 'myslewer-v260';
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 
 // Fetched-on-demand content (reeving diagrams, etc). Fixed name, never
@@ -45,6 +45,22 @@ const CONTENT_CACHE = 'app-content-v1';
 // carrier models are deliberately NOT added here - genuinely stable,
 // unedited third-party/OEM-export content, same reasoning as the reeving
 // SVGs above, correctly left in CONTENT_CACHE.
+//
+// outrigger/models/ltm1650-carrier.glb is a one-off exception to "GLB
+// carrier models stay in CONTENT_CACHE" - it just stopped being stable/
+// unedited (re-exported with the rear outrigger box properly separated
+// from the body, methodology.txt 105), and a stale cached copy here
+// isn't just a cosmetic miss the way an old diagram is - it would
+// silently bring back the exact whole-chassis-hides bug (methodology.txt
+// 95/98) for anyone whose browser already cached the old file, since the
+// old model's "Part 16" and the new model's "Part 16" are different real
+// parts. Unlike the small diagrams above though, this file is 45MB -
+// putting it in APP_SHELL like everything else here would force every
+// visitor to download it on install/update regardless of whether they
+// ever open the 3D preview that uses it. CONTENT_CACHE_INVALIDATE below
+// gets the correctness fix (evict the stale copy so the next view
+// re-fetches fresh) without that cost - nothing is precached, only
+// purged if already present.
 //
 // vendor/cabentry3d.js is the Cab Entry tab's own 3D module - same
 // dynamically-imported, actively-edited situation as carrier3d.js above,
@@ -87,6 +103,21 @@ const APP_SHELL = [
   './vendor/cabentry3d.js'
 ];
 
+// Purged from CONTENT_CACHE on every activate (see APP_SHELL's own
+// comment on ltm1650-carrier.glb above) WITHOUT being precached like
+// APP_SHELL - too large to justify an eager download for every visitor.
+// A person who's never viewed the 3D preview never had a stale copy to
+// begin with, so this is a no-op for them; a person who had, gets a
+// fresh fetch the next time they open it, same as first-ever viewing it
+// would. ltm1650-carrier-50pct.glb (the 50%-outrigger-span reference
+// build, for the planned no-go-zone overlay) isn't listed here - it's a
+// brand new filename nothing could already have cached, so there's no
+// staleness to purge yet; add it here too once it's actually wired into
+// a feature and gets its first post-ship correction.
+const CONTENT_CACHE_INVALIDATE = [
+  './outrigger/models/ltm1650-carrier.glb'
+];
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(APP_SHELL_CACHE)
@@ -117,6 +148,11 @@ self.addEventListener('activate', (event) => {
       // though a fresh copy now sits in APP_SHELL_CACHE too.
       const contentCache = await caches.open(CONTENT_CACHE);
       await Promise.all(APP_SHELL.map((url) => contentCache.delete(url)));
+      // Same purge, for the handful of large assets in
+      // CONTENT_CACHE_INVALIDATE that get corrected occasionally but are
+      // too big to justify precaching into APP_SHELL_CACHE for everyone -
+      // see that constant's own comment above.
+      await Promise.all(CONTENT_CACHE_INVALIDATE.map((url) => contentCache.delete(url)));
       await self.clients.claim();
     })()
   );
