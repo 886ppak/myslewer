@@ -4,7 +4,7 @@
 // reeving diagrams (see CONTENT_CACHE below) — those persist across updates
 // so a crew doesn't lose offline access to plans they've already viewed just
 // because an app update shipped.
-const CACHE_VERSION = 'myslewer-v268';
+const CACHE_VERSION = 'myslewer-v269';
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 
 // Fetched-on-demand content (reeving diagrams, etc). Fixed name, never
@@ -46,21 +46,29 @@ const CONTENT_CACHE = 'app-content-v1';
 // unedited third-party/OEM-export content, same reasoning as the reeving
 // SVGs above, correctly left in CONTENT_CACHE.
 //
-// outrigger/models/ltm1650-carrier.glb is a one-off exception to "GLB
-// carrier models stay in CONTENT_CACHE" - it just stopped being stable/
-// unedited (re-exported with the rear outrigger box properly separated
-// from the body, methodology.txt 105), and a stale cached copy here
-// isn't just a cosmetic miss the way an old diagram is - it would
-// silently bring back the exact whole-chassis-hides bug (methodology.txt
-// 95/98) for anyone whose browser already cached the old file, since the
-// old model's "Part 16" and the new model's "Part 16" are different real
-// parts. Unlike the small diagrams above though, this file is 45MB -
-// putting it in APP_SHELL like everything else here would force every
-// visitor to download it on install/update regardless of whether they
-// ever open the 3D preview that uses it. CONTENT_CACHE_INVALIDATE below
-// gets the correctness fix (evict the stale copy so the next view
-// re-fetches fresh) without that cost - nothing is precached, only
-// purged if already present.
+// outrigger/models/ltm1650-carrier.glb was a one-off exception to "GLB
+// carrier models stay in CONTENT_CACHE" for several versions (v259
+// through v268) - it had stopped being stable/unedited (re-exported
+// with the rear outrigger box properly separated from the body,
+// methodology.txt 105), and a stale cached copy wasn't just a cosmetic
+// miss the way an old diagram is - it would silently bring back the
+// exact whole-chassis-hides bug (methodology.txt 95/98) for anyone
+// whose browser already cached the old file, since the old model's
+// "Part 16" and the new model's "Part 16" are different real parts.
+// CONTENT_CACHE_INVALIDATE got that correctness fix without forcing an
+// eager 45MB download on every visitor via APP_SHELL. But it was left
+// listed there indefinitely instead of only for the one deploy that
+// actually needed it - CONTENT_CACHE_INVALIDATE runs on every single
+// activate regardless of what changed, so every subsequent deploy kept
+// force-evicting and re-downloading this 45MB file for anyone who'd
+// viewed the 3D preview, even though the model itself hadn't changed
+// since 105. Caught via a direct question about exactly this ("aren't
+// we just adding overlays on top, shouldn't the base model still be
+// cached?") - removed now that file is confirmed stable through many
+// label/overlay-only deploys since. See methodology.txt 115. If this
+// model is ever genuinely re-exported again, add it back here for
+// exactly the one deploy that ships the new file, then remove it again
+// the same way.
 //
 // vendor/cabentry3d.js is the Cab Entry tab's own 3D module - same
 // dynamically-imported, actively-edited situation as carrier3d.js above,
@@ -103,20 +111,19 @@ const APP_SHELL = [
   './vendor/cabentry3d.js'
 ];
 
-// Purged from CONTENT_CACHE on every activate (see APP_SHELL's own
-// comment on ltm1650-carrier.glb above) WITHOUT being precached like
-// APP_SHELL - too large to justify an eager download for every visitor.
-// A person who's never viewed the 3D preview never had a stale copy to
-// begin with, so this is a no-op for them; a person who had, gets a
-// fresh fetch the next time they open it, same as first-ever viewing it
-// would. The planned 50%-outrigger-span reference view (no-go-zone
-// overlay) does NOT get a second GLB file at all in the end - it's a
-// runtime translation applied to this same model's outrigger parts
-// instead (carrier3d.js's own OUTRIGGER_CORNER_PARTS), specifically to
-// avoid doubling this download for everyone. See methodology.txt 106/107.
-const CONTENT_CACHE_INVALIDATE = [
-  './outrigger/models/ltm1650-carrier.glb'
-];
+// Purged from CONTENT_CACHE on every activate WITHOUT being precached
+// like APP_SHELL - too large to justify an eager download for every
+// visitor. A person who's never viewed the affected 3D preview never
+// had a stale copy to begin with, so an entry here is a no-op for
+// them; a person who had, gets a fresh fetch the next time they open
+// it, same as first-ever viewing it would. This list should normally
+// be EMPTY - only add an entry for the one deploy that actually ships
+// a corrected/re-exported large file (a GLB, typically), then remove
+// it again on the next deploy. Leaving an entry here indefinitely
+// forces that same large re-download on every future deploy regardless
+// of what changed, which is exactly the mistake methodology.txt 115
+// found and fixed - see that entry before adding anything here again.
+const CONTENT_CACHE_INVALIDATE = [];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

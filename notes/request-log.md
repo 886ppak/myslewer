@@ -869,3 +869,34 @@ a working record, not app content.
   untouched. Shipped to main (CACHE_VERSION v267->v268, app
   v7.10->v7.11; carrier3d.js untouched, CARRIER3D_VERSION stays 57).
   See methodology.txt 114.
+
+## 2026-08-29 (continued)
+
+- "and when the user clicks this no go zone over lay ... can we make
+  the model go to the 50% outrigger mode. question answer this first
+  before doing other things an can I ask is there a reason we are
+  doing any of these changes it seem like I need to recache the model
+  for the 1650t aren't we just adding overlays on top shouldnt the
+  base model still be cached?" - answered both directly before
+  touching code, then "yeah fix both and the cache issue site wide I
+  don't want to burn thought my free tier bandwidth on github".
+  **Status: both shipped.** (1) toggleCarrier3DNoGoZone() now also
+  drives the existing "Show 50% outrigger span" checkbox/transform -
+  ticking no-go zone retracts the outriggers to match (every dataset
+  is only valid at 50% span), unticking restores full extension.
+  One-directional by design. (2) Found and fixed the real cause of the
+  recaching: sw.js's CONTENT_CACHE_INVALIDATE still listed the 1650
+  GLB from the entry-105 model swap, and that list purges from cache
+  on EVERY deploy regardless of what changed - so every overlay/label
+  push since (106-114) was silently forcing a fresh 45MB re-download
+  for anyone who'd opened the 3D preview. Emptied it back to [] and
+  rewrote the comments to spell out the "only list a file for the ONE
+  deploy that changes it, then remove it" rule so this can't quietly
+  recur. Audited the rest of sw.js (APP_SHELL's ~3.5MB of small
+  diagrams/icons/JS) - normal expected PWA refresh cost, not a
+  bandwidth problem, left as-is. Verified the 50%-tie-in via a
+  standalone render test of the real functions (ticking flips the
+  checkbox and fires the real transform call with enabled=true;
+  unticking flips both back). Shipped to main (CACHE_VERSION
+  v268->v269, app v7.11->v7.12; carrier3d.js untouched, CARRIER3D_VERSION
+  stays 57). See methodology.txt 115.

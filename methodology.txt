@@ -11999,3 +11999,49 @@ cranes get their own subsections as they're built.
   CACHE_VERSION v267->v268, app version v7.10->v7.11. carrier3d.js
   untouched (labels are plain data passed through as-is), so
   CARRIER3D_VERSION stays at 57.
+
+115. No-go zone drives 50% outrigger span + stale cache-invalidation fix
+
+  Two requests handled together this round, both answered directly
+  before any code changed, per instruction:
+
+  1. "when the user clicks this no go zone overlay ... can we make the
+     model go to the 50% outrigger mode" - confirmed yes/feasible
+     (every no-go zone dataset is only valid at 50% span anyway) before
+     building it. toggleCarrier3DNoGoZone() now also syncs the
+     existing #carrier-3d-outrigger-50pct-toggle checkbox and calls
+     window.__carrier3dSetOutrigger50Pct with the same enabled value -
+     one-directional (no-go zone drives the 50% state, not the
+     reverse), a deliberate simplification rather than trying to
+     preserve an independent manual 50% selection across an unrelated
+     no-go zone toggle. Verified via a standalone render test
+     (extracted the real functions fresh, same method as every prior
+     round): ticking no-go zone flips the 50% checkbox to checked and
+     fires __carrier3dSetOutrigger50Pct(modelKey, true); unticking
+     flips both back.
+
+  2. "is there a reason we are doing any of these changes it seem like
+     I need to recache the model for the 1650t aren't we just adding
+     overlays on top shouldnt the base model still be cached?" - real
+     bug, confirmed by re-reading sw.js: CONTENT_CACHE_INVALIDATE still
+     listed './outrigger/models/ltm1650-carrier.glb', added back at
+     entry 105 for the one deploy that actually swapped the model file,
+     but never removed afterward. That array is purged from
+     CONTENT_CACHE on EVERY activate regardless of what actually
+     changed in a given deploy - so every subsequent overlay/label-only
+     push since (106 through 114) was silently forcing a fresh 45MB
+     re-download of that GLB for anyone who'd viewed the 3D preview,
+     for no reason, burning real mobile-data bandwidth on a GitHub
+     Pages free-tier deploy. Fixed by emptying CONTENT_CACHE_INVALIDATE
+     back to [] and rewriting both its own comment and the APP_SHELL
+     comment block that referenced it, to make the "this list should
+     normally be empty, only add an entry for the ONE deploy that ships
+     a changed large file, then remove it again" rule explicit - this
+     exact leftover-forever mistake shouldn't recur for this or any
+     future model swap. Audited the rest of sw.js while in there
+     (APP_SHELL's own file sizes, ~3.5MB total across index.html +
+     small diagrams/icons/JS) - that one is normal/expected PWA
+     app-shell refresh cost, not a bandwidth problem, so left as is.
+
+  CACHE_VERSION v268->v269, app version v7.11->v7.12. carrier3d.js
+  untouched, CARRIER3D_VERSION stays 57.

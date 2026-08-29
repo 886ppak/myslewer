@@ -1521,7 +1521,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.11</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.12</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -8989,6 +8989,19 @@
       const config = configs && configSel ? configs[Number(configSel.value)] : null;
       if (window.__carrier3dSetNoGoZone) {
         window.__carrier3dSetNoGoZone(modelKey, enabled && config ? config.sectors : null, FOOTPRINTS[modelKey], CARRIER_CALIBRATION[modelKey]);
+      }
+      // Every no-go zone dataset is only valid with outriggers at 50%
+      // span, so drive that toggle along with this one instead of
+      // leaving it as a separate step someone could forget - ticking
+      // shows the retracted stance to match the data, unticking
+      // restores full extension. One-directional (this toggle drives
+      // the 50% one, not the reverse) - keeps the behavior simple and
+      // predictable rather than trying to preserve an independent
+      // manual 50% selection across an unrelated no-go zone toggle.
+      if (OUTRIGGER_50PCT_MODELS.includes(modelKey)) {
+        const pctCheckbox = document.getElementById('carrier-3d-outrigger-50pct-toggle');
+        if (pctCheckbox) pctCheckbox.checked = enabled;
+        if (window.__carrier3dSetOutrigger50Pct) window.__carrier3dSetOutrigger50Pct(modelKey, enabled);
       }
       if (!enabled) {
         const readout = document.getElementById('carrier-3d-nogo-readout');
