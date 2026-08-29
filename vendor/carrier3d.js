@@ -1744,8 +1744,10 @@ function drawMatEdgeMarks(group, cal, marks, dashed) {
     // plate-width/stage-table data yet, or the target genuinely falls
     // outside the outrigger's own real 0-100% range - shown as a second
     // stacked label line only when a real value exists, never a guess.
-    const insideLabel = `${mark.label} inside: ${mark.insideMm}mm` + (mark.insidePct != null ? `\nextend to ${mark.insidePct}% to mark (no load)` : '');
-    const outsideLabel = `${mark.label} outside: ${mark.outsideMm}mm` + (mark.outsidePct != null ? `\nextend to ${mark.outsidePct}% to mark (no load)` : '');
+    // "O/R" (Outrigger Reading) - short on purpose, person's own
+    // request, since this is a small on-model label not a sentence.
+    const insideLabel = `${mark.label} inside: ${mark.insideMm}mm` + (mark.insidePct != null ? `\nO/R ${mark.insidePct}%` : '');
+    const outsideLabel = `${mark.label} outside: ${mark.outsideMm}mm` + (mark.outsidePct != null ? `\nO/R ${mark.outsidePct}%` : '');
     addDimensionLine(group, pInsideEdge, pInside, mark.color, insideLabel, 0.5, dashed);
     addDimensionLine(group, pOutsideEdge, pOutside, mark.color, outsideLabel, 0.5, dashed);
   });

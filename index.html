@@ -1521,7 +1521,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.18</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.19</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2042,7 +2042,7 @@
           </thead>
           <tbody id="cad-mat-marking-results"></tbody>
         </table>
-        <div class="disclaimer">Measured laterally from the crane's own side (carrier edge, not centerline) out to the pad — mark the inside edge first, then the outside edge, to lay the mat out square before the crane arrives. Only shown for legs with a pad currently toggled on above; uses that leg's current (possibly shifted) position, same OEM-sourced span figures as Crane Layout's own ground layout marks — precise enough that a mirrored pair (e.g. C2/C3) always reads the same distance from the edge when unshifted. "Extend To %" (shown for cranes with a confirmed support plate size) is a no-load, measuring-only outrigger extension that puts the plate's own outer edge exactly on that mm mark, so it can be paint-marked before ever fully extending — never a load-rated position; the crane only ever lifts from its own published support stages.</div>
+        <div class="disclaimer">Measured laterally from the crane's own side (carrier edge, not centerline) out to the pad — mark the inside edge first, then the outside edge, to lay the mat out square before the crane arrives. Only shown for legs with a pad currently toggled on above, using that leg's current (possibly shifted) position — same OEM-sourced span figures as Crane Layout's own ground layout marks, so a mirrored pair (e.g. C2/C3) always reads the same distance from the edge when unshifted.<br><br>"O/R %" (Outrigger Reading, shown for cranes with a confirmed support plate size) works out the no-load outrigger extension that puts the support plate's own outer edge — not just the outrigger's own centerline reach — exactly on that mm mark, so it can be paint-marked before the outrigger is ever fully extended. Rounded up to the nearest whole percent, since real on-site adjustment only happens in whole-percent steps anyway. Never a load-rated position — the crane only ever lifts from its own published support stages.</div>
       </div>
 
       <button class="btn" onclick="window.print()">📄 Export / Print Setup Plan PDF</button>
@@ -5034,7 +5034,7 @@
 
     // Single source of truth for vendor/carrier3d.js's cache-busting query,
     // same reasoning as CWT3D_VERSION above.
-    const CARRIER3D_VERSION = 58;
+    const CARRIER3D_VERSION = 59;
 
     // Single source of truth for vendor/armeasure.js's cache-busting query
     // (Chain Shortening's "Mark Cut Point in AR"), same reasoning as
@@ -6871,7 +6871,16 @@
           const pct1 = sorted[i][0], pct2 = sorted[i + 1][0];
           if (w2 === w1) return pct1;
           const t = (targetWidthMm - w1) / (w2 - w1);
-          return Math.round((pct1 + t * (pct2 - pct1)) * 10) / 10;
+          // Whole percent only - real on-site adjustment happens in
+          // whole-percent steps anyway (that's the LICCON display's own
+          // resolution), so a decimal figure here is false precision.
+          // Rounded UP (never down): this is a "push out to at least
+          // here" instruction, so overshooting the target by a
+          // fraction of a percent is the safe direction - the plate's
+          // outer edge ends up AT OR PAST the mark, never short of it.
+          // Same reasoning already applied to Load Chart Finder's own
+          // radius rounding (methodology.txt 14.5).
+          return Math.ceil(pct1 + t * (pct2 - pct1));
         }
       }
       return null;
@@ -9595,7 +9604,7 @@
       while (headerRow.children.length > 4) headerRow.removeChild(headerRow.lastChild);
       if (showPctCol && headerRow.children.length === 4) {
         const th = document.createElement('th');
-        th.innerHTML = 'Extend To %<br><span style="font-weight:400;text-transform:none;">no-load measuring check only</span>';
+        th.innerHTML = 'O/R %<br><span style="font-weight:400;text-transform:none;">no-load measuring check only</span>';
         headerRow.appendChild(th);
       }
       const pctCell = (pct) => pct != null ? `${pct}%` : '<span style="color:var(--text-muted);">—</span>';

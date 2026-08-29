@@ -12426,3 +12426,45 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v274->v275, app version v7.17->v7.18. carrier3d.js
   untouched, CARRIER3D_VERSION stays 58. All 7 cranes now covered.
+
+122. O/R % - polish pass: whole-percent round-up, shorter label, cleaner disclaimer
+
+  Person asked for three related cleanups on the outrigger-as-a-tape-
+  measure feature (entries 119-121), all UI/precision polish rather
+  than new capability:
+
+  1. Round-up, whole percent only. outriggerPercentForTarget's final
+     step changed from Math.round(x*10)/10 (one decimal) to
+     Math.ceil(x) (whole number, always UP). Two real reasons, not
+     just tidiness: the LICCON display's own resolution is whole
+     percent anyway, so a decimal figure was false precision; and
+     rounding UP (not to nearest) means the instruction is always
+     "push out to AT LEAST this much" - the plate's outer edge ends up
+     at or past the target mark, never short of it, same reasoning
+     already applied to Load Chart Finder's own radius rounding
+     (methodology.txt 14.5). The worked example from earlier sessions
+     (2039mm) now reads 56%, not 55.4%.
+  2. Shorter 3D label. "extend to 48.9% to mark (no load)" became
+     "O/R 48.9%" (now "O/R 49%" post-rounding) - O/R = Outrigger
+     Reading, person's own shorthand, since this is a small on-model
+     label not a sentence. Same rename applied to the Bog Mat Marking
+     table's own column header for consistency (was "Extend To %").
+  3. Cleaned-up disclaimer. Rewrote the Bog Mat Marking card's
+     disclaimer text (person pasted the existing text back and asked
+     for a cleanup) to explicitly explain what the feature actually
+     does with the support plate's own width - "puts the support
+     plate's own outer edge - not just the outrigger's own centerline
+     reach - exactly on that mm mark" - since that half-plate-beyond-
+     the-centerline insight was the whole point of the feature and the
+     old text never actually said it.
+
+  Verified: pure-math test confirming genuine ceiling behavior (not
+  round-to-nearest - a target landing exactly on a whole percent stays
+  there, one landing a hair past it rounds up to the NEXT whole
+  percent, not back down), plus a full wiring re-run of the same C3/
+  2039mm scenario from entry 119 confirming the table header now reads
+  "O/R %" and the cell/marks-array value is the correctly-rounded
+  whole number (56, not 55.4).
+
+  CACHE_VERSION v275->v276, app version v7.18->v7.19,
+  CARRIER3D_VERSION 58->59 (label text change in carrier3d.js).

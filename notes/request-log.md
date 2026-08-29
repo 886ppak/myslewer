@@ -1048,3 +1048,23 @@ a working record, not app content.
   Shipped to main (CACHE_VERSION v274->v275, app v7.17->v7.18;
   carrier3d.js untouched, CARRIER3D_VERSION stays 58). All 7 cranes
   now covered. See methodology.txt 121.
+- Pasted the Bog Mat Marking disclaimer text and asked to "clean this
+  up and put something about what we just made and how it includes
+  the support plates width into account", plus "change this extend to
+  48.9% to mark (no load) to something shorter like O/R 49.9%" and
+  "let's just round the number up to percentages as the resolution...
+  doing it is at whole percents".
+  **Status: shipped.** Three changes: (1) outriggerPercentForTarget
+  now rounds UP to the nearest whole percent (Math.ceil, not
+  round-to-nearest-decimal) - real on-site adjustment only happens in
+  whole-percent steps, and rounding up means the instruction is always
+  "at least this much", never short of the mark; (2) the 3D label and
+  the Bog Mat Marking table's own column header both renamed to
+  "O/R %" (Outrigger Reading); (3) rewrote the disclaimer to actually
+  explain the plate-width math - "puts the support plate's own outer
+  edge - not just the outrigger's own centerline reach - exactly on
+  that mm mark". Verified the rounding is genuine ceiling (not
+  round-to-nearest) and re-ran the earlier C3/2039mm scenario end to
+  end, now correctly reading 56% instead of 55.4%. Shipped to main
+  (CACHE_VERSION v275->v276, app v7.18->v7.19, CARRIER3D_VERSION
+  58->59). See methodology.txt 122.
