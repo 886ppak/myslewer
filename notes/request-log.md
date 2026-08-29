@@ -1136,3 +1136,12 @@ a working record, not app content.
   interaction without real credentials). Shipped to main
   (CACHE_VERSION v278->v279, app v7.21->v7.22). See methodology.txt
   125.
+- "I see the notification but it doesn't have a link to the animation
+  ? where have you put the link ?" - correct catch, the entry's body
+  only described the button elsewhere in the app, never actually
+  linked anywhere.
+  **Status: shipped.** Added an optional `link: {href, text}` field to
+  notification items and a render branch that only shows it when
+  present. Paint-Mark Method entry now links straight to
+  guides/paint-mark-method.html. Shipped to main (CACHE_VERSION
+  v279->v280, app v7.22->v7.23). See methodology.txt 126.

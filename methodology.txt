@@ -12625,3 +12625,26 @@ cranes get their own subsections as they're built.
   beta-trial - per person's own call, beta-trial is being left alone
   for now rather than force this (and entry 124's animation link) onto
   a branch that never received the underlying O/R % feature.
+
+126. Notification item links (missing on the very first one)
+
+  Person's report right after 125 shipped: "I see the notification but
+  it doesn't have a link to the animation ? where have you put the
+  link ?" - correct, the "New: Paint-Mark Method Animation" entry's
+  body only described the button elsewhere in the app, it never
+  actually linked anywhere itself, despite the whole point of a
+  notification being to take someone straight to the thing.
+
+  Added an optional per-item `link: { href, text }` to the
+  NOTIFICATION_LOG item shape and a matching `.whatsnew-item-link`
+  render branch in renderNotifItems() - only renders when an item
+  actually has one, so plain announcements (like "New: Notifications"
+  itself) don't get an empty/dangling link. Wired the Paint-Mark Method
+  entry to link straight to guides/paint-mark-method.html.
+
+  Verified: called openNotifPanel() directly in a headless browser
+  (bypassing the sign-in gate that blocks a real click) and confirmed
+  exactly one .whatsnew-item-link renders with the correct href and
+  visible text, plus zero page errors.
+
+  CACHE_VERSION v279->v280, app version v7.22->v7.23.
