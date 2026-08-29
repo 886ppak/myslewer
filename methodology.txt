@@ -12124,3 +12124,65 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v270->v271, app version v7.13->v7.14. carrier3d.js
   untouched, CARRIER3D_VERSION stays 57.
+
+118. Ballast Radius buttons removed; table shows all configs + sliding beam box fitted/not-fitted
+
+  "actual just remove those buttons and just have the tab down the
+  bottom with all the clearances just show the clearances for all 3
+  configs and also add in there the measurement from the rear if the
+  outrigger box isn't fitted" - a direct reversal of the previous
+  round's single-select-drives-a-circle design (entry 117), replaced
+  with "just show everything, no selection needed."
+
+  Removed entirely: the "Ballast Radius (Site Clearance)" mode-toggle
+  buttons (sc-variant-group/sc-variant-toggle in the Crane &
+  Configuration card), slewClearanceVariantIdx, and
+  setSlewClearanceVariant. The numeric 360° Slew Clearance table
+  (renderSlewClearanceResults) now always lists every point at once -
+  fixed points AND every variant option (all 3 Ballast Radius options
+  for the 1650) - as separate rows, same as it already did for fixed
+  points, no index/selection needed. The 3D Carrier Preview's own
+  checkbox list (renderCarrier3DSlewToggles) reverted the same way -
+  every point (fixed + every variant) gets its own independent
+  checkbox again, exactly as it originally worked before entry 117's
+  single-circle change, and onSlewCircleToggle's special-cased
+  always-on variant circle was removed since checkboxes cover it now.
+
+  Second part: the numeric table had NEVER accounted for the 1650's
+  sliding beam/rear outrigger box at all (SLIDING_BEAM_BOX_DEPTH_MM) -
+  only the separate 3D-preview "Clearance Measurements" checkbox group
+  did. Its existing single unlabeled rear-clearance column for the
+  1650 was actually always the box-NOT-fitted figure by omission, just
+  never labeled as such. Added a new slewClearanceRearColumns()
+  helper: for a crane with SLIDING_BEAM_BOX_DEPTH_MM (only the 1650
+  today), the table now shows BOTH "sliding beam box fitted" and
+  "sliding beam box not fitted" rear-clearance columns side by side,
+  always, no checkbox - matching the "show everything" direction of
+  this whole request. Left the existing COMBI_BOX_DEPTH_MM cranes
+  (1110/1130/1160/1250/1300) and their sc-include-toolbox
+  checkbox-driven single column completely untouched - the person's
+  request specifically named "the outrigger box" (this session's
+  established term for the 1650's sliding beam box), not the tool box,
+  and touching working behavior on 5 other cranes wasn't asked for.
+  LRT 1100 (no box of any kind) keeps its original single plain
+  column. The table header row (#sc-header-row) is now built by JS
+  (1-2 dynamic <th> appended after the 3 static ones) rather than
+  fully static HTML, to support the variable column count per crane.
+
+  Verified with a full balanced-brace extraction of the real function
+  chain (slewClearanceRearColumns, renderSlewClearanceResults,
+  onSlewClearanceCraneChange, onScToolboxToggle,
+  updateCarrier3DLayoutAvailability, renderCarrier3DSlewToggles,
+  onSlewCircleToggle) run standalone in a real browser against three
+  cranes: the 1650 correctly shows 5 rows (2 fixed + 3 variants) with
+  2 correctly-labeled rear-clearance columns whose values differ by
+  exactly the 1270mm box depth, and the "Limiting point" note mentions
+  both figures with their labels; the 1110 (combi box) keeps its
+  original single toggleable column, confirmed the checkbox still
+  changes its value correctly (regression check); the 1100 (no box)
+  shows one plain column, toolbox checkbox correctly hidden. 3D preview
+  checkbox count confirmed at 5 for the 1650 (all points individually
+  toggleable again, not just the 2 fixed ones).
+
+  CACHE_VERSION v271->v272, app version v7.14->v7.15. carrier3d.js
+  untouched, CARRIER3D_VERSION stays 57.

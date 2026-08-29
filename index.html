@@ -1521,7 +1521,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.14</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.15</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2056,10 +2056,6 @@
           <label>Select Crane Model</label>
           <select id="sc-crane" onchange="onSlewClearanceCraneChange()"></select>
         </div>
-        <div class="form-group" id="sc-variant-group" style="margin-top:14px; display:none;">
-          <label id="sc-variant-label">Counterweight Tray</label>
-          <div class="mode-toggle" id="sc-variant-toggle" style="margin-top:6px;"></div>
-        </div>
       </div>
 
       <div class="card" id="carrier-3d-card-layout" style="display:none;">
@@ -2115,17 +2111,16 @@
         </label>
         <table>
           <thead>
-            <tr>
+            <tr id="sc-header-row">
               <th>Point</th>
               <th>Radius<br><span style="font-weight:400;text-transform:none;">from slew center</span></th>
               <th>Clearance<br><span style="font-weight:400;text-transform:none;">beyond side of carrier</span></th>
-              <th>Clearance<br><span style="font-weight:400;text-transform:none;">beyond rear of carrier</span></th>
             </tr>
           </thead>
           <tbody id="sc-results"></tbody>
         </table>
         <div class="disclaimer" id="sc-limiting-note"></div>
-        <div class="disclaimer">Side clearance assumes the crane is parked with its centerline parallel to whatever it needs to clear (wall, stockpile, fence, etc.) — the true worst case, since at that parking angle the swing radius becomes pure sideways distance. Park at an angle to the structure and the real clearance is larger than shown here. Rear clearance assumes the crane is backed square up to whatever sits directly behind it, measured from the rear of the carrier chassis (or the tool box's own rear face, once fitted, if the checkbox above is ticked) straight back to each radius point. Carrier width is this fleet's standard 525/80 R25 tyre (see the crane operating instructions, chapter 1.03, for other tyre options) except where noted. Reference tool only — cross-check against the current OEM documentation and the actual site before slewing near a structure.</div>
+        <div class="disclaimer">Side clearance assumes the crane is parked with its centerline parallel to whatever it needs to clear (wall, stockpile, fence, etc.) — the true worst case, since at that parking angle the swing radius becomes pure sideways distance. Park at an angle to the structure and the real clearance is larger than shown here. Rear clearance assumes the crane is backed square up to whatever sits directly behind it, measured from the rear of the carrier chassis (or the box's own rear face, once fitted, straight back to each radius point — cranes with a removable rear box show both fitted and not-fitted figures side by side). Carrier width is this fleet's standard 525/80 R25 tyre (see the crane operating instructions, chapter 1.03, for other tyre options) except where noted. Reference tool only — cross-check against the current OEM documentation and the actual site before slewing near a structure.</div>
       </details>
       </div>
       <!-- /cad-panel-layout -->
@@ -3816,7 +3811,6 @@
     };
 
     // --- TAB 3B: CRANE SETUP (360 SLEW CLEARANCE) ---
-    let slewClearanceVariantIdx = 0;
     // Defaults ON, not off - the person's own fleet always has the tool
     // box physically fitted on every LTM crane that carries one, so the
     // safe (smaller) rear clearance figure is the one that should show
@@ -3824,7 +3818,11 @@
     // (back to true, not false) on every crane switch - see
     // onSlewClearanceCraneChange - so a person unticking it for one
     // crane (the rare one actually running without its box) never
-    // silently carries that choice over to the next crane.
+    // silently carries that choice over to the next crane. Only applies
+    // to COMBI_BOX_DEPTH_MM cranes - the 1650's sliding beam box is
+    // handled separately below (both fitted/not-fitted always shown at
+    // once, no toggle, since a person on that specific crane asked to
+    // see both rather than switch between them).
     let scIncludeToolbox = true;
 
     function initSlewClearanceTab() {
@@ -3843,21 +3841,41 @@
 
     function onSlewClearanceCraneChange() {
       if (window.__updateX650TabVisibility) window.__updateX650TabVisibility();
-      slewClearanceVariantIdx = 0;
       scIncludeToolbox = true;
       const toolboxCheck = document.getElementById('sc-include-toolbox');
       if (toolboxCheck) toolboxCheck.checked = true;
       renderSlewClearanceResults();
     }
 
-    function setSlewClearanceVariant(idx) {
-      slewClearanceVariantIdx = idx;
-      renderSlewClearanceResults();
-    }
-
     function onScToolboxToggle() {
       scIncludeToolbox = document.getElementById('sc-include-toolbox').checked;
       renderSlewClearanceResults();
+    }
+
+    // Rear-clearance reference column(s) for this crane - one plain
+    // column (chassis only) for a crane with no rear box at all (LRT
+    // 1100), one toggleable column (chassis, +tool box when the
+    // checkbox above is ticked) for a combi-box crane, or two ALWAYS-
+    // shown columns (fitted / not fitted) for a sliding-beam-box crane
+    // (the 1650) - person's own request: show both at once rather than
+    // needing to toggle, since the sliding beam box previously had no
+    // representation in this table at all (only the 3D preview's own
+    // separate "Clearance Measurements" group accounted for it).
+    function slewClearanceRearColumns(modelKey, footprint) {
+      if (!footprint) return [];
+      const combiMm = COMBI_BOX_DEPTH_MM[modelKey] || 0;
+      const slidingBeamMm = SLIDING_BEAM_BOX_DEPTH_MM[modelKey] || 0;
+      if (slidingBeamMm > 0) {
+        return [
+          { headerHtml: 'Rear clearance<br><span style="font-weight:400;text-transform:none;">sliding beam box fitted</span>', noteLabel: 'sliding beam box fitted', rearRef: footprint.rear + slidingBeamMm },
+          { headerHtml: 'Rear clearance<br><span style="font-weight:400;text-transform:none;">sliding beam box not fitted</span>', noteLabel: 'sliding beam box not fitted', rearRef: footprint.rear }
+        ];
+      }
+      if (combiMm > 0) {
+        const includeToolbox = scIncludeToolbox;
+        return [{ headerHtml: 'Clearance<br><span style="font-weight:400;text-transform:none;">beyond rear of carrier</span>', noteLabel: null, rearRef: footprint.rear + (includeToolbox ? combiMm : 0) }];
+      }
+      return [{ headerHtml: 'Clearance<br><span style="font-weight:400;text-transform:none;">beyond rear of carrier</span>', noteLabel: null, rearRef: footprint.rear }];
     }
 
     function renderSlewClearanceResults() {
@@ -3874,35 +3892,35 @@
         (data.widthNote ? ` — ${data.widthNote}` : '');
 
       const footprint = FOOTPRINTS[modelKey];
-      const toolboxMm = COMBI_BOX_DEPTH_MM[modelKey] || 0;
+      const combiMm = COMBI_BOX_DEPTH_MM[modelKey] || 0;
+      const slidingBeamMm = SLIDING_BEAM_BOX_DEPTH_MM[modelKey] || 0;
       const toolboxGroup = document.getElementById('sc-toolbox-group');
-      toolboxGroup.style.display = toolboxMm ? 'flex' : 'none';
-      const includeToolbox = toolboxMm > 0 && scIncludeToolbox;
-      const rearRef = footprint ? footprint.rear + (includeToolbox ? toolboxMm : 0) : null;
+      toolboxGroup.style.display = combiMm ? 'flex' : 'none';
       document.getElementById('sc-rear-info').innerHTML = footprint
-        ? `Rear overhang (chassis${toolboxMm ? ', no tool box' : ''}): <strong>${footprint.rear} mm</strong>` +
-          (toolboxMm ? ` — tool box adds ${toolboxMm} mm when fitted` : '')
+        ? `Rear overhang (chassis${combiMm || slidingBeamMm ? ', box not fitted' : ''}): <strong>${footprint.rear} mm</strong>` +
+          (combiMm ? ` — tool box adds ${combiMm} mm when fitted` : '') +
+          (slidingBeamMm ? ` — sliding beam box adds ${slidingBeamMm} mm when fitted` : '')
         : '';
 
-      const variantGroup = document.getElementById('sc-variant-group');
-      const points = data.fixed.slice();
-      if (data.variants) {
-        variantGroup.style.display = '';
-        document.getElementById('sc-variant-label').textContent = data.variants.label;
-        const toggle = document.getElementById('sc-variant-toggle');
-        toggle.innerHTML = data.variants.options.map((opt, i) =>
-          `<button class="mode-btn${i === slewClearanceVariantIdx ? ' active' : ''}" onclick="setSlewClearanceVariant(${i})">${opt.label}</button>`
-        ).join('');
-        const chosen = data.variants.options[slewClearanceVariantIdx];
-        points.push({ label: chosen.label, radius: chosen.radius });
-      } else {
-        variantGroup.style.display = 'none';
-      }
+      const rearCols = slewClearanceRearColumns(modelKey, footprint);
+      const headerRow = document.getElementById('sc-header-row');
+      while (headerRow.children.length > 3) headerRow.removeChild(headerRow.lastChild);
+      rearCols.forEach((col) => {
+        const th = document.createElement('th');
+        th.innerHTML = col.headerHtml;
+        headerRow.appendChild(th);
+      });
+
+      // Every point shown at once, including every Ballast Radius variant
+      // option side by side (no single-select control anymore) - person's
+      // own request: see the clearance for all configs together rather
+      // than switching between them one at a time.
+      const points = data.fixed.concat(data.variants ? data.variants.options : []);
 
       const rows = points.map(p => {
         const clearance = p.radius - halfWidth;
-        const rearClearance = rearRef != null ? p.radius - rearRef : null;
-        return { ...p, clearance, rearClearance };
+        const rearClearances = rearCols.map((col) => p.radius - col.rearRef);
+        return { ...p, clearance, rearClearances };
       });
 
       document.getElementById('sc-results').innerHTML = rows.map(r => `
@@ -3910,14 +3928,20 @@
           <td style="text-align:left;">${r.label}</td>
           <td>${(r.radius / 1000).toFixed(2)} m</td>
           <td>${(r.clearance / 1000).toFixed(2)} m</td>
-          <td>${r.rearClearance != null ? (r.rearClearance / 1000).toFixed(2) + ' m' : '—'}</td>
+          ${r.rearClearances.map((rc) => `<td>${(rc / 1000).toFixed(2)} m</td>`).join('')}
         </tr>
       `).join('');
 
       const limiting = rows.reduce((max, r) => r.radius > max.radius ? r : max, rows[0]);
+      const rearNote = limiting
+        ? limiting.rearClearances.map((rc, i) => {
+            const suffix = rearCols[i] && rearCols[i].noteLabel ? ` (${rearCols[i].noteLabel})` : '';
+            return `${(rc / 1000).toFixed(2)} m clear beyond the rear${suffix}`;
+          }).join(', or ')
+        : '';
       document.getElementById('sc-limiting-note').textContent = limiting
         ? `Limiting point: ${limiting.label} — needs ${(limiting.clearance / 1000).toFixed(2)} m clear beyond the side of the carrier` +
-          (limiting.rearClearance != null ? `, or ${(limiting.rearClearance / 1000).toFixed(2)} m clear beyond the rear` : '') +
+          (rearNote ? `, or ${rearNote}` : '') +
           `, for a full 360° slew.`
         : '';
     }
@@ -8675,22 +8699,16 @@
     // - 1250 is the max at 3).
     const SLEW_CIRCLE_COLORS = ['#ff3b30', '#a855f7', '#22c55e', '#f97316'];
 
-    // Builds one checkbox per FIXED SLEW_CLEARANCE_DATA point only - a
-    // person can toggle any combination of these on to compare them
-    // directly on the model, since more than one can genuinely be rigged
-    // at once (see the person's own note on TY's/T3N above). The variant
-    // group (e.g. "6.4m @ 135°" vs "7.4m @ 90°" for the 1650's Ballast
-    // Radius) is NOT a second parallel set of checkboxes here - only one
-    // of those is ever physically fitted at a time, same as the numeric
-    // 360° Slew Clearance table already treats it, so its circle is
-    // driven directly by the SAME Ballast Radius buttons at the top of
-    // the page (setSlewClearanceVariant) rather than needing its own
-    // separate control that could get out of sync with the numbers -
-    // see onSlewCircleToggle's own comment for how that circle gets
-    // added in. Rebuilt from scratch on every crane switch, which also
-    // resets every checkbox to unticked - onSlewCircleToggle() is called
-    // once at the end to push that cleared state into the 3D view too, so
-    // a stale circle from the previous crane can't linger after switching
+    // Builds one checkbox per SLEW_CLEARANCE_DATA point - fixed points
+    // plus every variant option (e.g. both "6.4m @ 135°" and "7.4m @
+    // 90°" for the 1650's Ballast Radius) shown side by side, same
+    // treatment as the numeric 360° Slew Clearance table now gives them
+    // (all configs listed at once, no single-select control - person's
+    // own request, replacing the earlier button-driven single circle).
+    // Rebuilt from scratch on every crane switch, which also resets
+    // every checkbox to unticked - onSlewCircleToggle() is called once
+    // at the end to push that cleared state into the 3D view too, so a
+    // stale circle from the previous crane can't linger after switching
     // (see carrier3d.js's own pendingSlewCircles comment for why that
     // matters - it remembers the last state per model key, not just the
     // currently visible one).
@@ -8699,11 +8717,8 @@
       const data = SLEW_CLEARANCE_DATA[modelKey];
       if (!data) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
 
-      const points = data.fixed;
+      const points = data.fixed.concat(data.variants ? data.variants.options : []);
       const pointColors = points.map((p, i) => SLEW_CIRCLE_COLORS[i % SLEW_CIRCLE_COLORS.length]);
-      const variantOpt = data.variants ? data.variants.options[slewClearanceVariantIdx] : null;
-      const variantColor = data.variants ? SLEW_CIRCLE_COLORS[points.length % SLEW_CIRCLE_COLORS.length] : null;
-      const summarySwatchColors = variantColor ? pointColors.concat([variantColor]) : pointColors;
       wrap.style.display = '';
       // Three collapsed-by-default groups (methodology.txt 110) instead of
       // one long flat checkbox list - person's own pick of the three
@@ -8718,7 +8733,7 @@
         <details class="toggle-group">
           <summary>
             <span style="display:flex; align-items:center; gap:8px;">
-              <span class="toggle-group-swatches">${summarySwatchColors.map((c) => `<span style="background:${c};"></span>`).join('')}</span>
+              <span class="toggle-group-swatches">${pointColors.map((c) => `<span style="background:${c};"></span>`).join('')}</span>
               360° Slew Radius Circles
             </span>
           </summary>
@@ -8728,12 +8743,7 @@
               <input type="checkbox" data-radius="${p.radius}" data-color="${pointColors[i]}" onchange="onSlewCircleToggle()" style="width:auto; cursor:pointer;">
               <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${pointColors[i]}; flex-shrink:0;"></span>
               ${p.label} (${(p.radius / 1000).toFixed(2)}m)
-            </label>`).join('') +
-            (variantOpt ? `
-            <div style="display:flex; align-items:center; gap:6px; margin-top:6px; padding-top:6px; border-top:1px solid var(--border-color); font-size:0.75rem; color:var(--text-muted);">
-              <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${variantColor}; flex-shrink:0;"></span>
-              ${data.variants.label}: <strong style="color:var(--text-main);">${variantOpt.label}</strong> (${(variantOpt.radius / 1000).toFixed(2)}m) — always shown, set via the Ballast Radius buttons above
-            </div>` : '') + `
+            </label>`).join('') + `
           </div>
         </details>
 
@@ -8894,22 +8904,6 @@
       const data = SLEW_CLEARANCE_DATA[modelKey];
       const checks = Array.from(document.querySelectorAll('#carrier-3d-slew-toggles input[data-radius]:checked'));
       const circles = checks.map(el => ({ radius: parseFloat(el.dataset.radius), color: el.dataset.color }));
-      // The currently-selected Ballast Radius variant (set via the
-      // buttons at the top of the page, setSlewClearanceVariant) is
-      // always included as its own circle here - not behind a checkbox
-      // like the fixed points above, since only one of these is ever
-      // physically fitted at a time (same reasoning the numeric 360°
-      // Slew Clearance table already applies) and this is the one place
-      // that reflects "whatever's currently selected," not "whatever's
-      // ticked." Color index matches renderCarrier3DSlewToggles' own
-      // variantColor calculation exactly (both key off data.fixed.length)
-      // so the circle drawn here always matches the legend swatch shown
-      // in the toggle panel.
-      if (data && data.variants) {
-        const opt = data.variants.options[slewClearanceVariantIdx];
-        const variantColor = SLEW_CIRCLE_COLORS[data.fixed.length % SLEW_CIRCLE_COLORS.length];
-        circles.push({ radius: opt.radius, color: variantColor });
-      }
       const showClearanceEl = document.getElementById('carrier-3d-show-clearance');
       const showClearance = showClearanceEl ? showClearanceEl.checked : false;
       const showRearClearanceEl = document.getElementById('carrier-3d-show-rear-clearance');

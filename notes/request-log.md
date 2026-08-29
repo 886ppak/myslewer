@@ -936,3 +936,26 @@ a working record, not app content.
   correct radius/color circle call and the legend updates live. Shipped
   to main (CACHE_VERSION v270->v271, app v7.13->v7.14; carrier3d.js
   untouched, CARRIER3D_VERSION stays 57). See methodology.txt 117.
+- "actual just remove those buttons and just have the tab down the
+  bottom with all the clearances just show the clearances for all 3
+  configs and also add in there the measurement from the rear if the
+  outrigger box isn't fitted"
+  **Status: shipped.** Reversed the previous round's single-select
+  design: removed the Ballast Radius buttons entirely, the numeric
+  360° Slew Clearance table now lists every point (fixed + all 3
+  Ballast Radius options) as separate rows always, and the 3D
+  preview's checkboxes reverted to one-per-point (all 5, not just
+  fixed). Also found and fixed a real gap while in there: the table
+  had never accounted for the 1650's sliding beam/rear outrigger box
+  at all - added two always-shown columns, "sliding beam box fitted"
+  and "sliding beam box not fitted", rather than a toggle, matching
+  the "show everything" direction of the request. Left the other 5
+  cranes' existing tool-box checkbox untouched (request specifically
+  named "the outrigger box", this session's term for the 1650's part).
+  Verified via a full extraction test across three cranes (1650: 5
+  rows, 2 correctly-labeled rear columns differing by exactly 1270mm;
+  1110 combi-box crane: unchanged single toggleable column, regression
+  confirmed; 1100 no-box crane: unchanged single plain column).
+  Shipped to main (CACHE_VERSION v271->v272, app v7.14->v7.15;
+  carrier3d.js untouched, CARRIER3D_VERSION stays 57). See
+  methodology.txt 118.
