@@ -12186,3 +12186,120 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v271->v272, app version v7.14->v7.15. carrier3d.js
   untouched, CARRIER3D_VERSION stays 57.
+
+119. "Outrigger as a tape measure" - LTM 1650, Support Pad Placement
+
+  Worked out together over several rounds, not built from a single
+  message - person's own field technique, described initially in a
+  heavily voice-transcribed message that took real back-and-forth to
+  parse correctly (including one round where I wrongly claimed I lacked
+  data that was already in the app from an earlier session build - see
+  the "how do you not have it" correction below).
+
+  The technique itself: push a corner out to a throwaway, NO-LOAD
+  percentage just far enough that the support plate's own outer edge
+  touches a specific ground target (typically Bog Mat Marking's own
+  inside/outside edge figures), paint-mark it, retract to the crane's
+  real working stage. That mark then guides where to lay the bog mat
+  BEFORE the outrigger is ever fully extended onto it - solves the
+  problem of not being able to slide a mat under a pad that's already
+  down, using the outrigger's own calibrated extension (verified
+  against the crane's live LICCON % readout) instead of a tape measure
+  pulled across open ground. Explicitly confirmed: nobody lifts from
+  this position - it's a measuring-only maneuver, never a load-rated
+  stage.
+
+  Data foundation - re-derived and cross-checked, not assumed:
+  - Real mistake caught by the person: I said I lacked VarioBase
+    span-vs-percentage data across the fleet, when OUTRIGGER_STAGE_TABLE
+    (built during the earlier "Driving w/ Equipment" work, methodology
+    13.3) already had exactly this, for all 7 cranes (sparser for some -
+    1110 only 0/55%, 1130 only 0/50/100%, others have 0/50/75/100%,
+    1650 additionally has 25%). Should have searched the codebase
+    before claiming a gap existed.
+  - Confirmed (not assumed) that % scales LINEARLY with physical width
+    across the 1650's own table: every 25% step adds exactly 1.74m of
+    total width, independently matching OUTRIGGER_50PCT_DELTA_M in
+    carrier3d.js (a completely separate calibration source) - two real
+    data points agreeing to the millimetre, which is what justified
+    interpolating between the OEM's own published stages for an
+    arbitrary target rather than only ever quoting the stages
+    themselves.
+  - Support plate width (0.7m for the 1650) came from the person's own
+    OEM manual screenshot (Fig.158043, "10 Support plate" chapter) -
+    only half of it (the half beyond the outrigger's own known
+    centerline reference) actually extends past OUTRIGGER_STAGE_TABLE's
+    own quoted span figure, confirmed together step by step with the
+    full arithmetic shown before any code was written.
+  - Worked a real example together to verify the whole chain end to
+    end before building anything: target 2039mm (an actual "C3 inside"
+    figure from the person's own screenshot) -> 55.4% - confirmed by
+    the person as correct, and re-derived from scratch afterward via
+    the newly-built formula, landing on the exact same number.
+
+  Implementation (index.html):
+  - SUPPORT_PLATE_WIDTH_M - new constant, only '1650': 0.7 populated;
+    every other crane deliberately absent rather than guessed, gating
+    the whole feature off for them until their own real plate figure is
+    confirmed.
+  - outriggerPercentForTarget(modelKey, targetOuterEdgeMm) - converts a
+    target mm distance into the required %, working backward through
+    the exact chain confirmed above (subtract half-plate -> convert to
+    total support width -> find/interpolate the bracketing OEM stage
+    pair). Returns null (never an extrapolated guess) when the crane
+    lacks plate/stage data, or the target is genuinely outside the
+    outrigger's real 0-100% reach.
+  - computeMatMarkingData() now also returns insidePct/outsidePct per
+    leg, recomputed on every call - since this function already reruns
+    on every pad-size/shift change via calcCAD()'s existing cascade, no
+    new wiring was needed for the person's "auto-calculate if the bog
+    mat size changes" requirement, it just falls out of the existing
+    architecture.
+  - renderMatMarking() - Bog Mat Marking table gains a 5th "Extend To %"
+    column, dynamically shown only for a crane with the needed data
+    (same dynamic-header-cell pattern as the 360° Slew Clearance
+    table's rear-clearance columns, methodology.txt 118), each cell
+    showing Inside/Outside % or "—" per figure that's out of range.
+  - buildMatEdgeMarks() passes insidePct/outsidePct through to the 3D
+    marks array.
+
+  Implementation (carrier3d.js):
+  - makeTextSprite() extended to accept '\n'-separated multi-line text -
+    confirmed byte-identical output for every existing single-line
+    caller (same canvas size, same sprite scale) via a real browser
+    test before trusting it, since this function is shared by every
+    dimension label in the whole app and a regression here would be
+    silent and widespread.
+  - drawMatEdgeMarks() appends a second label line ("extend to X% to
+    mark (no load)") under the existing "inside: Nmm"/"outside: Nmm"
+    line, only when a real (non-null) percentage exists - person's own
+    request: show it "next to or under" the existing mm figure in the
+    3D view.
+
+  Verification, three independent stages:
+  1. Pure-math test of outriggerPercentForTarget - the exact 2039mm ->
+     55.4% worked example, forward/reverse round-trips across every
+     interval in the 1650's table (not just one), correct endpoint
+     handling, out-of-range -> null, missing-data crane -> null, and a
+     re-derivation of the table's own linearity (not assumed).
+  2. Real browser test of makeTextSprite's multi-line change - single-
+     line canvas/sprite-scale output confirmed byte-identical to a
+     from-scratch reimplementation of the ORIGINAL pre-change function,
+     multi-line output confirmed exactly double height with each line
+     rendering at the same visual size as before (not squashed).
+  3. Full wiring test (computeMatMarkingData -> renderMatMarking ->
+     buildMatEdgeMarks) against a scenario built to match the person's
+     own real screenshot exactly (C3, 2.4m pad, 100%-position edge
+     distance) - table shows 2039mm/4439mm exactly matching the
+     screenshot, the new column shows "Inside: 55.4%" (matching the
+     confirmed hand-worked example) and correctly "—" for Outside
+     (4439mm is genuinely beyond the outrigger's 100% reach of 3590mm,
+     which is expected - the mat is deliberately sized bigger than the
+     plate itself), and the marks array passed toward the 3D layer
+     carries insidePct/outsidePct through correctly.
+
+  CACHE_VERSION v272->v273, app version v7.15->v7.16, CARRIER3D_VERSION
+  57->58. Scoped to the LTM 1650 only for now - the other 6 cranes will
+  get their own support plate widths added the same way once confirmed,
+  same incremental pattern used for every other per-crane data set in
+  this app.

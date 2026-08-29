@@ -1199,15 +1199,23 @@ window.__carrier3dSyncOutriggers = function (modelKey, footprint, calibration, l
 // transient "Loading..." HTML label uses) - simpler, and correct at any
 // camera angle since it's a real object in the 3D scene, not an HTML
 // overlay that would need re-projecting on every OrbitControls frame.
+// text may contain '\n' for a stacked multi-line label (e.g. the mat
+// edge marks' mm figure plus a second line for the outrigger-as-tape-
+// measure percentage below it) - single-line callers are unaffected,
+// since a 1-element lines array reduces every calculation here back to
+// exactly what this function did before multi-line support existed
+// (confirmed: same canvas size, same fillText position, same sprite
+// scale for a plain string with no '\n').
 function makeTextSprite(text, color) {
+  const lines = String(text).split('\n');
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   const fontPx = 56;
   ctx.font = `bold ${fontPx}px sans-serif`;
-  const textWidth = ctx.measureText(text).width;
+  const textWidth = Math.max(...lines.map((l) => ctx.measureText(l).width));
   const padX = 20, padY = 14;
   canvas.width = textWidth + padX * 2;
-  canvas.height = fontPx + padY * 2;
+  canvas.height = fontPx * lines.length + padY * 2;
   // measureText above needs the font set BEFORE sizing the canvas, but
   // resizing a canvas clears it - the font has to be set again after.
   ctx.font = `bold ${fontPx}px sans-serif`;
@@ -1218,13 +1226,17 @@ function makeTextSprite(text, color) {
   ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
   ctx.fillStyle = color;
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, padX, canvas.height / 2);
+  lines.forEach((line, i) => ctx.fillText(line, padX, padY + fontPx * (i + 0.5)));
 
   const texture = new THREE.CanvasTexture(canvas);
   const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, depthWrite: false });
   const sprite = new THREE.Sprite(material);
   sprite.renderOrder = 999; // always drawn on top, same reasoning as depthTest:false above
-  const targetHeightM = 0.5; // world-metres tall, tuned to read clearly against a ~10-20m carrier
+  // world-metres tall PER LINE, tuned to read clearly against a ~10-20m
+  // carrier (same 0.5 as before single-line support existed) - scaling
+  // with line count keeps each line's rendered size consistent rather
+  // than squashing existing text into a fixed total sprite height.
+  const targetHeightM = 0.5 * lines.length;
   const scale = targetHeightM / canvas.height;
   sprite.scale.set(canvas.width * scale, canvas.height * scale, 1);
   return sprite;
@@ -1724,8 +1736,18 @@ function drawMatEdgeMarks(group, cal, marks, dashed) {
     const outsidePos = siteToWorld(cal, mark.outsideXMm, outsideYMm);
     const pOutside = new THREE.Vector3(outsidePos.x, y, outsidePos.z);
 
-    addDimensionLine(group, pInsideEdge, pInside, mark.color, `${mark.label} inside: ${mark.insideMm}mm`, 0.5, dashed);
-    addDimensionLine(group, pOutsideEdge, pOutside, mark.color, `${mark.label} outside: ${mark.outsideMm}mm`, 0.5, dashed);
+    // insidePct/outsidePct (see index.html's outriggerPercentForTarget) -
+    // the "outrigger as a tape measure" percentage: a no-load, measuring-
+    // only extension that puts the outer edge of the support PLATE
+    // exactly on this mm mark, so a crew can paint-mark the ground before
+    // ever fully extending. null whenever the crane has no confirmed
+    // plate-width/stage-table data yet, or the target genuinely falls
+    // outside the outrigger's own real 0-100% range - shown as a second
+    // stacked label line only when a real value exists, never a guess.
+    const insideLabel = `${mark.label} inside: ${mark.insideMm}mm` + (mark.insidePct != null ? `\nextend to ${mark.insidePct}% to mark (no load)` : '');
+    const outsideLabel = `${mark.label} outside: ${mark.outsideMm}mm` + (mark.outsidePct != null ? `\nextend to ${mark.outsidePct}% to mark (no load)` : '');
+    addDimensionLine(group, pInsideEdge, pInside, mark.color, insideLabel, 0.5, dashed);
+    addDimensionLine(group, pOutsideEdge, pOutside, mark.color, outsideLabel, 0.5, dashed);
   });
 }
 

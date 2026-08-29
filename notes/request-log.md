@@ -959,3 +959,39 @@ a working record, not app content.
   Shipped to main (CACHE_VERSION v271->v272, app v7.14->v7.15;
   carrier3d.js untouched, CARRIER3D_VERSION stays 57). See
   methodology.txt 118.
+- Multi-round "outrigger as a tape measure" discussion for Support Pad
+  Placement (LTM 1650): initial voice-transcribed description of the
+  technique (push a corner out to a throwaway %, paint-mark where the
+  plate's edge lands, retract, use the mark to lay the bog mat before
+  the outrigger is ever fully extended onto it), followed by real
+  back-and-forth confirming the exact math together, including a
+  correction ("how do you not have it... like you did for the spans
+  for all the other cranes") when I wrongly claimed the app lacked
+  VarioBase span data that was actually already there
+  (OUTRIGGER_STAGE_TABLE, built earlier this session), and a manual
+  screenshot (Fig.158043, Support plate chapter) supplying the 0.7m
+  plate width. Worked a real example together by hand (target 2039mm
+  -> 55.4%, confirmed correct by the person) before any code was
+  written. Final go-ahead: "yup go for it and if all the 4 corner and
+  in the support pad placement sub tab we can show the % in the 3d
+  model next to or under where 2039mm is and it need to able to be
+  varible as if someone changes the bog mat side I need it to auto
+  calulate accordingly".
+  **Status: shipped.** New outriggerPercentForTarget() converts a
+  target mm distance into the required extension % (returns null,
+  never a guess, when data's missing or the target's out of the
+  outrigger's real reach), wired into the existing Bog Mat Marking
+  table (new "Extend To %" column, shown only for the 1650 for now)
+  and the 3D mat edge labels (a second stacked line under the existing
+  mm figure). Auto-recalculates on any pad size change since it hooks
+  into the same computeMatMarkingData() the rest of that feature
+  already reruns on every change - no separate wiring needed. Verified
+  in three stages: pure-math round-trip/linearity test, a real-browser
+  regression test of the makeTextSprite multi-line change (confirmed
+  byte-identical output for every existing single-line label), and a
+  full wiring test built to match the person's own real screenshot
+  exactly (C3, 2.4m pad) - reproduced 2039mm/4439mm exactly and
+  correctly showed 55.4%/"—" for inside/outside. Shipped to main
+  (CACHE_VERSION v272->v273, app v7.15->v7.16, CARRIER3D_VERSION
+  57->58). Scoped to the 1650 only - other cranes need their own
+  confirmed plate width first. See methodology.txt 119.

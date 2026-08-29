@@ -1521,7 +1521,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.15</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.16</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2033,7 +2033,7 @@
         <div class="card-title" style="color:var(--success);">Bog Mat Marking <span style="font-size:0.75rem; color:var(--text-muted); text-transform:none; font-weight:400;">(from edge of crane, for laying the mat out on the ground)</span></div>
         <table>
           <thead>
-            <tr>
+            <tr id="cad-mat-marking-header-row">
               <th>Outrigger</th>
               <th>To Pad Center</th>
               <th>Inside Edge<br><span style="font-weight:400;text-transform:none;">closer to crane</span></th>
@@ -2042,7 +2042,7 @@
           </thead>
           <tbody id="cad-mat-marking-results"></tbody>
         </table>
-        <div class="disclaimer">Measured laterally from the crane's own side (carrier edge, not centerline) out to the pad — mark the inside edge first, then the outside edge, to lay the mat out square before the crane arrives. Only shown for legs with a pad currently toggled on above; uses that leg's current (possibly shifted) position, same OEM-sourced span figures as Crane Layout's own ground layout marks — precise enough that a mirrored pair (e.g. C2/C3) always reads the same distance from the edge when unshifted.</div>
+        <div class="disclaimer">Measured laterally from the crane's own side (carrier edge, not centerline) out to the pad — mark the inside edge first, then the outside edge, to lay the mat out square before the crane arrives. Only shown for legs with a pad currently toggled on above; uses that leg's current (possibly shifted) position, same OEM-sourced span figures as Crane Layout's own ground layout marks — precise enough that a mirrored pair (e.g. C2/C3) always reads the same distance from the edge when unshifted. "Extend To %" (shown for cranes with a confirmed support plate size) is a no-load, measuring-only outrigger extension that puts the plate's own outer edge exactly on that mm mark, so it can be paint-marked before ever fully extending — never a load-rated position; the crane only ever lifts from its own published support stages.</div>
       </div>
 
       <button class="btn" onclick="window.print()">📄 Export / Print Setup Plan PDF</button>
@@ -5034,7 +5034,7 @@
 
     // Single source of truth for vendor/carrier3d.js's cache-busting query,
     // same reasoning as CWT3D_VERSION above.
-    const CARRIER3D_VERSION = 57;
+    const CARRIER3D_VERSION = 58;
 
     // Single source of truth for vendor/armeasure.js's cache-busting query
     // (Chain Shortening's "Mark Cut Point in AR"), same reasoning as
@@ -6759,6 +6759,73 @@
       const TOL = 0.15;
       for (const key of Object.keys(pairs)) {
         if (Math.abs(width - parseFloat(key)) <= TOL) return pairs[key];
+      }
+      return null;
+    }
+
+    // Support plate width (the physical foot bolted under the outrigger
+    // cylinder, distinct from the beam/cylinder itself) - needed to
+    // convert OUTRIGGER_STAGE_TABLE's own centerline-to-centerline span
+    // figures into a distance to the plate's OUTER edge (see
+    // outriggerPercentForTarget below). Only the 1650 confirmed so far,
+    // straight from its own OEM manual's "Support plate" chapter
+    // (Fig.158043, 0.7m x 0.7m - the 0.7m figure is the one that matters
+    // here, along the beam's own extension axis). Add each crane's own
+    // real figure here as it's confirmed - never assumed to be the same
+    // across models. See methodology.txt.
+    const SUPPORT_PLATE_WIDTH_M = { '1650': 0.7 };
+
+    // "Outrigger as a tape measure" - person's own field technique,
+    // worked through and confirmed step by step before building this:
+    // push a corner out to a throwaway, NO-LOAD percentage just far
+    // enough that the support plate's own outer edge touches a known
+    // target distance (typically one of Bog Mat Marking's own inside/
+    // outside edge figures), paint-mark the ground there, then retract
+    // to the crane's real working stage. That paint mark is then used to
+    // lay the bog mat correctly BEFORE the outrigger ever gets fully
+    // extended onto it - solves the problem of not being able to slide a
+    // mat under a pad that's already down, without needing to trust a
+    // tape measure pulled across open/uneven ground.
+    //
+    // The math: OUTRIGGER_STAGE_TABLE gives real OEM span figures at a
+    // handful of published percentages. Checked directly (not assumed)
+    // that the relationship between % and physical width is genuinely
+    // linear across every interval in the 1650's own table - each 25%
+    // step adds exactly 1.74m of total width, matching
+    // OUTRIGGER_50PCT_DELTA_M in carrier3d.js independently - so
+    // interpolating BETWEEN two real published points for an arbitrary
+    // target is legitimate, not a guess. Returns null (never a guessed
+    // number) when this crane has no confirmed plate width or stage
+    // table yet, or when the target genuinely falls outside the
+    // outrigger's own real 0-100% range (not physically achievable).
+    //
+    // The returned percentage is NOT itself an OEM-published stage - see
+    // OUTRIGGER_STAGE_TABLE for those, the only percentages this crane
+    // is ever actually load-rated at. This one is for a temporary,
+    // no-load positioning check only, always verified on site against
+    // the crane's own live LICCON percentage readout.
+    function outriggerPercentForTarget(modelKey, targetOuterEdgeMm) {
+      const stages = OUTRIGGER_STAGE_TABLE[modelKey];
+      const plateM = SUPPORT_PLATE_WIDTH_M[modelKey];
+      const data = SLEW_CLEARANCE_DATA[modelKey];
+      if (!stages || stages.length < 2 || !plateM || !data || typeof targetOuterEdgeMm !== 'number') return null;
+
+      const halfPlateMm = (plateM * 1000) / 2;
+      const targetCenterlineMm = targetOuterEdgeMm - halfPlateMm;
+      const targetWidthMm = targetCenterlineMm * 2 + data.carrierWidthB;
+
+      const sorted = stages.slice().sort((a, b) => a[0] - b[0]);
+      const widthsMm = sorted.map(([, w]) => w * 1000);
+      if (targetWidthMm < widthsMm[0] || targetWidthMm > widthsMm[widthsMm.length - 1]) return null;
+
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const w1 = widthsMm[i], w2 = widthsMm[i + 1];
+        if (targetWidthMm >= w1 && targetWidthMm <= w2) {
+          const pct1 = sorted[i][0], pct2 = sorted[i + 1][0];
+          if (w2 === w1) return pct1;
+          const t = (targetWidthMm - w1) / (w2 - w1);
+          return Math.round((pct1 + t * (pct2 - pct1)) * 10) / 10;
+        }
       }
       return null;
     }
@@ -9423,6 +9490,7 @@
     // than shown with a confusing negative number.
     function computeMatMarkingData(useTarget) {
       if (!lastMapped || !lastFp) return [];
+      const modelKey = document.getElementById('cad-crane').value;
       const halfB = lastFp.width / 2;
       return lastMapped.filter(leg => {
         if (!leg.pad) return false;
@@ -9435,9 +9503,17 @@
         const side = x >= 0 ? 1 : -1;
         const edgeToCenterMm = Math.abs(x) - halfB;
         const halfPadMm = leg.pad.width / 2;
+        const insideMm = edgeToCenterMm - halfPadMm;
+        const outsideMm = edgeToCenterMm + halfPadMm;
         return {
           id: leg.id, side, y, edgeXMm: side * halfB, padLengthMm: leg.pad.length,
-          edgeToCenterMm, insideMm: edgeToCenterMm - halfPadMm, outsideMm: edgeToCenterMm + halfPadMm
+          edgeToCenterMm, insideMm, outsideMm,
+          // "Outrigger as a tape measure" - see outriggerPercentForTarget's
+          // own comment. Recomputed fresh every call (same as everything
+          // else in this function), so changing pad width/length live
+          // recalculates these too - no separate wiring needed.
+          insidePct: outriggerPercentForTarget(modelKey, insideMm),
+          outsidePct: outriggerPercentForTarget(modelKey, outsideMm)
         };
       });
     }
@@ -9448,14 +9524,31 @@
     // dimension label in this app (ground layout marks, mat edge marks
     // themselves, clearance measurement).
     function renderMatMarking() {
+      const modelKey = document.getElementById('cad-crane').value;
       const card = document.getElementById('cad-mat-marking-card');
       const tbody = document.getElementById('cad-mat-marking-results');
-      const rows = computeMatMarkingData().map(m => `
+      const headerRow = document.getElementById('cad-mat-marking-header-row');
+      const data = computeMatMarkingData();
+      // Extra "outrigger as tape measure" column only for a crane with
+      // confirmed plate-width + stage-table data (currently just the
+      // 1650) - hidden entirely rather than shown full of dashes for
+      // every other crane, same dynamic-column pattern already used for
+      // the 360° Slew Clearance table's rear-clearance columns.
+      const showPctCol = !!(SUPPORT_PLATE_WIDTH_M[modelKey] && OUTRIGGER_STAGE_TABLE[modelKey]);
+      while (headerRow.children.length > 4) headerRow.removeChild(headerRow.lastChild);
+      if (showPctCol && headerRow.children.length === 4) {
+        const th = document.createElement('th');
+        th.innerHTML = 'Extend To %<br><span style="font-weight:400;text-transform:none;">no-load measuring check only</span>';
+        headerRow.appendChild(th);
+      }
+      const pctCell = (pct) => pct != null ? `${pct}%` : '<span style="color:var(--text-muted);">—</span>';
+      const rows = data.map(m => `
           <tr>
             <td><b>C${m.id}</b></td>
             <td>${Math.round(m.edgeToCenterMm)} mm</td>
             <td>${Math.round(m.insideMm)} mm</td>
-            <td>${Math.round(m.outsideMm)} mm</td>
+            <td>${Math.round(m.outsideMm)} mm</td>` +
+            (showPctCol ? `<td>Inside: ${pctCell(m.insidePct)}<br>Outside: ${pctCell(m.outsidePct)}</td>` : '') + `
           </tr>`).join('');
       card.style.display = rows ? '' : 'none';
       tbody.innerHTML = rows;
@@ -9486,7 +9579,9 @@
         yMm: m.y,
         padLengthMm: m.padLengthMm,
         insideMm: Math.round(m.insideMm),
-        outsideMm: Math.round(m.outsideMm)
+        outsideMm: Math.round(m.outsideMm),
+        insidePct: m.insidePct,
+        outsidePct: m.outsidePct
       }));
     }
 
