@@ -11676,3 +11676,45 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v260->v261, app version v7.3->v7.4, CARRIER3D_VERSION
   53->54.
+
+108. 50%-span toggle was moving the wrong node - real fix + real test
+
+  Person's screenshot showed the "Show 50% outrigger span" toggle
+  producing an obviously wrong result - outriggers at inconsistent,
+  asymmetric lengths, not a clean uniform retraction. Asked to compare
+  against their own reference model directly rather than trust the
+  numbers again.
+
+  Root cause: entry 107's transform matched nodes named "Part N" (same
+  convention PART_GROUPS' visibility toggle uses) and set THAT node's
+  position.x. Visibility doesn't care which node in the chain you flip,
+  so that convention was fine for the outrigger box toggle - but Onshape's
+  GLTF export wraps every mesh in an "occurrence of Part N" instance node
+  that carries the REAL position, with "Part N" itself sitting at
+  identity (0,0,0) underneath it. Confirmed by actually loading the
+  model through GLTFLoader in a real browser (not reading the raw file
+  with pygltflib, which is what entry 106/107's verification did - that
+  check the MATH was right, but never confirmed which runtime node the
+  code was actually touching). Applying +-1.74 to a node whose real
+  value was 0, instead of whatever its real ~1.4-1.7m base was, produces
+  a different wrong number for every part (they don't all share the
+  same base offset), which is exactly the "inconsistent, asymmetric"
+  look in the screenshot.
+
+  Fix: match against "occurrence of Part N" instead. Also built a
+  proper end-to-end test this time instead of trusting file-level math:
+  a real headless-Chromium page (Playwright) loads the ACTUAL app
+  GLTFLoader/DRACOLoader pipeline, applies the exact fixed transform
+  function to the normal-span model, and compares the resulting
+  position of all 12 parts against the person's own reference model
+  loaded the same way - all 12 match to float precision, and toggling
+  back off correctly restores each part's true original position (also
+  verified, not assumed). This is the level of verification that should
+  have been done in entry 107 to begin with - a raw-file bounding-box/
+  matrix check is good for confirming a MODEL is correct, but confirming
+  RUNTIME CODE behaves correctly requires actually running it through
+  the real loader, which behaves differently in ways the raw file
+  doesn't reveal (name sanitization, node structure).
+
+  CACHE_VERSION v261->v262, app version v7.4->v7.5, CARRIER3D_VERSION
+  54->55.

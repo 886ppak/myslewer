@@ -736,3 +736,19 @@ a working record, not app content.
   Layout next to Hide Rear Outrigger Box. Shipped to main
   (CACHE_VERSION v260->v261, app v7.3->v7.4, CARRIER3D_VERSION 53->54).
   See methodology.txt 107.
+- "this doesn't look right they are meant to retract directly in
+  towards the carrier . can you just compare it to the one I actually
+  made so you can see what I mean" (screenshot of the 50% span toggle
+  showing an asymmetric, clearly wrong result)
+  **Status: real bug found and fixed, properly verified this time.**
+  The transform was matching "Part N" nodes (position sits at identity
+  there) instead of the "occurrence of Part N" parent node that
+  actually carries the real position - confirmed by loading the model
+  through an actual browser GLTFLoader instance rather than just
+  reading the raw file. Built a proper end-to-end test: applied the
+  fixed transform to the real model in a real headless browser and
+  compared all 12 parts against the person's reference model loaded the
+  same way - exact match on all 12, and toggling off correctly restores
+  the true original position. Shipped to main (CACHE_VERSION
+  v261->v262, app v7.4->v7.5, CARRIER3D_VERSION 54->55). See
+  methodology.txt 108.

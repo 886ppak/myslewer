@@ -369,17 +369,30 @@ const OUTRIGGER_CORNER_PARTS = {
   }
 };
 
-// Base (normal-span) local X is captured into userData the first time a
-// part is touched, not assumed to be 0 - every one of these parts sits
-// somewhere off-centerline already (see the person's own carrierWidthB/2
-// figures elsewhere in this app), so restoring "off" has to mean "back
-// to its real original position," not "back to zero."
+// IMPORTANT: the offset lives on the "occurrence of Part N" node, NOT
+// "Part N" itself - Onshape's GLTF export wraps each mesh in an
+// "occurrence of X" instance node that carries the real position, with
+// the "X" mesh node underneath sitting at identity (0,0,0). Confirmed
+// by actually loading the model through GLTFLoader (not just reading
+// the raw file) and checking both nodes directly - see methodology.txt
+// 108. Matching "Part N" alone (like PART_GROUPS' visibility toggle
+// correctly does, since visibility doesn't care which node in the chain
+// you flip) silently moves the part from a false zero baseline instead
+// of its real ~1.4-1.7m one, which is exactly what produced the wrong,
+// asymmetric-looking result the person caught.
+//
+// Base (normal-span) local X is still captured into userData the first
+// time a part is touched, not assumed to be some fixed number - every
+// one of these parts sits somewhere off-centerline already (see the
+// person's own carrierWidthB/2 figures elsewhere in this app), so
+// restoring "off" has to mean "back to its real original position," not
+// "back to zero."
 window.__carrier3dSetOutrigger50Pct = function (modelKey, enabled) {
   const root = modelCache[modelKey];
   const corners = OUTRIGGER_CORNER_PARTS[modelKey];
   if (!root || !corners) return;
   Object.values(corners).forEach(({ parts, sign }) => {
-    const wanted = new Set(parts.map(normalizePartName));
+    const wanted = new Set(parts.map((p) => normalizePartName('occurrence of ' + p)));
     root.traverse((obj) => {
       if (!wanted.has(normalizePartName(obj.name))) return;
       if (obj.userData.__normalSpanX === undefined) obj.userData.__normalSpanX = obj.position.x;
