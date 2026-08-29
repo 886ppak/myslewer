@@ -11964,3 +11964,38 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v266->v267, app version v7.9->v7.10. carrier3d.js
   untouched, so CARRIER3D_VERSION stays at 57.
+
+114. No-go zone middle-sector label fix - '<' should have been '>'
+
+  Person checked the shipped 105t no-go zone against the app and
+  reported the tap readout on the left side ("Left, >58° – <122° —
+  min radius 7.8m") was wrong: the "<122" should read ">122". Real
+  bug, not a re-litigation of the boundary numbers themselves (those
+  were already correct and unchanged).
+
+  Root cause: assumed the middle sector's two thresholds should follow
+  ordinary mathematical range notation (">" for the lower bound, "<"
+  for the upper bound - like ">58° <122°" reads as "greater than 58 AND
+  less than 122"). That's wrong for how this crane's readout actually
+  works - re-reading the person's own original dictated data
+  (">59 to >122" for this exact sector, both readings given with ">",
+  never "<") already contained this, it just wasn't caught the first
+  time round. Both thresholds of a two-sided middle sector use ">" -
+  each one marks "you have now gone beyond this angle," not a
+  closed-range upper limit. A single-sided sector unbounded at one end
+  (the rear-pole sector, only bounded above at 58°/56°; the front-pole
+  sector, only bounded below at 122°/124°) keeps its existing "<58°"/
+  ">122°" form respectively - person didn't flag those as wrong, and
+  they're the genuinely single-boundary case this distinction doesn't
+  apply to.
+
+  Fixed both configs' middle-sector label:
+  - 105t/6.4m: '>58° – <122°' -> '>58° – >122°'
+  - 115t/6.4m: '>56° – <124°' -> '>56° – >124°'
+  Purely a label-string change - fromDeg/toDeg/minRadiusM (the actual
+  geometry and ring-drawing data) were already correct and untouched,
+  confirmed by re-grepping the exact literals after editing.
+
+  CACHE_VERSION v267->v268, app version v7.10->v7.11. carrier3d.js
+  untouched (labels are plain data passed through as-is), so
+  CARRIER3D_VERSION stays at 57.

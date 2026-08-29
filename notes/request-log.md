@@ -847,3 +847,25 @@ a working record, not app content.
   clears both the 3D overlay and the readout. Shipped to main
   (CACHE_VERSION v266->v267, app v7.9->v7.10; carrier3d.js untouched,
   CARRIER3D_VERSION stays 57). See methodology.txt 113.
+- "can you check and fix 105 CWT and buckets set to 6.4m ... I looked
+  at it on the app and seems you are mixing up >< where they shouldn't
+  be" - asked where exactly and which label before touching anything,
+  given how much dictation ambiguity the >< notation already caused
+  once. Person's answer pinned it down precisely: "Left, >58° – <122°
+  — min radius 7.8m ... the error here is <122 it still should be
+  '>122'".
+  **Status: real bug found and fixed.** The middle sector's own two
+  thresholds had been written using ordinary math range notation
+  (">lower – <upper"), but this crane's readout uses ">" for BOTH ends
+  of a two-sided middle sector - re-checking the person's own original
+  dictated data confirmed it was there all along (">59 to >122", never
+  a "<" for that sector) and just wasn't caught the first time. Fixed
+  both configs' middle-sector label (105t: '>58° – <122°' -> '>58° –
+  >122°'; 115t: '>56° – <124°' -> '>56° – >124°'). The single-sided
+  rear/front-pole sector labels ("<58°"/">122°" etc) were left as-is -
+  not flagged as wrong, and they're the genuinely single-boundary case
+  this fix doesn't apply to. Purely a label-string fix - the actual
+  degree boundaries and ring geometry were already correct and
+  untouched. Shipped to main (CACHE_VERSION v267->v268, app
+  v7.10->v7.11; carrier3d.js untouched, CARRIER3D_VERSION stays 57).
+  See methodology.txt 114.
