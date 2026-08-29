@@ -914,3 +914,25 @@ a working record, not app content.
   confirming all three configs list in the dropdown. Shipped to main
   (CACHE_VERSION v269->v270, app v7.12->v7.13; carrier3d.js untouched,
   CARRIER3D_VERSION stays 57). See methodology.txt 116.
+- "these boxes don't seem to do anything ? I click them it doesn't
+  give the radius circles like the toggles do what are there purpose?"
+  (screenshot of the "Ballast Radius (Site Clearance)" button group) -
+  explained they only fed the separate numeric 360° Slew Clearance
+  table (which sits collapsed by default, and whose "Limiting point"
+  rarely changes on the 1650 since TY's/T3N always dominate), never
+  the 3D preview. Then: "yea have it also drive the circles in the 3d
+  preview too".
+  **Status: shipped.** Removed the redundant per-variant-option
+  checkboxes from the 3D preview's own checkbox list (only one ballast
+  radius is ever physically fitted at once, so a second disconnected
+  set of checkboxes for the same thing didn't make sense) and instead
+  made the currently-selected Ballast Radius button always draw its
+  own circle in the 3D view, updating live as the buttons are clicked
+  - reusing the exact same onSlewCircleToggle()/__carrier3dSetSlewCircles
+  pipeline the fixed-point checkboxes already use, so no new plumbing
+  needed since that whole render chain already re-runs on every button
+  click. Verified with a full balanced-brace extraction of the real
+  function chain run in a real browser: each button click produces the
+  correct radius/color circle call and the legend updates live. Shipped
+  to main (CACHE_VERSION v270->v271, app v7.13->v7.14; carrier3d.js
+  untouched, CARRIER3D_VERSION stays 57). See methodology.txt 117.

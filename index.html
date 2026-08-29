@@ -1521,7 +1521,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.13</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.14</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -8675,11 +8675,19 @@
     // - 1250 is the max at 3).
     const SLEW_CIRCLE_COLORS = ['#ff3b30', '#a855f7', '#22c55e', '#f97316'];
 
-    // Builds one checkbox per SLEW_CLEARANCE_DATA point (fixed points plus
-    // every variant option, e.g. both "Standard" and "Vario Ballast" for
-    // 1160/1250/1650 - shown side by side rather than behind a selector,
-    // so a person can toggle both on at once to compare them directly on
-    // the model). Rebuilt from scratch on every crane switch, which also
+    // Builds one checkbox per FIXED SLEW_CLEARANCE_DATA point only - a
+    // person can toggle any combination of these on to compare them
+    // directly on the model, since more than one can genuinely be rigged
+    // at once (see the person's own note on TY's/T3N above). The variant
+    // group (e.g. "6.4m @ 135°" vs "7.4m @ 90°" for the 1650's Ballast
+    // Radius) is NOT a second parallel set of checkboxes here - only one
+    // of those is ever physically fitted at a time, same as the numeric
+    // 360° Slew Clearance table already treats it, so its circle is
+    // driven directly by the SAME Ballast Radius buttons at the top of
+    // the page (setSlewClearanceVariant) rather than needing its own
+    // separate control that could get out of sync with the numbers -
+    // see onSlewCircleToggle's own comment for how that circle gets
+    // added in. Rebuilt from scratch on every crane switch, which also
     // resets every checkbox to unticked - onSlewCircleToggle() is called
     // once at the end to push that cleared state into the 3D view too, so
     // a stale circle from the previous crane can't linger after switching
@@ -8691,8 +8699,11 @@
       const data = SLEW_CLEARANCE_DATA[modelKey];
       if (!data) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
 
-      const points = data.fixed.concat(data.variants ? data.variants.options : []);
+      const points = data.fixed;
       const pointColors = points.map((p, i) => SLEW_CIRCLE_COLORS[i % SLEW_CIRCLE_COLORS.length]);
+      const variantOpt = data.variants ? data.variants.options[slewClearanceVariantIdx] : null;
+      const variantColor = data.variants ? SLEW_CIRCLE_COLORS[points.length % SLEW_CIRCLE_COLORS.length] : null;
+      const summarySwatchColors = variantColor ? pointColors.concat([variantColor]) : pointColors;
       wrap.style.display = '';
       // Three collapsed-by-default groups (methodology.txt 110) instead of
       // one long flat checkbox list - person's own pick of the three
@@ -8707,7 +8718,7 @@
         <details class="toggle-group">
           <summary>
             <span style="display:flex; align-items:center; gap:8px;">
-              <span class="toggle-group-swatches">${pointColors.map((c) => `<span style="background:${c};"></span>`).join('')}</span>
+              <span class="toggle-group-swatches">${summarySwatchColors.map((c) => `<span style="background:${c};"></span>`).join('')}</span>
               360° Slew Radius Circles
             </span>
           </summary>
@@ -8717,7 +8728,12 @@
               <input type="checkbox" data-radius="${p.radius}" data-color="${pointColors[i]}" onchange="onSlewCircleToggle()" style="width:auto; cursor:pointer;">
               <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${pointColors[i]}; flex-shrink:0;"></span>
               ${p.label} (${(p.radius / 1000).toFixed(2)}m)
-            </label>`).join('') + `
+            </label>`).join('') +
+            (variantOpt ? `
+            <div style="display:flex; align-items:center; gap:6px; margin-top:6px; padding-top:6px; border-top:1px solid var(--border-color); font-size:0.75rem; color:var(--text-muted);">
+              <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${variantColor}; flex-shrink:0;"></span>
+              ${data.variants.label}: <strong style="color:var(--text-main);">${variantOpt.label}</strong> (${(variantOpt.radius / 1000).toFixed(2)}m) — always shown, set via the Ballast Radius buttons above
+            </div>` : '') + `
           </div>
         </details>
 
@@ -8875,8 +8891,25 @@
 
     function onSlewCircleToggle() {
       const modelKey = document.getElementById('sc-crane').value;
+      const data = SLEW_CLEARANCE_DATA[modelKey];
       const checks = Array.from(document.querySelectorAll('#carrier-3d-slew-toggles input[data-radius]:checked'));
       const circles = checks.map(el => ({ radius: parseFloat(el.dataset.radius), color: el.dataset.color }));
+      // The currently-selected Ballast Radius variant (set via the
+      // buttons at the top of the page, setSlewClearanceVariant) is
+      // always included as its own circle here - not behind a checkbox
+      // like the fixed points above, since only one of these is ever
+      // physically fitted at a time (same reasoning the numeric 360°
+      // Slew Clearance table already applies) and this is the one place
+      // that reflects "whatever's currently selected," not "whatever's
+      // ticked." Color index matches renderCarrier3DSlewToggles' own
+      // variantColor calculation exactly (both key off data.fixed.length)
+      // so the circle drawn here always matches the legend swatch shown
+      // in the toggle panel.
+      if (data && data.variants) {
+        const opt = data.variants.options[slewClearanceVariantIdx];
+        const variantColor = SLEW_CIRCLE_COLORS[data.fixed.length % SLEW_CIRCLE_COLORS.length];
+        circles.push({ radius: opt.radius, color: variantColor });
+      }
       const showClearanceEl = document.getElementById('carrier-3d-show-clearance');
       const showClearance = showClearanceEl ? showClearanceEl.checked : false;
       const showRearClearanceEl = document.getElementById('carrier-3d-show-rear-clearance');
@@ -8885,7 +8918,6 @@
       const includeToolbox = includeToolboxEl ? includeToolboxEl.checked : false;
       const includeSlidingBeamBoxEl = document.getElementById('carrier-3d-include-slidingbeambox');
       const includeSlidingBeamBox = includeSlidingBeamBoxEl ? includeSlidingBeamBoxEl.checked : false;
-      const data = SLEW_CLEARANCE_DATA[modelKey];
       const footprint = FOOTPRINTS[modelKey];
       const rearMm = (showRearClearance && footprint)
         ? footprint.rear

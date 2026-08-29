@@ -12075,3 +12075,52 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v269->v270, app version v7.12->v7.13. carrier3d.js
   untouched, CARRIER3D_VERSION stays 57.
+
+117. Ballast Radius (Site Clearance) buttons now drive the 3D circle
+
+  Follow-up to the "these boxes don't seem to do anything" question:
+  the Ballast Radius mode-toggle buttons (top of Crane Positioning,
+  SLEW_CLEARANCE_DATA[modelKey].variants) only ever fed the numeric
+  360° Slew Clearance table, never the 3D Carrier Preview's own radius
+  circles - a completely separate control, which is why clicking them
+  looked like it did nothing when compared against the circle
+  checkboxes. Person asked to have it drive the 3D circle too.
+
+  Before this, renderCarrier3DSlewToggles' own checkbox list ALSO
+  independently listed every variant option as its own checkbox
+  (points = data.fixed.concat(data.variants.options)) - a second,
+  disconnected way to show the same kind of circle, since only one
+  ballast radius is ever physically fitted at a time (same reasoning
+  the numeric table already applies via its single-select buttons).
+  Rather than add a THIRD parallel control, removed the per-variant
+  checkboxes from that list entirely (points = data.fixed now, fixed
+  points only) and made the currently-selected variant (whatever the
+  top buttons have picked, slewClearanceVariantIdx) an ALWAYS-DRAWN
+  circle instead - no checkbox of its own, since "whatever's currently
+  selected" is exactly what a checkbox can't represent (it would need
+  a whole radio-group semantic, not a plain toggle). onSlewCircleToggle()
+  appends this circle straight from SLEW_CLEARANCE_DATA + the module-
+  level slewClearanceVariantIdx, using the same color-cycling scheme
+  (SLEW_CIRCLE_COLORS[data.fixed.length % ...]) both there and in the
+  legend row renderCarrier3DSlewToggles draws so the two never
+  disagree on color. Because setSlewClearanceVariant -> render
+  SlewClearanceResults -> updateCarrier3DLayoutAvailability ->
+  renderCarrier3DSlewToggles -> onSlewCircleToggle was ALREADY the
+  full call chain on every button click (confirmed by reading it, not
+  assumed), zero new wiring was needed beyond the two functions
+  themselves - the existing render cascade already re-runs
+  onSlewCircleToggle() every time a button is clicked.
+
+  Verified with a proper balanced-brace Python extraction (not manual
+  sed line ranges, which kept mis-splitting mid-function on earlier
+  attempts) of the real renderSlewClearanceResults/setSlewClearanceVariant/
+  updateCarrier3DLayoutAvailability/renderCarrier3DSlewToggles/
+  onSlewCircleToggle chain, run standalone in a real browser: clicking
+  each of the three buttons in turn produces a __carrier3dSetSlewCircles
+  call with the correct radius (6400/7400/8400) and a consistent color,
+  the legend text updates live, the active button's own highlighted
+  state is correct, and no checkbox exists anymore for any variant
+  option (only the 2 fixed points, TY's/T3N, still have one).
+
+  CACHE_VERSION v270->v271, app version v7.13->v7.14. carrier3d.js
+  untouched, CARRIER3D_VERSION stays 57.
