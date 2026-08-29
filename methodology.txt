@@ -11718,3 +11718,28 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v261->v262, app version v7.4->v7.5, CARRIER3D_VERSION
   54->55.
+
+109. Rear outrigger box: Part 6 was missing from the group
+
+  Person tested the rebuilt "Hide rear outrigger box" toggle live and
+  caught a stray via Identify Parts: "Part_6" stayed visible when the
+  box was hidden. Checked before adding it, not just taken on the
+  report: Part 6's own world-space bounding box (0.7 x 0.26 x 0.7m,
+  ~7% of the model's length) and position (Z center -2.374, X center
+  6.19) closely cluster with the already-confirmed box parts, especially
+  Part 19/15 from the same C1 corner (Z -2.369/-2.370) - genuinely
+  belongs with the group, not another chassis-sized mistake. Added to
+  PART_GROUPS.rearOutriggerBox (carrier3d.js) - 9 parts now, not 8.
+
+  Re-verified live the same way as entry 108 - loaded the model through
+  an actual GLTFLoader instance, applied the updated group, confirmed
+  Part 6's node reads visible:false. Part 6 already existed in
+  OUTRIGGER_CORNER_PARTS (entry 106/107's C1 list) for the 50%-span
+  toggle - no conflict having a part belong to both groups, they act on
+  different things (visibility vs. position) and the physical reality
+  already established (entry 105) is that the box carries the C1/C4 leg
+  mechanisms with it, so overlap between the two lists is expected, not
+  a sign of a mistake.
+
+  CACHE_VERSION v262->v263, app version v7.5->v7.6, CARRIER3D_VERSION
+  55->56.

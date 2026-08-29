@@ -319,10 +319,15 @@ function identifyAtPoint(clientX, clientY) {
 // spans ~9% of the model's length (vs. the old bad "Part 16" at 95%).
 // Numbering isn't stable across CAD re-exports, so "Part 16" here is a
 // genuinely different, small, legitimate part - not the same mistake
-// with a different label. See methodology.txt 105.
+// with a different label. See methodology.txt 105. "Part 6" added after
+// the fact (methodology.txt 109) - the person caught it via Identify
+// Parts as a stray piece left behind when the box was hidden; checked
+// the same way as the original 8 (small, ~7% of the model's length, and
+// spatially clustered right alongside Part 19/15 - same C1 corner) before
+// adding it, not just taken on the report alone.
 const PART_GROUPS = {
   1650: {
-    rearOutriggerBox: ['Part 7', 'Part 9', 'Part 15', 'Part 16', 'Part 17', 'Part 18', 'Part 19', 'Part 21']
+    rearOutriggerBox: ['Part 6', 'Part 7', 'Part 9', 'Part 15', 'Part 16', 'Part 17', 'Part 18', 'Part 19', 'Part 21']
   }
 };
 

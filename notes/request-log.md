@@ -752,3 +752,13 @@ a working record, not app content.
   the true original position. Shipped to main (CACHE_VERSION
   v261->v262, app v7.4->v7.5, CARRIER3D_VERSION 54->55). See
   methodology.txt 108.
+- "also Tapped: Part_6 was a stray and didn't get hidden when the
+  outrigger box is off"
+  **Status: fixed.** Checked Part 6's bounding box and position before
+  adding it (same rigor as the original 8 - clustered right alongside
+  Part 19/15 from the same corner, ~7% of the model's length, not a
+  chassis-sized part), then added it to PART_GROUPS.rearOutriggerBox
+  and re-verified live through an actual GLTFLoader instance that it
+  now reads visible:false when the box is hidden. Shipped to main
+  (CACHE_VERSION v262->v263, app v7.5->v7.6, CARRIER3D_VERSION
+  55->56). See methodology.txt 109.
