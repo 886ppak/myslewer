@@ -900,3 +900,17 @@ a working record, not app content.
   unticking flips both back). Shipped to main (CACHE_VERSION
   v268->v269, app v7.11->v7.12; carrier3d.js untouched, CARRIER3D_VERSION
   stays 57). See methodology.txt 115.
+- "iv got to map one more Cwt config" then "125t Cwt 6.4 buckets\n\n<54
+  to >54 min 3.1 then >55 to >126 min 10.1 then >127 to <127 min 3.1
+  then <126 to <55 min 10.1"
+  **Status: shipped.** Same four-segment dictation shape as the prior
+  two configs - applied the resolution rule the 115t round already
+  validated (trust the pole-straddling segment's own self-consistent
+  number - 54 and 127 - over the middle segment's off-by-one reading)
+  rather than re-asking. Added as a third entry in NOGO_ZONE_DATA['1650']:
+  <54° 3.1m, >54°-and->127° 10.1m, >127° 3.1m. Dropdown lists it
+  automatically, no UI code changes needed. Verified via the same
+  pure-math round-trip test (new numbers) and a standalone render test
+  confirming all three configs list in the dropdown. Shipped to main
+  (CACHE_VERSION v269->v270, app v7.12->v7.13; carrier3d.js untouched,
+  CARRIER3D_VERSION stays 57). See methodology.txt 116.

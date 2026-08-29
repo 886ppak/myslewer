@@ -12045,3 +12045,33 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v268->v269, app version v7.11->v7.12. carrier3d.js
   untouched, CARRIER3D_VERSION stays 57.
+
+116. Third no-go zone config (125t/6.4m)
+
+  "125t Cwt 6.4 buckets\n\n<54 to >54 min 3.1 then >55 to >126 min
+  10.1 then >127 to <127 min 3.1 then <126 to <55 min 10.1" - same
+  four-segment dictation shape as the 105t and 115t configs. This time
+  didn't re-ask about the boundary ambiguity - applied the resolution
+  rule the 115t clarification round already validated: the two
+  pole-straddling segments (segment1 "<54 to >54", segment3 "<127 to
+  >127") are each SELF-consistent on one number (both readings of that
+  segment agree), which is a stronger signal than the middle segments
+  (segment2/segment4), which report a DIFFERENT number one degree off
+  (55/126) despite agreeing with EACH OTHER. The 115t round explicitly
+  confirmed trusting the pole-straddling segment's own number (56, not
+  57) over the middle segment's, so applied the same rule here: 54 and
+  127, not 55/126.
+
+  Sectors: <54deg 3.1m, >54deg-<127deg[label >54 deg - >127 deg per
+  methodology.txt 114's fix] 10.1m, >127deg 3.1m. Added as a third
+  entry in NOGO_ZONE_DATA['1650'] - the dropdown already lists every
+  array entry automatically, so no UI code changes needed, just data.
+
+  Verification: re-ran the pure-math round-trip script (copy, new
+  54/127/10.1 numbers) - all checks pass including ring closure and
+  the intentional step discontinuity at both boundaries. Re-ran the
+  standalone dropdown-render test with all three configs present, all
+  list correctly.
+
+  CACHE_VERSION v269->v270, app version v7.12->v7.13. carrier3d.js
+  untouched, CARRIER3D_VERSION stays 57.
