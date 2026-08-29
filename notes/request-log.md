@@ -1107,4 +1107,32 @@ a working record, not app content.
   showPctCol condition as the O/R % table column. Added to sw.js's
   APP_SHELL (genuinely-edited content, not a stable export - it
   already needed one correctness fix). Shipped to main (CACHE_VERSION
-  v277->v278, app v7.20->v7.21). See methodology.txt 124.
+  v277->v278, app v7.20->v7.21). See methodology.txt 124. Not
+  shadowed to beta-trial - that branch turned out to have never
+  received the underlying O/R % feature at all (no
+  SUPPORT_PLATE_WIDTH_M, no outriggerPercentForTarget), so the link
+  had nothing to attach to there. Person's call: leave beta-trial
+  alone for now rather than force it.
+- "I refreshed it on my phone and didnt get a notification push?" -
+  clarified that was a one-off ping from this dev session's own tools,
+  not something the app itself does. Same message also asked: (1)
+  since sharing's closed now, hide the header share icon and move the
+  QR into a collapsed Admin Dashboard submenu; (2) wire in a
+  notification icon where past notable changes can be browsed, not
+  just a one-time popup.
+  **Status: shipped.** Restructured the existing one-time "What's
+  New" popup (WHATS_NEW) into NOTIFICATION_LOG, a full history array -
+  same panel now auto-opens once per new version AND reopens any time
+  via a new bell icon (#notif-btn) that took over the header's old
+  share-icon slot, with a red dot when there's anything unseen. Seeded
+  version 2 with this session's own two changes (the Paint-Mark Method
+  animation + the notification system itself) so it launches with
+  real history. Share App (QR/copy link/native share) moved into a new
+  collapsed <details> in Admin Dashboard, same lazy-render-on-open
+  pattern as Cab Entry's own 3D panel - underlying share functions
+  untouched, only the header modal wrapper removed. Verified via a
+  real headless browser load with zero console/page errors; full
+  click-through wasn't possible (sign-in gate blocks headless
+  interaction without real credentials). Shipped to main
+  (CACHE_VERSION v278->v279, app v7.21->v7.22). See methodology.txt
+  125.

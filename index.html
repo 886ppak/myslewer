@@ -58,11 +58,17 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     #update-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1c1e22; border: 1px solid var(--border-color); color: var(--text-main); padding: 10px 18px; border-radius: 8px; font-size: 0.85rem; z-index: 9999; box-shadow: 0 4px 14px rgba(0,0,0,0.45); display: none; max-width: 90vw; text-align: center; }
 
-    #share-btn { position: absolute; right: 56px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 50%; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--accent-gold); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
-    #share-btn svg { width: 17px; height: 17px; }
-    #share-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 200; }
-    #share-panel { display: none; position: fixed; top: 62px; right: 14px; left: 14px; max-width: 320px; margin: 0 auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; z-index: 201; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
-    #share-panel .card-title { margin-bottom: 12px; }
+    /* Notifications bell - takes the share icon's old slot (right:56px).
+       General public sharing closed (see the "Share App" section moved
+       into Admin Dashboard below), so that slot was free; this is a much
+       more frequently useful thing for every signed-in user to have
+       one tap away than a share icon nobody but an admin ever needs now. */
+    #notif-btn { position: absolute; right: 56px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 50%; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--accent-gold); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+    #notif-btn svg { width: 17px; height: 17px; }
+    #notif-badge { position: absolute; top: 3px; right: 3px; width: 9px; height: 9px; border-radius: 50%; background: var(--danger); border: 1.5px solid #181a1d; }
+
+    /* QR/url/actions styling reused by Admin Dashboard's "Share App" card
+       below - kept as its own block since it's no longer part of a modal. */
     #share-qr-wrap { display: flex; justify-content: center; background: #fff; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
     #share-qr-wrap svg { display: block; width: 180px; height: 180px; }
     #share-url-text { font-size: 0.78rem; color: var(--text-muted); word-break: break-all; text-align: center; margin-bottom: 12px; }
@@ -85,10 +91,13 @@
     .tab-toggle-check { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: 1; min-width: 0; cursor: pointer; }
     .tab-toggle-check input[type="checkbox"] { width: 20px; height: 20px; flex-shrink: 0; cursor: pointer; }
 
-    /* "What's New" one-time announcement popup - shown at most once per
-       WHATS_NEW.version (main app script), tracked per-device in
-       localStorage, not tied to every CACHE_VERSION bump (most deploys
-       aren't worth interrupting someone's day for). Centered as a true
+    /* Notifications panel - doubles as the "What's New" auto-popup (shown
+       once per NOTIFICATION_LOG's latest version, tracked per-device in
+       localStorage, not tied to every CACHE_VERSION bump - most deploys
+       aren't worth interrupting someone's day for) AND the reopenable
+       history behind the header bell (#notif-btn), which lists every past
+       entry, not just the newest. Same panel either way - opening it by
+       either path marks the latest version seen. Centered as a true
        modal, unlike the header panels above which anchor under the
        header - this one's meant to actually stop someone rather than
        sit out of the way until opened. */
@@ -501,7 +510,7 @@
       body { background: #fff; color: #000; padding-bottom: 0; }
       header { background: #fff; border-bottom: 2px solid #000; position: static; }
       header h1 { color: #000; }
-      #update-check-btn, #share-btn, #cache-btn, #profile-btn { display: none; }
+      #update-check-btn, #notif-btn, #cache-btn, #profile-btn { display: none; }
       .card { background: #fff; border: 1px solid #999; break-inside: avoid; }
       .card-title { color: #000; border-bottom: 1px solid #999; }
       input, select { background: #fff; color: #000; border: 1px solid #999; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -1521,15 +1530,16 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.21</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.22</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
     <button id="profile-btn" type="button" onclick="toggleProfilePanel()" title="Profile" aria-label="Profile">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7"></path></svg>
     </button>
-    <button id="share-btn" type="button" onclick="toggleSharePanel()" title="Share this app" aria-label="Share this app">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+    <button id="notif-btn" type="button" onclick="openNotifPanel()" title="Notifications" aria-label="Notifications">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+      <span id="notif-badge" style="display:none;"></span>
     </button>
     <button id="tabs-btn" type="button" onclick="toggleTabsPanel()" title="Customize tabs" aria-label="Customize tabs">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line><circle cx="8" cy="6" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="16" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="10" cy="18" r="1.6" fill="currentColor" stroke="none"></circle></svg>
@@ -1581,17 +1591,6 @@
     <button type="button" class="toolbar-btn" id="profile-signout-btn" onclick="profileSignOut()">Sign Out</button>
   </div>
 
-  <div id="share-backdrop" onclick="closeSharePanel()"></div>
-  <div id="share-panel">
-    <div class="card-title">Share MYSLEWER</div>
-    <div id="share-qr-wrap"></div>
-    <div id="share-url-text"></div>
-    <div class="share-actions">
-      <button class="toolbar-btn" onclick="copyShareLink()">Copy Link</button>
-      <button class="toolbar-btn" id="share-native-btn" onclick="nativeShare()" style="display:none;">Share…</button>
-    </div>
-  </div>
-
   <div id="tabs-backdrop" onclick="closeTabsPanel()"></div>
   <div id="tabs-panel">
     <div class="card-title">Customize Tabs</div>
@@ -1599,11 +1598,11 @@
     <div id="tabs-toggle-list"></div>
   </div>
 
-  <div id="whatsnew-backdrop"></div>
+  <div id="whatsnew-backdrop" onclick="closeNotifPanel()"></div>
   <div id="whatsnew-panel">
-    <div class="card-title">What's New</div>
+    <div class="card-title">Notifications</div>
     <div id="whatsnew-items"></div>
-    <button class="btn" style="margin-top:14px;" onclick="closeWhatsNew()">Got It</button>
+    <button class="btn" style="margin-top:14px;" onclick="closeNotifPanel()">Close</button>
   </div>
 
   <nav class="nav-tabs">
@@ -2810,6 +2809,17 @@
         </div>
         <div style="display:none; color:var(--danger); font-size:0.85rem; margin-top:10px;" id="adminInviteError"></div>
       </div>
+
+      <details class="card" id="admin-share-qr-details">
+        <summary class="card-title">Share App (QR Code)</summary>
+        <p class="disclaimer" style="margin-top:0;">General public sign-up is closed now, so this is admin-only - previously a header icon every signed-in user could see. Still useful for handing a new user the app's own URL directly (e.g. on-site, before they've been added to the allowlist).</p>
+        <div id="share-qr-wrap"></div>
+        <div id="share-url-text"></div>
+        <div class="share-actions">
+          <button class="toolbar-btn" onclick="copyShareLink()">Copy Link</button>
+          <button class="toolbar-btn" id="share-native-btn" onclick="nativeShare()" style="display:none;">Share…</button>
+        </div>
+      </details>
     </div>
 
   </div>
@@ -10152,20 +10162,19 @@
       return window.location.origin + window.location.pathname;
     }
 
-    function toggleSharePanel() {
-      const panel = document.getElementById('share-panel');
-      if (panel.style.display === 'block') { closeSharePanel(); return; }
-      panel.style.display = 'block';
-      document.getElementById('share-backdrop').style.display = 'block';
+    // Now lives inside Admin Dashboard's own collapsed "Share App" <details>
+    // (see admin-share-qr-details) rather than a header-icon modal every
+    // signed-in user could open - general public sign-up is closed, so a
+    // share-this-app icon in every user's header no longer made sense.
+    // Same lazy-render-on-open idea as Cab Entry's own 3D <details> panel:
+    // only pay for the QR encode (and the qrcode.js load behind it) once
+    // an admin actually opens this, not on every Admin Dashboard visit.
+    document.getElementById('admin-share-qr-details')?.addEventListener('toggle', function () {
+      if (!this.open) return;
       document.getElementById('share-url-text').textContent = shareUrl();
       document.getElementById('share-native-btn').style.display = navigator.share ? '' : 'none';
       renderShareQR();
-    }
-
-    function closeSharePanel() {
-      document.getElementById('share-panel').style.display = 'none';
-      document.getElementById('share-backdrop').style.display = 'none';
-    }
+    });
 
     // Header's own always-visible entry point into offline caching -
     // previously the only way to see "is this fully downloaded for
@@ -10956,45 +10965,102 @@
     // deploy (this session alone shipped ~10 in a row) and would nag
     // constantly if it triggered this. Batch multiple smaller changes
     // into one version bump rather than firing once per feature.
-    const WHATS_NEW = {
-      version: 1,
-      items: [
-        {
-          title: 'New: Customize Your Tabs',
-          body: "Don't need every tab? Tap the new menu icon in the header to hide the ones you don't use and reorder the rest with the up/down arrows — your top tab even opens first when you launch the app. Saved on this device only, so everyone sees their own layout."
-        }
-      ]
-    };
+    // Every release note ever shown, oldest first - version numbers bump
+    // by one per batch (same "batch multiple smaller changes into one
+    // bump rather than firing once per feature" rule as before). This
+    // now serves TWO jobs instead of one: the original one-time "what's
+    // new" popup on the first load after a new version ships, AND a
+    // reopenable history behind the header bell (#notif-btn) so someone
+    // who refreshes the app and *doesn't* happen to catch the popup (or
+    // just wants to check what changed recently) can always go back and
+    // look - person asked directly why refreshing on their phone didn't
+    // notify them of anything; the earlier phone alert for the Paint-Mark
+    // Method animation was a one-off ping from this dev session's own
+    // tools, not something the app itself does. This is the app-side fix:
+    // a real notification surfaces itself next launch, and stays visible
+    // (bell badge, then in history) instead of being a single push that's
+    // easy to miss.
+    const NOTIFICATION_LOG = [
+      {
+        version: 1,
+        items: [
+          {
+            title: 'New: Customize Your Tabs',
+            body: "Don't need every tab? Tap the new menu icon in the header to hide the ones you don't use and reorder the rest with the up/down arrows — your top tab even opens first when you launch the app. Saved on this device only, so everyone sees their own layout."
+          }
+        ]
+      },
+      {
+        version: 2,
+        items: [
+          {
+            title: 'New: Paint-Mark Method Animation',
+            body: 'Support Pad Placement’s Bog Mat Marking card now has a "How O/R % Marking Works" button — a step-by-step animation of using an outrigger’s own extension as a tape measure to mark a bog mat’s position before the crane ever fully deploys.'
+          },
+          {
+            title: 'New: Notifications',
+            body: 'The share icon in the header is now a bell — tap it any time to see this list again. New entries also pop up once, automatically, the next time you open the app after a notable change ships.'
+          }
+        ]
+      }
+    ];
     const WHATSNEW_SEEN_KEY = 'myslewer_whatsnew_seen_v1';
 
-    // Checked once per load, after the app itself is already usable -
-    // "already seen this version" is per-device (localStorage), never
-    // synced anywhere, matching every other personal-preference feature
-    // in this app. No opt-out - these are infrequent enough (batched,
-    // not per-deploy) that dismissing once per version is enough.
-    function maybeShowWhatsNew() {
-      try {
-        if (localStorage.getItem(WHATSNEW_SEEN_KEY) === String(WHATS_NEW.version)) return;
-      } catch (e) {
-        return; // storage unavailable - don't nag every single load
-      }
+    function latestNotifVersion() {
+      return NOTIFICATION_LOG[NOTIFICATION_LOG.length - 1].version;
+    }
+
+    function notifSeenVersion() {
+      try { return Number(localStorage.getItem(WHATSNEW_SEEN_KEY)) || 0; }
+      catch (e) { return latestNotifVersion(); } // storage unavailable - don't nag every load
+    }
+
+    // Small red dot on the bell when there's anything unseen - checked on
+    // load (regardless of whether the auto-popup fires) and again after
+    // the panel closes, so it always reflects current state.
+    function updateNotifBadge() {
+      const badge = document.getElementById('notif-badge');
+      if (badge) badge.style.display = notifSeenVersion() < latestNotifVersion() ? 'block' : 'none';
+    }
+
+    // Renders every release in NOTIFICATION_LOG, newest first - unlike the
+    // old one-version-only popup, opening this always shows the full
+    // history, not just whatever's newest right now.
+    function renderNotifItems() {
       const itemsEl = document.getElementById('whatsnew-items');
-      itemsEl.innerHTML = WHATS_NEW.items.map((item) => `
+      const items = NOTIFICATION_LOG.slice().reverse().flatMap((release) => release.items);
+      itemsEl.innerHTML = items.map((item) => `
         <div class="whatsnew-item">
           <div class="whatsnew-item-title">${item.title}</div>
           <div class="whatsnew-item-body">${item.body}</div>
         </div>
       `).join('');
-      document.getElementById('whatsnew-backdrop').style.display = 'block';
-      document.getElementById('whatsnew-panel').style.display = 'block';
     }
 
-    function closeWhatsNew() {
-      try {
-        localStorage.setItem(WHATSNEW_SEEN_KEY, String(WHATS_NEW.version));
-      } catch (e) { /* storage unavailable - will just show again next load */ }
+    function openNotifPanel() {
+      renderNotifItems();
+      document.getElementById('whatsnew-backdrop').style.display = 'block';
+      document.getElementById('whatsnew-panel').style.display = 'block';
+      try { localStorage.setItem(WHATSNEW_SEEN_KEY, String(latestNotifVersion())); }
+      catch (e) { /* storage unavailable - badge/auto-popup will just recur */ }
+      updateNotifBadge();
+    }
+
+    function closeNotifPanel() {
       document.getElementById('whatsnew-backdrop').style.display = 'none';
       document.getElementById('whatsnew-panel').style.display = 'none';
+    }
+
+    // Checked once per load, after the app itself is already usable -
+    // "already seen this version" is per-device (localStorage), never
+    // synced anywhere, matching every other personal-preference feature
+    // in this app. No opt-out - these are infrequent enough (batched,
+    // not per-deploy) that auto-popping once per version is enough; the
+    // bell (always available) covers "I want to check again".
+    function maybeShowWhatsNew() {
+      updateNotifBadge();
+      if (notifSeenVersion() >= latestNotifVersion()) return;
+      openNotifPanel();
     }
 
     // Opens on whatever tab this device's order/hide prefs put first,

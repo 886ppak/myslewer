@@ -12560,3 +12560,68 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v277->v278, app version v7.20->v7.21. carrier3d.js
   untouched, CARRIER3D_VERSION stays 59.
+
+125. Notifications bell (reopenable history) + Share App moved to Admin
+
+  Person asked three things at once: (1) "I refreshed it on my phone
+  and didnt get a notification push?" - the phone alert for entry 124
+  was a one-off ping from this dev session's own tools (a
+  Claude-Code-Remote push to the connected phone), not something the
+  app itself does - refreshing the PWA was never going to trigger
+  anything on its own; (2) since general public sharing is closed now,
+  hide the header share icon and move the QR code into a collapsed
+  Admin Dashboard submenu; (3) wire in a notification icon where past
+  notable changes can be browsed, not just a one-time popup.
+
+  The app already had a "What's New" one-time popup (WHATS_NEW,
+  version 1, "Customize Your Tabs") that only ever showed its single
+  current version's items once per device then vanished for good - no
+  way to go back and check it again, which is the real app-side
+  answer to (1): a proper notification system surfaces itself
+  automatically next launch AND stays reachable afterwards, instead
+  of being a single alert that's easy to miss.
+
+  Restructured WHATS_NEW into NOTIFICATION_LOG, an array of every
+  release ever shipped (oldest first, each with its own version + item
+  list) rather than just the current one. The same panel now serves
+  both jobs: auto-opens once per device the first time a newer version
+  exists (unchanged localStorage key, so already-dismissed devices
+  keep that state), and reopens on demand via a new bell icon
+  (#notif-btn) that took over the share icon's old header slot -
+  rendering the FULL history newest-first either way, with a small red
+  dot on the bell whenever there's anything unseen. Added this
+  session's own two ship-worthy changes as version 2 (the Paint-Mark
+  Method animation from entry 124, and the notification system itself)
+  so the feature launches with real history instead of one lone entry.
+
+  Share App (QR code + copy link + native share) moved out of the
+  header entirely into a new collapsed <details class="card"> in Admin
+  Dashboard, right after "Invite a Colleague" - same lazy-render-on-
+  open pattern as Cab Entry's own 3D <details> panel (a toggle
+  listener only calls renderShareQR()/populates the URL once actually
+  opened, not on every Admin Dashboard visit). The underlying
+  functions (shareUrl/renderShareQR/copyShareLink/nativeShare) were
+  untouched - only the modal wrapper around them (toggleSharePanel/
+  closeSharePanel, the header button, the backdrop) was removed, since
+  general sign-up is closed and a share-this-app icon in every regular
+  user's header no longer serves a purpose - still useful for an admin
+  handing someone the URL directly on-site.
+
+  Verified: loaded the app in a real headless browser and confirmed
+  zero console/page errors after the restructure (the previous
+  concatenated-script node --check approach turned out unreliable for
+  this multi-<script>-tag page and was abandoned in favour of an
+  actual browser load, which is what would actually catch a real
+  syntax error); confirmed every renamed id (notif-btn, notif-badge,
+  openNotifPanel/closeNotifPanel, admin-share-qr-details) has no
+  leftover reference to the old names anywhere in the file. Full
+  interactive click-through (opening the bell, expanding the Admin
+  Dashboard QR section) wasn't possible in this environment - the
+  app's own sign-in gate blocks headless interaction without real
+  credentials, same constraint noted for the Bog Mat Marking wiring in
+  entry 124.
+
+  CACHE_VERSION v278->v279, app version v7.21->v7.22. Not shadowed to
+  beta-trial - per person's own call, beta-trial is being left alone
+  for now rather than force this (and entry 124's animation link) onto
+  a branch that never received the underlying O/R % feature.
