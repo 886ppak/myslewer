@@ -11778,3 +11778,36 @@ cranes get their own subsections as they're built.
   gap, not an app bug).
 
   CACHE_VERSION v263->v264, app version v7.6->v7.7.
+
+111. Rear outrigger box visibility tied to Include sliding beam box
+
+  Person's own call, confirmed before touching anything: no more
+  standalone "Hide rear outrigger box" checkbox - the 3D model should
+  just follow "Include sliding beam box in rear figure" directly.
+  Ticked = box included/fitted = shows in 3D; unticked = box removed =
+  hidden. Same idea as the original merge attempt (entry 97) that got
+  reverted for having the direction backwards and a bad part mapping at
+  the time - both of those are fixed now (entry 105's clean model,
+  entry 109's Part 6 fix), so redoing it properly landed cleanly.
+
+  Removed REAR_OUTRIGGER_BOX_MODELS entirely (SLIDING_BEAM_BOX_DEPTH_MM
+  is the same '1650'-only list already, so keeping a second identical
+  gate was redundant) along with the standalone checkbox and the
+  toggleCarrier3DPartGroup wrapper it alone drove - genuinely dead code
+  once nothing called it, deleted rather than left behind. New
+  onIncludeSlidingBeamBoxToggle() calls the same onSlewCircleToggle()
+  the checkbox always needed for the measurement math, then separately
+  drives window.__carrier3dSetPartGroupVisible off the same checked
+  state. Default state on a fresh render also flipped to match: the
+  checkbox itself always starts unticked (innerHTML rebuild), so the 3D
+  model now resets to box-hidden on load instead of the old standalone
+  toggle's box-shown default - consistent with the person's own stated
+  site practice (position the crane first, fit the box later).
+
+  Verified live before shipping (same standalone-render method as
+  entries 108/110): confirmed the old checkbox id is gone, the sliding-
+  beam-box checkbox exists, the fresh-render reset call passes
+  visible:false, and ticking/unticking the checkbox calls
+  __carrier3dSetPartGroupVisible with true/false correctly both ways.
+
+  CACHE_VERSION v264->v265, app version v7.7->v7.8.

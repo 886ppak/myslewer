@@ -773,3 +773,16 @@ a working record, not app content.
   actual function standalone in a real browser before shipping. Shipped
   to main (CACHE_VERSION v263->v264, app v7.6->v7.7). See
   methodology.txt 110.
+- "So for the six fifty, I don't need an individual toggle for hiding
+  the rear outrigger box. I need it to be tied in with the include
+  outrigger box for the measurement thing. If it's toggled, including
+  it, it shows the box. If it's untoggled, the box is removed."
+  (confirmed understanding first, then: "Yeah that's right, go ahead")
+  **Status: shipped.** Removed the standalone "Hide rear outrigger box"
+  checkbox and REAR_OUTRIGGER_BOX_MODELS entirely. "Include sliding beam
+  box in rear figure" now drives both the measurement math (as before)
+  and the 3D model's visibility - ticked shows it, unticked hides it.
+  Fresh-render default flipped to match (box hidden until ticked, since
+  the checkbox itself always starts unticked). Verified live before
+  shipping. Shipped to main (CACHE_VERSION v264->v265, app v7.7->v7.8).
+  See methodology.txt 111.

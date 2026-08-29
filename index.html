@@ -1521,7 +1521,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.7</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.8</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -5253,18 +5253,17 @@
     // exception. See methodology.txt for the full primary-source trail.
     const SLIDING_BEAM_BOX_DEPTH_MM = { '1650': 1270 };
 
-    // Cranes with a real component -> Part_N mapping built up via the
-    // (admin-only) Identify Parts tool - see carrier3d.js's own
-    // PART_GROUPS, which this list mirrors. Kept as a plain constant
-    // here (rather than only reading window.__carrier3dGetPartGroups)
-    // because renderCarrier3DSlewToggles below has to decide whether to
-    // show the "Hide Rear Outrigger Box" checkbox BEFORE carrier3d.js
-    // has necessarily been dynamically imported yet - this panel
-    // renders as soon as a crane's picked, independent of whether "Show
-    // 3D Carrier Model" has ever been clicked. Second attempt at this
-    // feature - see PART_GROUPS' own comment in carrier3d.js for why the
-    // first one got fully reverted and what's different this time.
-    const REAR_OUTRIGGER_BOX_MODELS = ['1650'];
+    // Third attempt at rear-outrigger-box visibility (see PART_GROUPS'
+    // own comment in carrier3d.js for the first two) - no longer its own
+    // standalone checkbox at all. The person's own call: the 3D model
+    // should just show whatever "Include sliding beam box in rear
+    // figure" (below) already says is fitted, rather than making someone
+    // keep two checkboxes in sync by hand. SLIDING_BEAM_BOX_DEPTH_MM
+    // itself is now the only gate needed - it's already the same '1650'-
+    // only crane list REAR_OUTRIGGER_BOX_MODELS used to be, so that
+    // separate constant (and the standalone checkbox/
+    // toggleCarrier3DPartGroup wrapper it drove) has been removed rather
+    // than kept alongside a second, now-redundant on/off control.
 
     // Cranes with a runtime 50%-outrigger-span reference toggle -
     // carrier3d.js's own OUTRIGGER_CORNER_PARTS, which this mirrors, for
@@ -8645,9 +8644,9 @@
       // closed. Grouping is purely visual (details.toggle-group, see its
       // own CSS comment); every checkbox keeps the exact same id/data-*
       // attributes as before, so onSlewCircleToggle/onGroundLayoutToggle/
-      // toggleCarrier3DPartGroup/toggleCarrier3DOutrigger50Pct (all of
-      // which look things up by id or by #carrier-3d-slew-toggles-scoped
-      // selector, never by DOM position) needed zero changes.
+      // onIncludeSlidingBeamBoxToggle/toggleCarrier3DOutrigger50Pct (all
+      // of which look things up by id or by #carrier-3d-slew-toggles-
+      // scoped selector, never by DOM position) needed zero changes.
       wrap.innerHTML = `
         <details class="toggle-group">
           <summary>
@@ -8684,8 +8683,8 @@
             </label>` : '') +
             (SLIDING_BEAM_BOX_DEPTH_MM[modelKey] ? `
             <label style="display:flex; align-items:center; gap:6px; margin-top:6px; margin-left:22px; cursor:pointer; font-size:0.7rem; color:var(--text-muted);">
-              <input type="checkbox" id="carrier-3d-include-slidingbeambox" onchange="onSlewCircleToggle()" style="width:auto; cursor:pointer;">
-              Include sliding beam box in rear figure (+${(SLIDING_BEAM_BOX_DEPTH_MM[modelKey] / 1000).toFixed(2)}m)
+              <input type="checkbox" id="carrier-3d-include-slidingbeambox" onchange="onIncludeSlidingBeamBoxToggle()" style="width:auto; cursor:pointer;">
+              Include sliding beam box in rear figure (+${(SLIDING_BEAM_BOX_DEPTH_MM[modelKey] / 1000).toFixed(2)}m) - also shows/hides it in the 3D model
             </label>` : '') + `
           </div>
         </details>
@@ -8697,11 +8696,6 @@
               <input type="checkbox" id="carrier-3d-show-ground-layout" onchange="onGroundLayoutToggle()" style="width:auto; cursor:pointer;">
               Show ground layout marks (paint-out dimensions)
             </label>` +
-            (REAR_OUTRIGGER_BOX_MODELS.includes(modelKey) ? `
-            <label style="display:flex; align-items:center; gap:6px; margin-top:6px; cursor:pointer; font-size:0.75rem;">
-              <input type="checkbox" id="carrier-3d-hide-outrigger-box-toggle" onchange="toggleCarrier3DPartGroup('rearOutriggerBox', this.checked, 'sc-crane')" style="width:auto; cursor:pointer;">
-              Hide rear outrigger box (3D model only)
-            </label>` : '') +
             (OUTRIGGER_50PCT_MODELS.includes(modelKey) ? `
             <label style="display:flex; align-items:center; gap:6px; margin-top:6px; cursor:pointer; font-size:0.75rem;">
               <input type="checkbox" id="carrier-3d-outrigger-50pct-toggle" onchange="toggleCarrier3DOutrigger50Pct(this.checked, 'sc-crane')" style="width:auto; cursor:pointer;">
@@ -8712,12 +8706,14 @@
       onSlewCircleToggle();
       onGroundLayoutToggle();
       // New checkboxes above always start unticked (innerHTML rebuild),
-      // so explicitly reset both to their true (normal-span, box-shown)
-      // state in the 3D model too - otherwise switching away from this
-      // crane and back could leave the model itself in the ticked state
-      // while the checkbox reads unticked.
-      if (REAR_OUTRIGGER_BOX_MODELS.includes(modelKey) && window.__carrier3dSetPartGroupVisible) {
-        window.__carrier3dSetPartGroupVisible(modelKey, 'rearOutriggerBox', true);
+      // so explicitly reset the 3D model to match that fresh state too -
+      // otherwise switching away from this crane and back could leave
+      // the model itself in the ticked state while the checkbox reads
+      // unticked. Rear outrigger box now follows "Include sliding beam
+      // box" (unticked on rebuild = box hidden, not the old standalone
+      // toggle's default-shown) - see onIncludeSlidingBeamBoxToggle.
+      if (SLIDING_BEAM_BOX_DEPTH_MM[modelKey] && window.__carrier3dSetPartGroupVisible) {
+        window.__carrier3dSetPartGroupVisible(modelKey, 'rearOutriggerBox', false);
       }
       if (OUTRIGGER_50PCT_MODELS.includes(modelKey) && window.__carrier3dSetOutrigger50Pct) {
         window.__carrier3dSetOutrigger50Pct(modelKey, false);
@@ -8888,26 +8884,30 @@
         : 'No part there - try tapping directly on a visible surface of the model.';
     };
 
-    // Real show/hide toggle for a component built up from Identify Parts
-    // taps (see toggleCarrier3DIdentifyMode above) - currently just the
-    // 1650's rear outrigger box (carrier3d.js's own PART_GROUPS), more
-    // groups/models to follow as their part lists get confirmed the same
-    // way. Unlike Identify Parts this one isn't admin-gated - it's a
-    // real user-facing feature once a crane's group is mapped. Lives in
-    // Crane Layout's slew-toggles panel (renderCarrier3DSlewToggles),
-    // right alongside the other rear-figure checkboxes it visually
-    // matches (Include tool box/sliding beam box) - craneSelectId
-    // parameterized (rather than hardcoded) since that panel uses
-    // sc-crane, not Support Pad Placement's cad-crane.
-    function toggleCarrier3DPartGroup(groupKey, hidden, craneSelectId) {
-      const modelKey = document.getElementById(craneSelectId).value;
-      if (window.__carrier3dSetPartGroupVisible) window.__carrier3dSetPartGroupVisible(modelKey, groupKey, !hidden);
+    // Rear outrigger box visibility (carrier3d.js's own PART_GROUPS) tied
+    // directly to "Include sliding beam box in rear figure" rather than
+    // its own standalone checkbox - person's own call, third attempt at
+    // this feature (see PART_GROUPS' own comment in carrier3d.js). Calls
+    // the same onSlewCircleToggle() the checkbox used to call alone (the
+    // measurement math still needs it), then separately drives the 3D
+    // model's visibility off the same checked state. sc-crane hardcoded
+    // rather than parameterized like the old wrapper was - this handler
+    // only ever fires from Crane Layout's own checkbox, never Support Pad
+    // Placement's.
+    function onIncludeSlidingBeamBoxToggle() {
+      onSlewCircleToggle();
+      const checkEl = document.getElementById('carrier-3d-include-slidingbeambox');
+      const modelKey = document.getElementById('sc-crane').value;
+      if (checkEl && window.__carrier3dSetPartGroupVisible) {
+        window.__carrier3dSetPartGroupVisible(modelKey, 'rearOutriggerBox', checkEl.checked);
+      }
     }
 
     // 50%-outrigger-span reference toggle (see OUTRIGGER_50PCT_MODELS
-    // above and carrier3d.js's own OUTRIGGER_CORNER_PARTS) - same
-    // craneSelectId parameterization as toggleCarrier3DPartGroup, same
-    // reason.
+    // above and carrier3d.js's own OUTRIGGER_CORNER_PARTS) - unlike
+    // onIncludeSlidingBeamBoxToggle above, still craneSelectId-
+    // parameterized rather than hardcoded, in case a future non-Crane-
+    // Layout consumer needs it too.
     function toggleCarrier3DOutrigger50Pct(enabled, craneSelectId) {
       const modelKey = document.getElementById(craneSelectId).value;
       if (window.__carrier3dSetOutrigger50Pct) window.__carrier3dSetOutrigger50Pct(modelKey, enabled);
