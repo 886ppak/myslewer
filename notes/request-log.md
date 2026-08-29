@@ -818,3 +818,32 @@ a working record, not app content.
   the rear outriggers), and a standalone checkbox/label/wiring test.
   Shipped to main (CACHE_VERSION v265->v266, app v7.8->v7.9,
   CARRIER3D_VERSION 56->57). See methodology.txt 112.
+
+## 2026-08-29
+
+- "115t CWT 6.4m buckets/recepticles\n\n<56 - >56 min 3.1\n>57 - >123
+  min 9m\n>124 - <125 min 3.1\n<124 - <57 min 9m" - a second no-go
+  zone dataset for the same LTM 1650/VarioBase 50% span setup, this
+  time 115t CWT at the same 6.4m ballast radius. Same boundary-noise
+  pattern as the 105t data (two slightly different numbers reported at
+  one transition) - asked directly whether it was a real 1° dead gap
+  or just imprecise phrasing; confirmed a single clean boundary at
+  56°, with 124° kept for the other boundary (no preference given, so
+  used the value mentioned twice vs once). Also asked how to present
+  two configs for the same crane in the UI; chose a dropdown selector
+  over a second standalone checkbox.
+  **Status: shipped.** `NOGO_ZONE_DATA['1650']` changed from a single
+  config object to an array of configs (105t/6.4m, 115t/6.4m), each
+  with its own sectors. New dropdown next to the existing "Show no-go
+  zone" checkbox picks which config's ring is drawn; switching the
+  dropdown while the ring is already showing updates it immediately.
+  carrier3d.js needed no changes - it only ever receives a flat
+  sectors array either way. Verified via a re-run of the pure-math
+  round-trip test against the new 56/124 sector table (all checks
+  pass, including the intentional step discontinuity at each
+  boundary) and a standalone render test of the actual toggle/dropdown
+  functions confirming both configs list correctly, switching configs
+  while ticked passes the right sectors immediately, and unticking
+  clears both the 3D overlay and the readout. Shipped to main
+  (CACHE_VERSION v266->v267, app v7.9->v7.10; carrier3d.js untouched,
+  CARRIER3D_VERSION stays 57). See methodology.txt 113.

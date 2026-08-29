@@ -1521,7 +1521,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.9</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.10</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -5293,16 +5293,31 @@
     // person's own DXF review) rather than a plain "58-122" range, so
     // it reads the same way on-screen as it does on the crane's own
     // display. See methodology.txt 112.
+    // Array per model (not a single object) since more than one CWT/
+    // ballast configuration can apply to the same crane - a dropdown
+    // in the UI picks which one is currently shown, so there's never
+    // ambiguity about which config a displayed ring belongs to.
     const NOGO_ZONE_DATA = {
-      '1650': {
-        cwtTonnes: 105,
-        ballastRadiusM: 6.4,
-        sectors: [
-          { fromDeg: 0,   toDeg: 58,  minRadiusM: 3.1, label: '<58°' },
-          { fromDeg: 58,  toDeg: 122, minRadiusM: 7.8, label: '>58° – <122°' },
-          { fromDeg: 122, toDeg: 180, minRadiusM: 3.1, label: '>122°' }
-        ]
-      }
+      '1650': [
+        {
+          cwtTonnes: 105,
+          ballastRadiusM: 6.4,
+          sectors: [
+            { fromDeg: 0,   toDeg: 58,  minRadiusM: 3.1, label: '<58°' },
+            { fromDeg: 58,  toDeg: 122, minRadiusM: 7.8, label: '>58° – <122°' },
+            { fromDeg: 122, toDeg: 180, minRadiusM: 3.1, label: '>122°' }
+          ]
+        },
+        {
+          cwtTonnes: 115,
+          ballastRadiusM: 6.4,
+          sectors: [
+            { fromDeg: 0,   toDeg: 56,  minRadiusM: 3.1, label: '<56°' },
+            { fromDeg: 56,  toDeg: 124, minRadiusM: 9,   label: '>56° – <124°' },
+            { fromDeg: 124, toDeg: 180, minRadiusM: 3.1, label: '>124°' }
+          ]
+        }
+      ]
     };
 
     // TEST DATA - LTM 1110-5.1 only, built as a proof-of-concept before this
@@ -8736,8 +8751,11 @@
             (NOGO_ZONE_DATA[modelKey] ? `
             <label style="display:flex; align-items:center; gap:6px; margin-top:6px; cursor:pointer; font-size:0.75rem;">
               <input type="checkbox" id="carrier-3d-nogo-zone-toggle" onchange="toggleCarrier3DNoGoZone(this.checked, 'sc-crane')" style="width:auto; cursor:pointer;">
-              <span style="color:var(--danger);">Show no-go zone</span> — VarioBase 50% span, ${NOGO_ZONE_DATA[modelKey].cwtTonnes}t CWT / ${NOGO_ZONE_DATA[modelKey].ballastRadiusM}m ballast only
-            </label>` : '') + `
+              <span style="color:var(--danger);">Show no-go zone</span> — VarioBase 50% span
+            </label>
+            <select id="carrier-3d-nogo-zone-config" onchange="toggleCarrier3DNoGoZone(document.getElementById('carrier-3d-nogo-zone-toggle').checked, 'sc-crane')" style="margin-top:4px; margin-left:22px; font-size:0.7rem; width:calc(100% - 22px);">
+              ${NOGO_ZONE_DATA[modelKey].map((cfg, i) => `<option value="${i}">${cfg.cwtTonnes}t CWT / ${cfg.ballastRadiusM}m ballast</option>`).join('')}
+            </select>` : '') + `
           </div>
         </details>`;
       onSlewCircleToggle();
@@ -8955,19 +8973,22 @@
       if (window.__carrier3dSetOutrigger50Pct) window.__carrier3dSetOutrigger50Pct(modelKey, enabled);
     }
 
-    // No-go zone reference overlay (see NOGO_ZONE_DATA above). Passes the
-    // sector table straight through - carrier3d.js draws the ring and
-    // does its own tap-to-read hit testing (ray/ground-plane
-    // intersection + polar math against the same sectors, NOT raycasting
-    // the dashed line itself, which is a poor/fiddly hit target - see
-    // that module's own comment). Clears the readout on toggle-off too,
-    // not just the 3D ring, so a stale reading can't linger once the
-    // overlay itself is gone.
+    // No-go zone reference overlay (see NOGO_ZONE_DATA above - an array
+    // per model, since more than one CWT/ballast config can apply; the
+    // config dropdown picks which entry's sectors get passed through).
+    // carrier3d.js draws the ring and does its own tap-to-read hit
+    // testing (ray/ground-plane intersection + polar math against the
+    // same sectors, NOT raycasting the dashed line itself, which is a
+    // poor/fiddly hit target - see that module's own comment). Clears
+    // the readout on toggle-off too, not just the 3D ring, so a stale
+    // reading can't linger once the overlay itself is gone.
     function toggleCarrier3DNoGoZone(enabled, craneSelectId) {
       const modelKey = document.getElementById(craneSelectId).value;
-      const data = NOGO_ZONE_DATA[modelKey];
+      const configs = NOGO_ZONE_DATA[modelKey];
+      const configSel = document.getElementById('carrier-3d-nogo-zone-config');
+      const config = configs && configSel ? configs[Number(configSel.value)] : null;
       if (window.__carrier3dSetNoGoZone) {
-        window.__carrier3dSetNoGoZone(modelKey, enabled && data ? data.sectors : null, FOOTPRINTS[modelKey], CARRIER_CALIBRATION[modelKey]);
+        window.__carrier3dSetNoGoZone(modelKey, enabled && config ? config.sectors : null, FOOTPRINTS[modelKey], CARRIER_CALIBRATION[modelKey]);
       }
       if (!enabled) {
         const readout = document.getElementById('carrier-3d-nogo-readout');

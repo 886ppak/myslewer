@@ -11900,3 +11900,67 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v265->v266, app version v7.8->v7.9, CARRIER3D_VERSION
   56->57.
+
+113. Second no-go zone config (115t/6.4m) + config dropdown
+
+  Follow-up to entry 112: person supplied a second no-go zone dataset
+  for the same LTM 1650/VarioBase 50% span setup, this time 115t CWT
+  at the same 6.4m ballast radius:
+    <56deg: 3.1m min radius
+    >56deg - <124deg: 9m min radius
+    >124deg: 3.1m min radius
+  Same mirrored-per-side convention as entry 112, re-confirmed rather
+  than assumed.
+
+  The raw verbal data had the same kind of two-numbers-at-one-boundary
+  noise entry 112 hit (58 vs 59 there; here "<56 ... >57" for the same
+  transition), so rather than guess which number was the real crossover,
+  asked directly whether it's a genuine 1deg dead gap or just imprecise
+  phrasing - confirmed: single clean boundary at 56deg, no gap. Same
+  question style for the 124/125 ambiguity; person had no preference,
+  so kept 124deg (matches the majority of their own readings - two
+  independent mentions of 124 vs one of 125).
+
+  Since this is a second CWT/ballast configuration for the same crane,
+  not a replacement, NOGO_ZONE_DATA['1650'] changed from a single config
+  object to an ARRAY of config objects - each still carrying its own
+  cwtTonnes/ballastRadiusM/sectors, so there's no shared/ambiguous
+  state between configs. Person's own explicit preference (asked
+  directly, given three options): a dropdown selector alongside the
+  existing "Show no-go zone" checkbox, rather than a second standalone
+  checkbox per config - scales better if a third config ever gets
+  added, and keeps only one ring on screen at a time (two overlapping
+  no-go rings for the same crane would be genuinely confusing, not
+  just visually busy).
+
+  toggleCarrier3DNoGoZone() reads the new #carrier-3d-nogo-zone-config
+  <select> (rebuilt fresh from NOGO_ZONE_DATA[modelKey] on every render,
+  same pattern as every other dynamically-built dropdown in this app)
+  and passes that config's own sectors through - the dropdown's own
+  onchange also calls toggleCarrier3DNoGoZone so switching configs
+  while the ring is already showing updates it immediately, not just
+  on next tick. carrier3d.js itself needed zero changes - it already
+  only ever receives a flat sectors array, never NOGO_ZONE_DATA
+  directly, so the array-vs-object restructure was fully contained to
+  index.html.
+
+  Verification, same three-stage standard as entry 112:
+  1. Pure-math round-trip test re-run against the new 56/124 sector
+     table (copy of entry 112's script with the new numbers) - forward/
+     inverse, boundary step-discontinuity, ring-closure all pass.
+  2. Standalone render test of the actual renderCarrier3DSlewToggles/
+     toggleCarrier3DNoGoZone functions (extracted fresh from index.html,
+     not hand-copied) against a fake NOGO_ZONE_DATA array: confirms the
+     dropdown lists both configs with the right labels, ticking with
+     the dropdown on its default (105t) passes the 105t sectors,
+     switching the dropdown to 115t while still ticked immediately
+     passes the 115t sectors instead, and unticking clears both the
+     3D call (null) and the on-screen readout.
+  3. Skipped a fresh GLTFLoader render this round (carrier3d.js itself
+     is unchanged from entry 112, which already got that verification
+     for the ring-drawing code path itself) - the only new surface
+     here is the index.html data/UI wiring, which stage 2 covers
+     directly.
+
+  CACHE_VERSION v266->v267, app version v7.9->v7.10. carrier3d.js
+  untouched, so CARRIER3D_VERSION stays at 57.
