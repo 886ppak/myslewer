@@ -762,3 +762,14 @@ a working record, not app content.
   now reads visible:false when the box is hidden. Shipped to main
   (CACHE_VERSION v262->v263, app v7.5->v7.6, CARRIER3D_VERSION
   55->56). See methodology.txt 109.
+- "I like concept one and I'd like the sub tabs to be collapsed by
+  default"
+  **Status: shipped.** Restructured Crane Layout's 3D preview toggle
+  list into three collapsible groups (360° Slew Radius Circles,
+  Clearance Measurements, Reference Overlays), all closed by default,
+  reusing a lighter variant of the app's existing details/summary
+  collapsible-card pattern. No JS logic changes needed - every
+  checkbox's id/onchange stayed the same. Verified by rendering the
+  actual function standalone in a real browser before shipping. Shipped
+  to main (CACHE_VERSION v263->v264, app v7.6->v7.7). See
+  methodology.txt 110.

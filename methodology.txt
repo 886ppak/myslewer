@@ -11743,3 +11743,38 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v262->v263, app version v7.5->v7.6, CARRIER3D_VERSION
   55->56.
+
+110. Crane Layout toggle panel: collapsible groups, closed by default
+
+  Panel had grown to ~11 flat checkboxes (5 radius circles + 2 clearance
+  + 2 nested + ground layout + box hide + 50% span, the last three all
+  added this session) - person asked to brainstorm cleanup options.
+  Published 3 mockups as a pinned artifact using the app's own real
+  colors/components for a fair comparison: collapsible groups (matching
+  the Layout Dimensions/360° Slew Clearance pattern already used lower
+  on this same tab), a Display Options sheet, and radius circles as
+  chips + a compact two-column grid. Person picked concept 1, closed by
+  default.
+
+  Grouped into three details.toggle-group sections - "360° Slew Radius
+  Circles", "Clearance Measurements", "Reference Overlays" - a new,
+  lighter CSS variant of the existing details.card/summary.card-title
+  chevron pattern (not reusing .card directly, since nesting a full card
+  inside the already-existing "3D Carrier Preview" card would double up
+  the border/background). Every checkbox kept its exact id and data-*
+  attributes unchanged - onSlewCircleToggle/onGroundLayoutToggle/
+  toggleCarrier3DPartGroup/toggleCarrier3DOutrigger50Pct all look things
+  up by id or by a #carrier-3d-slew-toggles-scoped selector, never by
+  DOM position, so grouping the markup needed zero JS changes beyond the
+  template restructure itself.
+
+  Verified before shipping by extracting the actual updated function
+  and CSS and rendering them standalone in a real browser against fake
+  SLEW_CLEARANCE_DATA - confirmed all three groups render closed by
+  default, expand correctly, and every label/checkbox matches the
+  original content exactly (a first render hit a mojibake artifact from
+  the test page's own missing <meta charset> - confirmed via the real
+  index.html that it already declares UTF-8, so purely a test-harness
+  gap, not an app bug).
+
+  CACHE_VERSION v263->v264, app version v7.6->v7.7.
