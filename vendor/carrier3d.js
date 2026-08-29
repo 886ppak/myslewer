@@ -51,6 +51,7 @@ let slewCircleGroup = null;
 let groundLayoutGroup = null;
 let matEdgeGroup = null;
 let targetMatEdgeGroup = null;
+let noGoZoneGroup = null;
 // Which DOM wrap/label the single shared canvas is currently parented
 // into - there are two possible mount points now (Support Pad Placement's
 // own 3D card, and Crane Layout's own 3D card), never both showing at
@@ -106,6 +107,14 @@ const pendingMatEdgeContext = {};
 // clearing or redrawing one never touches the other.
 const pendingTargetMatEdgeMarks = {};
 const pendingTargetMatEdgeContext = {};
+// Same replay-once-loaded pattern again, for the no-go zone reference
+// overlay (see __carrier3dSetNoGoZone below, index.html's NOGO_ZONE_DATA)
+// - a seventh independent toggle, own pair of maps, same reasoning as
+// every other one above. sectors is the plain fromDeg/toDeg/minRadiusM/
+// label array straight from index.html - no per-crane transformation
+// needed before storing it, that all happens in buildNoGoZonePoints.
+const pendingNoGoZone = {};
+const pendingNoGoZoneContext = {};
 
 // AR placement state ("View in AR" button, both Support Pad Placement's
 // and Crane Layout's own toolbars - see index.html's AR_SUPPORTED_MODELS).
@@ -254,6 +263,12 @@ function onCanvasPointerUp(ev) {
   const movedPx = Math.hypot(ev.clientX - downPos.x, ev.clientY - downPos.y);
   if (movedPx > IDENTIFY_TAP_MOVE_THRESHOLD_PX) return; // was an orbit/pan drag, not a tap
   identifyAtPoint(ev.clientX, ev.clientY);
+  // Same tap gesture, second independent consumer - noGoZoneAtPoint is a
+  // no-op whenever the no-go zone overlay isn't currently on (checks
+  // noGoZoneGroup itself), same early-return pattern identifyAtPoint
+  // uses for identifyModeActive, so both can safely run off every tap
+  // without needing a mode flag to arbitrate between them.
+  noGoZoneAtPoint(ev.clientX, ev.clientY);
 }
 
 function identifyAtPoint(clientX, clientY) {
@@ -439,6 +454,7 @@ function clearScene() {
   groundLayoutGroup = null;
   matEdgeGroup = null;
   targetMatEdgeGroup = null;
+  noGoZoneGroup = null;
 }
 
 function clearOutriggers() {
@@ -474,6 +490,13 @@ function clearTargetMatEdgeMarks() {
   scene.remove(targetMatEdgeGroup);
   disposeGroup(targetMatEdgeGroup);
   targetMatEdgeGroup = null;
+}
+
+function clearNoGoZone() {
+  if (!noGoZoneGroup) return;
+  scene.remove(noGoZoneGroup);
+  disposeGroup(noGoZoneGroup);
+  noGoZoneGroup = null;
 }
 
 function loadGLTFAsync(url) {
@@ -662,6 +685,7 @@ window.__carrier3dActivate = function (modelKey, url, wrapId, labelId, calibrati
     clearGroundLayoutMarks();
     clearMatEdgeMarks();
     clearTargetMatEdgeMarks();
+    clearNoGoZone();
   }
 
   const cached = modelCache[modelKey];
@@ -690,6 +714,10 @@ window.__carrier3dActivate = function (modelKey, url, wrapId, labelId, calibrati
       if (pendingTargetMatEdgeMarks[modelKey]) {
         const ctx = pendingTargetMatEdgeContext[modelKey] || {};
         applyTargetMatEdgeMarks(modelKey, root, pendingTargetMatEdgeMarks[modelKey], ctx.footprint, ctx.calibration);
+      }
+      if (pendingNoGoZone[modelKey]) {
+        const ctx = pendingNoGoZoneContext[modelKey] || {};
+        applyNoGoZone(modelKey, root, pendingNoGoZone[modelKey], ctx.footprint, ctx.calibration);
       }
     });
   }
@@ -1496,6 +1524,142 @@ window.__carrier3dSetGroundLayoutMarks = function (modelKey, marks, footprint, c
   applyGroundLayoutMarks(modelKey, root, marks, footprint, calibration);
 };
 
+// No-go zone reference overlay (Crane Layout's "Show no-go zone"
+// checkbox - index.html's NOGO_ZONE_DATA). sectors is
+// [{fromDeg, toDeg, minRadiusM, label}], each one meaning "off the rear
+// pole, applied identically to both the left and right side" - the SAME
+// 0-180deg convention Lift Logger's own slew dial uses (0deg = dead over
+// the rear, 180deg = dead over the front), confirmed with the person
+// directly before writing any of this - NOT a raw 0-360deg bearing
+// stacked around the circle. See methodology.txt 112.
+//
+// Drawn as one continuous stepped ring by walking side=+1 (right) then
+// side=-1 (left) through the same sector table both times - right's
+// 0->180deg sweep naturally ends at the front pole, then left's own
+// 0->180deg sweep (traversed in reverse, front back to rear) continues
+// the SAME loop back to the start, so it closes into a single dashed
+// line with no seam. Each sector is walked at its own constant
+// minRadiusM (an arc, not interpolated toward the next sector's radius)
+// with the jump between two different radii at a shared boundary angle
+// left as a straight radial segment - deliberately NOT smoothed, since
+// the source data is a genuine step function (this minimum right up
+// until this angle, then a different one), and smoothing across it
+// would visually imply in-between values that were never actually
+// given.
+function buildNoGoZonePoints(cal, sectors) {
+  const SEGMENTS_PER_180 = 48;
+  const points = [];
+  const sides = [1, -1]; // right sweeps rear->front ascending; left continues front->rear, same table, mirrored by sin()'s own sign
+  sides.forEach((side, sideIdx) => {
+    const orderedSectors = sideIdx === 0 ? sectors : sectors.slice().reverse();
+    orderedSectors.forEach((sector) => {
+      const steps = Math.max(1, Math.round(SEGMENTS_PER_180 * (sector.toDeg - sector.fromDeg) / 180));
+      const startDeg = sideIdx === 0 ? sector.fromDeg : sector.toDeg;
+      const endDeg = sideIdx === 0 ? sector.toDeg : sector.fromDeg;
+      for (let i = 0; i <= steps; i++) {
+        const deg = startDeg + (endDeg - startDeg) * (i / steps);
+        const rad = deg * Math.PI / 180;
+        const radiusMm = sector.minRadiusM * 1000;
+        const lateralMm = side * radiusMm * Math.sin(rad);
+        const longitudinalMm = radiusMm * Math.cos(rad);
+        points.push(siteToWorld(cal, lateralMm, longitudinalMm));
+      }
+    });
+  });
+  points.push(points[0].clone()); // close the loop
+  return points;
+}
+
+function applyNoGoZone(modelKey, root, sectors, footprint, calibration) {
+  clearNoGoZone();
+  if (!sectors || !sectors.length) return;
+  const cal = ensureSlewCalibration(modelKey, root, footprint, calibration);
+  if (!cal) return;
+
+  const rawPoints = buildNoGoZonePoints(cal, sectors);
+  // Sits just above the plain slew circles' own 0.03 ground offset (see
+  // applySlewCircles) so this draws on top of them rather than
+  // z-fighting when both happen to be on at once.
+  const y = cal.groundY + 0.035;
+  const points = rawPoints.map((p) => new THREE.Vector3(p.x, y, p.z));
+  const geo = new THREE.BufferGeometry().setFromPoints(points);
+  // LineDashedMaterial, not the plain LineLoop/LineBasicMaterial the
+  // reference slew circles use - reads as a warning boundary rather than
+  // just another radius option. computeLineDistances() is required for
+  // the dash pattern to actually render (Three.js measures dash/gap
+  // along the accumulated segment distance, which doesn't exist until
+  // this runs) - a real, easy-to-forget step, not optional here.
+  const mat = new THREE.LineDashedMaterial({ color: '#ff1a1a', dashSize: 0.35, gapSize: 0.2, linewidth: 1, depthTest: false, depthWrite: false });
+  const line = new THREE.Line(geo, mat);
+  line.computeLineDistances();
+  line.renderOrder = 12;
+
+  noGoZoneGroup = new THREE.Group();
+  noGoZoneGroup.add(line);
+  // Stashed on the group (not a module-level variable) so a stale
+  // reading can never survive a clearNoGoZone() - once the group's gone,
+  // there's nothing left for noGoZoneAtPoint to read.
+  noGoZoneGroup.userData.cal = cal;
+  noGoZoneGroup.userData.sectors = sectors;
+  scene.add(noGoZoneGroup);
+}
+
+window.__carrier3dSetNoGoZone = function (modelKey, sectors, footprint, calibration) {
+  pendingNoGoZone[modelKey] = sectors;
+  pendingNoGoZoneContext[modelKey] = { footprint, calibration };
+  if (currentModelKey !== modelKey || !scene) return;
+  const root = modelCache[modelKey];
+  if (!root) return; // still loading - replayed once it's in, see __carrier3dActivate
+  applyNoGoZone(modelKey, root, sectors, footprint, calibration);
+};
+
+// Tap-to-read-info for the no-go zone ring - deliberately NOT a raycast
+// against the dashed Line itself (a thin, gapped target that's genuinely
+// hard to hit precisely on a phone screen), but a ray/ground-plane
+// intersection plus the exact same polar math buildNoGoZonePoints uses
+// to draw the ring in the first place, so a tap ANYWHERE along the
+// right angular direction reads back that sector's real boundary - not
+// "did you happen to hit this exact dash." Reuses the same shared
+// raycaster/mouse/camera as identifyAtPoint above.
+function noGoZoneAtPoint(clientX, clientY) {
+  if (!noGoZoneGroup) return;
+  const cal = noGoZoneGroup.userData.cal;
+  const sectors = noGoZoneGroup.userData.sectors;
+  if (!cal || !sectors) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -cal.groundY);
+  const hitPoint = new THREE.Vector3();
+  if (!raycaster.ray.intersectPlane(plane, hitPoint)) {
+    if (window.__carrier3dOnNoGoZoneTapped) window.__carrier3dOnNoGoZoneTapped(null);
+    return;
+  }
+  // Inverse of siteToWorld: world -> site-plan mm (see that function's
+  // own comment on the convention - x = lateral +right, y = longitudinal
+  // +rear).
+  const lateralMm = (hitPoint.x - cal.lateralCenter) / cal.xSlope;
+  const longitudinalMm = (hitPoint.z - cal.slewZ) / cal.zSlope;
+  const tappedRadiusMm = Math.hypot(lateralMm, longitudinalMm);
+  // atan2(|lateral|, longitudinal): 0 at dead rear (lateral=0,
+  // longitudinal=+r), 90 at dead side (longitudinal=0), 180 at dead
+  // front (lateral=0, longitudinal=-r) - exactly the 0-180-off-the-rear-
+  // pole convention NOGO_ZONE_DATA's sectors are defined in, regardless
+  // of which side the tap landed on.
+  const deg = Math.atan2(Math.abs(lateralMm), longitudinalMm) * 180 / Math.PI;
+  const side = lateralMm >= 0 ? 'right' : 'left';
+  const sector = sectors.find((s) => deg >= s.fromDeg && deg < s.toDeg) || sectors[sectors.length - 1];
+  if (window.__carrier3dOnNoGoZoneTapped) {
+    window.__carrier3dOnNoGoZoneTapped({
+      side,
+      sectorLabel: sector.label,
+      minRadiusM: sector.minRadiusM,
+      tappedRadiusM: tappedRadiusMm / 1000
+    });
+  }
+}
+
 // Support Pad Placement's "Current Mat Marks" / "Target Mat Marks" toggles -
 // the 3D counterpart of the Bog Mat Marking table (index.html), for a leg
 // that currently has a pad toggled on. marks is an array of {label, color,
@@ -1844,7 +2008,7 @@ window.__carrier3dEnterAR = async function (modelKey, footprint, calibration, an
   // exact same anchor-relative local space as root, so it moves and
   // rotates with the placed model instead of staying behind at its old
   // orbit-preview position.
-  arCarriedGroups = [outriggerGroup, slewCircleGroup, groundLayoutGroup, matEdgeGroup, targetMatEdgeGroup].filter(Boolean);
+  arCarriedGroups = [outriggerGroup, slewCircleGroup, groundLayoutGroup, matEdgeGroup, targetMatEdgeGroup, noGoZoneGroup].filter(Boolean);
   arCarriedGroups.forEach((group) => {
     scene.remove(group);
     group.position.set(-anchorX, -anchorY, -anchorZ);

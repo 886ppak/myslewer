@@ -786,3 +786,35 @@ a working record, not app content.
   the checkbox itself always starts unticked). Verified live before
   shipping. Shipped to main (CACHE_VERSION v264->v265, app v7.7->v7.8).
   See methodology.txt 111.
+- "okay I have some data for no go zone radius on vario base x% (but
+  outriggers set at 50% extention) with 105 CWT and buckets set to
+  6.4m ... do you understand how to build this red hashed no go
+  radius circle ?" followed by clarification that the overlay must
+  explicitly state it's for 105t CWT / 6.4m ballast only, that the
+  angles use the Lift Logger's own 0-180° + side dial convention
+  ("0 being directly over the rear, 180 directly over the front"), and
+  ("can you make sure you use "<" ">" symbology... this is the actual
+  symbology the crane uses") that it must use LICCON's own boundary
+  notation, not a translated plain-language range - then "Yeah go
+  ahead"
+  **Status: shipped.** New "Show no-go zone" checkbox in Reference
+  Overlays (LTM 1650 only, gated on the data existing) draws a dashed
+  red ring on the ground plane at the given step-function minimum
+  radii (3.1m / 7.8m / 3.1m across the <58° / >58°-<122° / >122°
+  sectors), mirrored across both sides per the confirmed dial
+  convention so the ring closes into one continuous loop, with no
+  smoothing between sectors since the source data is a genuine step
+  function, not a curve. Checkbox label spells out "VarioBase 50%
+  span, 105t CWT / 6.4m ballast only" directly in the text (not a
+  tooltip) since this dataset isn't valid for any other CWT/ballast
+  combination. Tapping the ring reads back that sector's own boundary
+  label using the same "<"/">" notation, via ground-plane-ray
+  intersection + inverse polar math rather than raycasting the thin
+  dashed line itself. Verified in three independent stages: a pure-
+  math round-trip test (forward polar->world and back, confirming the
+  step discontinuity at each sector boundary is intentional, not a
+  bug), a real GLTFLoader/DRACOLoader render against the live model
+  (screenshot confirmed a correctly-scalloped ring sitting right at
+  the rear outriggers), and a standalone checkbox/label/wiring test.
+  Shipped to main (CACHE_VERSION v265->v266, app v7.8->v7.9,
+  CARRIER3D_VERSION 56->57). See methodology.txt 112.

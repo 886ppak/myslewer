@@ -11811,3 +11811,92 @@ cranes get their own subsections as they're built.
   __carrier3dSetPartGroupVisible with true/false correctly both ways.
 
   CACHE_VERSION v264->v265, app version v7.7->v7.8.
+
+112. No-go zone radius overlay - LTM 1650, VarioBase 50%, 105t/6.4m
+
+  First real payoff of the whole no-go-zone thread from earlier in this
+  session (entries covering the geometry-vs-manual-data question, then
+  the 50%-span model work in entries 106-108). Person supplied the
+  actual LICCON-sourced boundary data for one specific configuration -
+  VarioBase, outriggers at 50% extension, 105t counterweight, ballast
+  radius 6.4m:
+    <58deg: 3.1m min radius
+    >58deg - <122deg: 7.8m min radius
+    >122deg: 3.1m min radius
+  Confirmed the coordinate convention BEFORE writing any code (own
+  question, not assumed): matches Lift Logger's own slew dial exactly -
+  0deg = dead over the rear, 180deg = dead over the front, and this one
+  0-180 sector table applies IDENTICALLY to both the left and right side
+  (mirrored, not four different numbers stacked around the full 360).
+  Also confirmed the overlay must display the LICCON "<"/">" symbology
+  verbatim (matches the OUTRIGGER CENTER POSITIONS table style already
+  seen on the person's own DXF review), not a translated "58-122" range.
+
+  Implementation:
+  - index.html: NOGO_ZONE_DATA['1650'] holds cwtTonnes/ballastRadiusM
+    (for the mandatory config label) plus the sector table, each sector
+    carrying its own pre-formatted "<"/">" label string rather than
+    deriving display text from fromDeg/toDeg at render time - keeps the
+    on-screen text and the source data impossible to drift apart.
+  - New "Show no-go zone" checkbox in Reference Overlays, gated on
+    NOGO_ZONE_DATA[modelKey] existing (no separate crane-list constant -
+    same lesson as entry 111, one source of truth). Label spells out
+    "VarioBase 50% span, 105t CWT / 6.4m ballast only" directly in the
+    checkbox text, not a tooltip - this dataset is NOT valid for any
+    other CWT/ballast combination and the person was explicit that
+    needs to be obvious, not discoverable.
+  - carrier3d.js: buildNoGoZonePoints() converts the 0-180-per-side
+    table into actual site-plan mm coordinates via siteToWorld (x =
+    lateral +right, y = longitudinal +rear - the same convention
+    already used everywhere else in this module), walking side=+1
+    (right) then side=-1 (left) through the same sector table so the
+    whole thing closes into one continuous loop with no seam. Each
+    sector is drawn at its own constant radius (an arc), with a straight
+    radial jump at each sector boundary - deliberately NOT smoothed
+    between sectors, since the source data is a genuine step function,
+    not a curve, and interpolating would visually claim values that
+    were never given. Drawn with THREE.LineDashedMaterial (red) rather
+    than the plain LineLoop the reference slew circles use, so it reads
+    as a warning boundary - computeLineDistances() called explicitly,
+    since the dash pattern silently doesn't render without it.
+  - Tap-to-read-info reuses the existing tap-vs-drag gesture detection
+    (onCanvasPointerUp) but does NOT raycast the dashed line itself - a
+    thin, gapped target that's a genuinely poor raycast candidate,
+    especially on a phone screen. Instead: ray/ground-plane
+    intersection (the ring already lives at ground level) then the
+    exact inverse of the polar math used to draw it, so a tap anywhere
+    along the right angular direction reads back that sector's real
+    boundary. Readout uses the sector's own stored label string, same
+    "<"/">" symbology as everywhere else.
+  - Full pendingNoGoZone/pendingNoGoZoneContext replay-on-load pair
+    added (matching ground layout marks/slew circles' own pattern, NOT
+    the simpler no-replay approach entries 108/111 used for part-
+    visibility/position toggles) - this is a drawn overlay like those,
+    not a transform on already-loaded parts, so it needs the same
+    "ticked before the 3D model has even loaded" safety net. Also added
+    to clearScene/the wrap-change clear block and arCarriedGroups, same
+    as every other drawn overlay group.
+
+  Verification, in order, each one genuinely independent of the last:
+  1. Pure-math round-trip test (Node, no browser) - forward polar->site-
+     plan->world, then the exact inverse the tap handler uses, for a
+     spread of angles/sides/radii including right on the 58/122
+     boundaries - confirms the two are true inverses of each other and
+     the sector step discontinuity is intentional (a boundary angle
+     legitimately produces two valid radii, not a bug).
+  2. Real end-to-end render: loaded the actual carrier3d.js through a
+     real GLTFLoader/DRACOLoader instance (Playwright, same method as
+     entry 108's fix) against the live model, called
+     window.__carrier3dSetNoGoZone with the real sector data, and
+     screenshotted the result - a dashed red ring, correctly scalloped
+     (tight near the rear pole, bulging out at 90deg, matching the
+     3.1m/7.8m pattern), sitting right where the rear outriggers are.
+  3. Checkbox/label/wiring test (same standalone-render method as
+     entries 108/110/111) - confirms the label text, the exact sector
+     data (including the "<"/">" label strings) reaching
+     __carrier3dSetNoGoZone on toggle-on, footprint/calibration passed
+     through correctly, and the toggle-off path correctly clearing both
+     the 3D overlay and the on-screen readout.
+
+  CACHE_VERSION v265->v266, app version v7.8->v7.9, CARRIER3D_VERSION
+  56->57.
