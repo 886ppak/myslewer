@@ -4,7 +4,7 @@
 // reeving diagrams (see CONTENT_CACHE below) — those persist across updates
 // so a crew doesn't lose offline access to plans they've already viewed just
 // because an app update shipped.
-const CACHE_VERSION = 'myslewer-v277';
+const CACHE_VERSION = 'myslewer-v278';
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 
 // Fetched-on-demand content (reeving diagrams, etc). Fixed name, never
@@ -83,6 +83,14 @@ const CONTENT_CACHE = 'app-content-v1';
 // export issue), so treating them as stable/CONTENT_CACHE from day one
 // would risk exactly the stale-diagram bug methodology.txt 10.28
 // describes the first time a future correction ships.
+//
+// guides/paint-mark-method.html (linked from Bog Mat Marking's "How O/R %
+// Marking Works" button) is genuinely-edited explainer content, not a
+// stable one-off export - the very first version already needed a
+// correctness fix (the paint mark was keyed to the support plate's
+// centre instead of its outer edge) - so it gets the same APP_SHELL
+// update-guarantee as carrier3d.js above rather than falling into
+// CONTENT_CACHE's fetch-once-cache-forever path.
 const APP_SHELL = [
   './',
   './index.html',
@@ -108,7 +116,8 @@ const APP_SHELL = [
   './cad/x650-ps-69.jpg',
   './reeving/manifest.json',
   './vendor/carrier3d.js',
-  './vendor/cabentry3d.js'
+  './vendor/cabentry3d.js',
+  './guides/paint-mark-method.html'
 ];
 
 // Purged from CONTENT_CACHE on every activate WITHOUT being precached

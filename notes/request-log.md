@@ -1087,3 +1087,24 @@ a working record, not app content.
   worked example. Disclaimer text updated to match. Shipped to main
   (CACHE_VERSION v276->v277, app v7.19->v7.20; carrier3d.js untouched,
   CARRIER3D_VERSION stays 59). See methodology.txt 123.
+- "can you make animations...showing the outrigger getting extended to
+  say 56% a person marking the outside edge of support plate...then
+  retracting back to 50%...lifting the bog mat into place...then
+  extending the outrigger to 100% to show that it now lines up
+  perfectly with the center of the bog mat" - built a 6-step animated
+  SVG walkthrough, first published privately as a Claude Artifact and
+  pushed as a phone notification. Person caught a real bug: "the
+  little person is meant to mark the outside edge...looks like you
+  have him marking the center line" - correct, the plate's local
+  geometry was centred on the beam pivot so the mark math was using
+  the plate's centre, not its edge. Fixed and re-verified with actual
+  element bounding boxes. Then: "so other users will be able to get to
+  this link?" - no, Artifacts are private by default - followed by
+  "can you not just wire it into the pwa GitHub some how?"
+  **Status: shipped.** Rebuilt as a real standalone page in the repo
+  (guides/paint-mark-method.html) and linked from the Bog Mat Marking
+  card's new "How O/R % Marking Works" button, gated by the same
+  showPctCol condition as the O/R % table column. Added to sw.js's
+  APP_SHELL (genuinely-edited content, not a stable export - it
+  already needed one correctness fix). Shipped to main (CACHE_VERSION
+  v277->v278, app v7.20->v7.21). See methodology.txt 124.

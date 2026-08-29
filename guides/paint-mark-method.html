@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paint-Mark Method — Myslewer</title>
+<meta name="description" content="An animated walkthrough of using an outrigger's own extension as a tape measure to place a bog mat before the crane ever fully deploys.">
+<link rel="icon" href="../icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap">
+<style>
+  :root {
+    --ground: #efece3;
+    --surface: #ffffff;
+    --panel: #faf8f2;
+    --line: #3a4048;
+    --line-soft: #cdc6b6;
+    --steel: #5c6672;
+    --steel-dark: #384049;
+    --dirt: #a3896a;
+    --dirt-deep: #7c6549;
+    --accent: #ff6a1a;
+    --accent-soft: #ffe0c9;
+    --success: #16a34a;
+    --success-soft: #d3f3df;
+    --text: #1c2127;
+    --text-muted: #5c6672;
+    --chip-bg: #1c2127;
+    --chip-fg: #ffb347;
+    --shadow: rgba(28, 33, 39, 0.14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #12161b;
+      --surface: #1c222a;
+      --panel: #191e24;
+      --line: #7c8794;
+      --line-soft: #333c45;
+      --steel: #8fa0aa;
+      --steel-dark: #495661;
+      --dirt: #6b5638;
+      --dirt-deep: #4a3a24;
+      --accent: #ff7a2e;
+      --accent-soft: #4a2c14;
+      --success: #4ade80;
+      --success-soft: #16341f;
+      --text: #edf1f4;
+      --text-muted: #94a1ab;
+      --chip-bg: #0c0f12;
+      --chip-fg: #ffc266;
+      --shadow: rgba(0, 0, 0, 0.45);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: 'Archivo', system-ui, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 28px 16px 40px;
+  }
+  .back-link {
+    display: block;
+    width: 100%;
+    max-width: 980px;
+    margin: 0 auto 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+  .back-link:hover { color: var(--accent); }
+  .page {
+    width: 100%;
+    max-width: 980px;
+    display: flex;
+    flex-direction: column;
+  }
+  .sheet {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: 4px;
+    box-shadow: 0 24px 60px -30px var(--shadow);
+    position: relative;
+  }
+  .sheet::before, .sheet::after,
+  .sheet .tick-br, .sheet .tick-bl {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--accent);
+  }
+  .sheet::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .sheet::after { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+  .tick-bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
+  .tick-br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+  .sheet__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+    padding: 28px 32px 18px;
+    border-bottom: 1px solid var(--line-soft);
+    flex-wrap: wrap;
+  }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 6px;
+  }
+  h1 {
+    font-family: 'Big Shoulders Display', system-ui, sans-serif;
+    font-weight: 800;
+    font-size: clamp(2.1rem, 5vw, 3.1rem);
+    line-height: 0.92;
+    letter-spacing: 0.005em;
+    margin: 0;
+    text-transform: uppercase;
+    text-wrap: balance;
+    color: var(--text);
+  }
+  .sheet__meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-align: right;
+    line-height: 1.5;
+  }
+  .sheet__meta b { color: var(--text); font-weight: 600; }
+
+  .stage {
+    position: relative;
+    margin: 0 20px;
+    margin-top: 20px;
+    border: 1px solid var(--line-soft);
+    border-radius: 3px;
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--panel) 0%, var(--panel) 68%, var(--dirt) 68%, var(--dirt-deep) 100%);
+  }
+  .rig { display: block; width: 100%; height: auto; }
+
+  .caption-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--line-soft);
+    background: var(--surface);
+  }
+  .step-badge {
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    color: var(--chip-fg);
+    background: var(--chip-bg);
+    border-radius: 3px;
+    padding: 6px 9px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .caption-text {
+    font-size: 0.95rem;
+    line-height: 1.4;
+    color: var(--text);
+    min-height: 1.4em;
+  }
+  .caption-text .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 32px 28px;
+    flex-wrap: wrap;
+  }
+  .transport {
+    display: flex;
+    gap: 8px;
+  }
+  .btn {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 600;
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line-soft);
+    border-radius: 3px;
+    padding: 9px 16px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: border-color 0.15s ease, transform 0.1s ease;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn--primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #17110a;
+  }
+
+  .steps-track {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .step-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 3px;
+    border: 1px solid var(--line-soft);
+    background: var(--panel);
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .step-dot:hover { border-color: var(--accent); color: var(--text); }
+  .step-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .step-dot.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #17110a;
+  }
+  .step-dot.is-done { color: var(--accent); border-color: var(--accent-soft); }
+
+  .foot-note {
+    padding: 0 32px 26px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.55;
+    max-width: 62ch;
+  }
+  .foot-note b { color: var(--text); font-weight: 600; }
+
+  /* --- SVG rig elements --- */
+  .grid-line { stroke: var(--line-soft); stroke-width: 1; opacity: 0.5; }
+  .ground-line { stroke: var(--line); stroke-width: 2; }
+  .carrier-body { fill: var(--steel-dark); }
+  .carrier-detail { fill: var(--steel); }
+  .wheel { fill: var(--steel-dark); stroke: var(--line); stroke-width: 1.5; }
+  .wheel-hub { fill: var(--steel); }
+  .beam { fill: var(--steel); }
+  .beam-shade { fill: var(--steel-dark); }
+  .strut { fill: var(--steel-dark); }
+  .plate { fill: var(--line); stroke: var(--steel); stroke-width: 1.5; }
+  .plate.aligned { fill: var(--success); stroke: var(--success); }
+  .boom { stroke: var(--steel); stroke-width: 7; stroke-linecap: round; fill: none; }
+  .cab { fill: var(--steel-dark); }
+  .mark-line { stroke: var(--accent); stroke-width: 3; stroke-dasharray: 6 5; opacity: 0; }
+  .mark-dot { fill: var(--accent); opacity: 0; }
+  .mat-body { fill: var(--dirt-deep); stroke: var(--line); stroke-width: 1.5; }
+  .mat-plank { stroke: var(--dirt); stroke-width: 1.5; opacity: 0.7; }
+  .mat-center-tick { stroke: var(--line-soft); stroke-width: 2; stroke-dasharray: 3 3; }
+  .mat-center-tick.hit { stroke: var(--success); }
+  .person-body { fill: none; stroke: var(--text); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+  .person-head { fill: var(--text); }
+  .paint-can { fill: var(--accent); }
+  .readout {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+  }
+  .readout-bg { fill: var(--chip-bg); }
+  .readout-text { fill: var(--chip-fg); font-size: 20px; }
+  .readout-label { fill: var(--text-muted); font-size: 11px; font-family: 'Archivo', sans-serif; font-weight: 600; letter-spacing: 0.06em; }
+  .align-pulse { fill: none; stroke: var(--success); stroke-width: 3; opacity: 0; }
+
+  /* footGroup (strut+plate) intentionally has NO CSS transition - its
+     transform is set every animation frame by the same JS loop that
+     drives the beam's width and the readout number, so all three stay
+     perfectly in sync (a CSS transition here would use its own easing
+     curve, drifting out of step with the JS-tweened number). */
+  .mat-group { transition: transform 0.9s cubic-bezier(0.34, 1.4, 0.64, 1), opacity 0.4s ease; }
+  .boom-group { transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.34, 1.2, 0.64, 1); }
+  .person-group { transition: opacity 0.5s ease, transform 0.5s ease; }
+  .mark-line, .mark-dot { transition: opacity 0.4s ease; }
+  .align-pulse { transition: opacity 0.5s ease; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mat-group, .boom-group, .person-group, .mark-line, .mark-dot, .align-pulse {
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .sheet__head { padding: 22px 18px 16px; }
+    .sheet__meta { text-align: left; }
+    .stage { margin: 16px 12px 0; }
+    .caption-bar { padding: 12px 14px; }
+    .controls { padding: 14px 18px 22px; }
+    .foot-note { padding: 0 18px 22px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="../index.html">&larr; Back to Myslewer</a>
+
+  <div class="sheet">
+    <div class="tick-bl"></div>
+    <div class="tick-br"></div>
+
+    <div class="sheet__head">
+      <div>
+        <p class="eyebrow">Outrigger positioning &middot; Support Pad Placement</p>
+        <h1>Paint&#8209;Mark&nbsp;Method</h1>
+      </div>
+      <div class="sheet__meta">LTM 1650&#8209;8.1 &middot; <b>C2</b> corner (front&#8209;right)<br>Support plate 700&nbsp;mm</div>
+    </div>
+
+    <div class="stage">
+      <svg class="rig" viewBox="0 0 1320 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Animated diagram of an outrigger extending to mark, then retracting, then extending fully to align with a bog mat">
+        <!-- reference grid -->
+        <line class="grid-line" x1="0" y1="120" x2="1320" y2="120"></line>
+        <line class="grid-line" x1="0" y1="240" x2="1320" y2="240"></line>
+
+        <!-- ground -->
+        <line class="ground-line" x1="0" y1="360" x2="1320" y2="360"></line>
+
+        <!-- boom (appears step 4) -->
+        <g class="boom-group" id="boomGroup" style="opacity:0; transform-origin:118px 210px; transform:rotate(-6deg) translateY(6px);">
+          <path class="boom" d="M118,210 L470,70"></path>
+          <rect class="cab" x="86" y="182" width="52" height="46" rx="4"></rect>
+        </g>
+
+        <!-- carrier -->
+        <g>
+          <rect class="carrier-body" x="24" y="216" width="176" height="96" rx="6"></rect>
+          <rect class="carrier-detail" x="40" y="230" width="60" height="34" rx="3"></rect>
+          <circle class="wheel" cx="68" cy="322" r="24"></circle>
+          <circle class="wheel-hub" cx="68" cy="322" r="8"></circle>
+          <circle class="wheel" cx="150" cy="322" r="24"></circle>
+          <circle class="wheel-hub" cx="150" cy="322" r="8"></circle>
+        </g>
+
+        <!-- readout chip -->
+        <g id="readoutChip">
+          <rect class="readout-bg" x="24" y="34" width="150" height="52" rx="4"></rect>
+          <text class="readout-label" x="36" y="52">OUTRIGGER C2</text>
+          <text class="readout readout-text" id="readoutText" x="36" y="76">0%</text>
+        </g>
+
+        <!-- outrigger: the beam TELESCOPES (fixed base, width grows) - it
+             doesn't float as a rigid block, it stays attached to the
+             carrier the whole time, same as a real outrigger beam. The
+             foot (strut + plate) is a separate group that translates to
+             wherever the beam's current outer end is. Both are driven
+             from the same pct value every animation frame so they can
+             never visually separate or lag out of sync. -->
+        <rect class="beam-shade" x="186" y="296" width="14" height="26"></rect>
+        <rect class="beam" id="beamRect" x="190" y="288" width="0" height="18"></rect>
+        <g id="footGroup" style="transform: translateX(0px);">
+          <rect class="strut" x="185" y="300" width="10" height="60"></rect>
+          <rect class="plate" id="plateRect" x="167" y="352" width="46" height="14" rx="2"></rect>
+          <circle class="align-pulse" id="alignPulse" cx="190" cy="359" r="10"></circle>
+        </g>
+
+        <!-- paint mark, fixed to the ground once placed -->
+        <line class="mark-line" id="markLine" x1="554" y1="322" x2="554" y2="360"></line>
+        <circle class="mark-dot" id="markDot" cx="554" cy="360" r="4"></circle>
+
+        <!-- person: local coords centered on x=0 so the group's own
+             translateX can place them exactly AT any target x without
+             needing an offset that has to be re-derived by hand -->
+        <g class="person-group" id="personGroup" style="opacity:0; transform: translate(0px, 0px);">
+          <circle class="person-head" cx="0" cy="300" r="9"></circle>
+          <path class="person-body" d="M0,309 L0,338 M0,316 L-22,332 M0,316 L-20,300 M0,338 L-14,360 M0,338 L16,360"></path>
+          <rect class="paint-can" x="-28" y="326" width="12" height="10" rx="1"></rect>
+        </g>
+
+        <!-- bog mat -->
+        <g class="mat-group" id="matGroup" style="opacity:0; transform: translateY(-70px);">
+          <rect class="mat-body" x="554" y="340" width="572" height="20" rx="2"></rect>
+          <line class="mat-plank" x1="668" y1="340" x2="668" y2="360"></line>
+          <line class="mat-plank" x1="782" y1="340" x2="782" y2="360"></line>
+          <line class="mat-plank" x1="896" y1="340" x2="896" y2="360"></line>
+          <line class="mat-plank" x1="1010" y1="340" x2="1010" y2="360"></line>
+          <line class="mat-plank" x1="1124" y1="340" x2="1124" y2="360"></line>
+          <line class="mat-center-tick" id="matCenterTick" x1="840" y1="330" x2="840" y2="368"></line>
+        </g>
+      </svg>
+
+      <div class="caption-bar">
+        <span class="step-badge">STEP <span id="stepNumText">1</span>/6</span>
+        <span class="caption-text" id="captionText"></span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="transport">
+        <button class="btn btn--primary" id="playBtn" type="button">Pause</button>
+        <button class="btn" id="restartBtn" type="button">Restart</button>
+      </div>
+      <div class="steps-track" id="stepsTrack" role="tablist" aria-label="Jump to step"></div>
+    </div>
+
+    <p class="foot-note">The 56% extension is a <b>no-load, measuring-only</b> position &mdash; never a load-rated stage. Its only job is to put the support plate's own outer edge on a specific ground mark so the bog mat can be placed correctly <i>before</i> the outrigger is ever fully deployed.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  var BEAM_X0 = 190;      // fixed pivot - where the beam attaches to the carrier, never moves
+  var MAX_REACH = 650;    // px of travel from 0% to 100%
+  function plateX(pct) { return BEAM_X0 + (pct / 100) * MAX_REACH; }
+
+  // plateX() gives the CENTRE of the foot/plate group (the plate rect's
+  // local geometry is centred on BEAM_X0). What actually gets painted -
+  // and what the mat has to line up against - is the plate's OUTSIDE
+  // edge (the face farthest from the carrier), same as the real O/R %
+  // calculator in the app itself. PLATE_HALF_W matches the plate rect's
+  // own local half-width (x="167" width="46" -> half-width 23) so this
+  // stays exact if that geometry ever changes.
+  var PLATE_HALF_W = 23;
+  function outerEdgeX(pct) { return plateX(pct) + PLATE_HALF_W; }
+
+  var MARK_PCT = 56;
+  var markX = outerEdgeX(MARK_PCT);
+  var finalX = outerEdgeX(100);
+  var matLeft = markX;
+  var matWidth = 2 * (finalX - markX);
+  var matCenter = matLeft + matWidth / 2; // == finalX, by construction
+
+  var beamRect = document.getElementById('beamRect');
+  var footGroup = document.getElementById('footGroup');
+  var plateRect = document.getElementById('plateRect');
+  var readoutText = document.getElementById('readoutText');
+  var markLine = document.getElementById('markLine');
+  var markDot = document.getElementById('markDot');
+  var personGroup = document.getElementById('personGroup');
+  var matGroup = document.getElementById('matGroup');
+  var matCenterTick = document.getElementById('matCenterTick');
+  var boomGroup = document.getElementById('boomGroup');
+  var alignPulse = document.getElementById('alignPulse');
+  var captionText = document.getElementById('captionText');
+  var stepNumText = document.getElementById('stepNumText');
+  var playBtn = document.getElementById('playBtn');
+  var restartBtn = document.getElementById('restartBtn');
+  var stepsTrack = document.getElementById('stepsTrack');
+
+  var prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Redraw the mat + its centre tick from the SAME plateX() the beam
+  // itself uses, rather than trusting the static markup's guessed
+  // coordinates - guarantees the "lands exactly on centre" moment is
+  // geometrically true, not just visually close.
+  var matBody = matGroup.querySelector('.mat-body');
+  matBody.setAttribute('x', matLeft);
+  matBody.setAttribute('width', matWidth);
+  matCenterTick.setAttribute('x1', matCenter);
+  matCenterTick.setAttribute('x2', matCenter);
+  var planks = matGroup.querySelectorAll('.mat-plank');
+  var plankCount = planks.length;
+  planks.forEach(function (pl, i) {
+    var x = matLeft + matWidth * ((i + 1) / (plankCount + 1));
+    pl.setAttribute('x1', x); pl.setAttribute('x2', x);
+  });
+  markLine.setAttribute('x1', markX); markLine.setAttribute('x2', markX);
+  markDot.setAttribute('cx', markX);
+
+  // Beam + foot are driven together, every frame, by ONE tween - see
+  // applyPct/tweenPct below. A CSS transition on the foot group here
+  // would use its own easing curve and drift out of sync with the
+  // beam's width and the readout number, which are numeric and JS-only.
+  function applyPct(pct) {
+    var dx = plateX(pct) - BEAM_X0;
+    beamRect.setAttribute('width', Math.max(0, dx + 5));
+    footGroup.style.transform = 'translateX(' + dx + 'px)';
+    readoutText.textContent = Math.round(pct) + '%';
+  }
+
+  var displayedPct = 0;
+  var pctRAF = null;
+  function tweenPct(from, to, dur, onDone) {
+    if (pctRAF) cancelAnimationFrame(pctRAF);
+    if (prefersReduced || dur <= 0) {
+      applyPct(to);
+      displayedPct = to;
+      if (onDone) onDone();
+      return;
+    }
+    var start = null;
+    function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+    function tick(ts) {
+      if (start === null) start = ts;
+      var t = Math.min(1, (ts - start) / dur);
+      applyPct(from + (to - from) * ease(t));
+      if (t < 1) {
+        pctRAF = requestAnimationFrame(tick);
+      } else {
+        pctRAF = null;
+        displayedPct = to;
+        if (onDone) onDone();
+      }
+    }
+    pctRAF = requestAnimationFrame(tick);
+  }
+
+  var STEPS = [
+    { caption: 'Push outrigger <b class="num">C2</b> out to <span class="num">56%</span> &mdash; a throwaway, no-load extension used purely to find a ground reference.', pct: MARK_PCT, dur: 1400 },
+    { caption: 'Mark the <b>outside edge</b> of the support plate with line-marking paint.', pct: MARK_PCT, dur: 1300 },
+    { caption: 'Retract to <span class="num">50%</span> &mdash; the crane&rsquo;s real working stage. The paint mark stays exactly where it is.', pct: 50, dur: 1400 },
+    { caption: 'Set the crane up on its real support stage.', pct: 50, dur: 1100 },
+    { caption: 'Lay the bog mat with its <b>inside edge</b> sitting right on the marked line.', pct: 50, dur: 1300 },
+    { caption: 'Extend to <span class="num">100%</span>. The plate lands exactly on the mat&rsquo;s centre &mdash; by design, not luck.', pct: 100, dur: 1900 }
+  ];
+
+  function showPerson() { personGroup.style.opacity = '1'; personGroup.style.transform = 'translate(' + markX + 'px, 0px)'; }
+  function hidePerson() { personGroup.style.opacity = '0'; }
+  function showBoom() { boomGroup.style.opacity = '1'; boomGroup.style.transform = 'rotate(0deg) translateY(0px)'; }
+  function showMat() { matGroup.style.opacity = '1'; matGroup.style.transform = 'translateY(0px)'; }
+  function showAlignment() {
+    matCenterTick.classList.add('hit');
+    plateRect.classList.add('aligned');
+    alignPulse.style.opacity = '1';
+    setTimeout(function () { alignPulse.style.opacity = '0'; }, 900);
+  }
+  function resetVisuals() {
+    matCenterTick.classList.remove('hit');
+    plateRect.classList.remove('aligned');
+    markLine.style.opacity = '0';
+    markDot.style.opacity = '0';
+    personGroup.style.opacity = '0';
+    boomGroup.style.opacity = '0';
+    boomGroup.style.transform = 'rotate(-6deg) translateY(6px)';
+    matGroup.style.opacity = '0';
+    matGroup.style.transform = 'translateY(-70px)';
+  }
+
+  var idx = 0;
+  var playing = true;
+  var timer = null;
+  var revealTimer = null;
+
+  function renderDots() {
+    stepsTrack.innerHTML = '';
+    STEPS.forEach(function (s, i) {
+      var d = document.createElement('button');
+      d.type = 'button';
+      d.className = 'step-dot';
+      d.textContent = (i + 1);
+      d.setAttribute('aria-label', 'Go to step ' + (i + 1));
+      d.addEventListener('click', function () { jumpTo(i); });
+      stepsTrack.appendChild(d);
+    });
+    updateDots();
+  }
+  function updateDots() {
+    var dots = stepsTrack.querySelectorAll('.step-dot');
+    dots.forEach(function (d, i) {
+      d.classList.toggle('is-active', i === idx);
+      d.classList.toggle('is-done', i < idx);
+    });
+  }
+
+  // Snaps every prop to exactly the state step `i` should show once
+  // fully entered - used both for an instant jump and to seed an
+  // animated entry's end-state reveals.
+  function applyStepVisuals(i) {
+    if (i === 0) { hidePerson(); markLine.style.opacity = '0'; markDot.style.opacity = '0'; boomGroup.style.opacity = '0'; matGroup.style.opacity = '0'; }
+    if (i === 1) { showPerson(); markLine.style.opacity = '1'; markDot.style.opacity = '1'; }
+    if (i >= 2) { hidePerson(); markLine.style.opacity = '1'; markDot.style.opacity = '1'; }
+    if (i >= 3) showBoom();
+    if (i >= 4) showMat();
+    if (i >= 5) showAlignment();
+  }
+
+  function enterStep(i, animate) {
+    if (revealTimer) { clearTimeout(revealTimer); revealTimer = null; }
+    idx = i;
+    var s = STEPS[i];
+    stepNumText.textContent = (i + 1);
+    captionText.innerHTML = s.caption;
+    updateDots();
+
+    if (!animate) {
+      applyStepVisuals(i);
+      tweenPct(displayedPct, s.pct, 0);
+      return;
+    }
+
+    // Reveal timing tied to THIS step's own transition, not the
+    // previous one - person appears then the mark gets painted partway
+    // through step 2; boom/mat fade in as their own step starts.
+    if (i === 1) {
+      showPerson();
+      revealTimer = setTimeout(function () {
+        if (idx !== 1) return;
+        markLine.style.opacity = '1';
+        markDot.style.opacity = '1';
+      }, s.dur * 0.55);
+    } else {
+      hidePerson();
+    }
+    if (i === 3) showBoom();
+    if (i === 4) showMat();
+
+    tweenPct(displayedPct, s.pct, s.dur, function () {
+      if (idx === 5) showAlignment();
+    });
+  }
+
+  function jumpTo(i) {
+    stop();
+    resetVisuals();
+    applyStepVisuals(i);
+    enterStep(i, false);
+    playing = false;
+    playBtn.textContent = 'Play';
+  }
+
+  function advance() {
+    var next = idx + 1;
+    if (next >= STEPS.length) {
+      timer = setTimeout(function () {
+        resetVisuals();
+        enterStep(0, false);
+        timer = setTimeout(advance, STEPS[0].dur + 500);
+      }, 1800);
+      return;
+    }
+    enterStep(next, true);
+    timer = setTimeout(advance, STEPS[next].dur + 350);
+  }
+
+  function play() {
+    playing = true;
+    playBtn.textContent = 'Pause';
+    timer = setTimeout(advance, STEPS[idx].dur + 350);
+  }
+  function stop() {
+    playing = false;
+    playBtn.textContent = 'Play';
+    if (timer) { clearTimeout(timer); timer = null; }
+  }
+
+  playBtn.addEventListener('click', function () {
+    if (playing) { stop(); } else { play(); }
+  });
+  restartBtn.addEventListener('click', function () {
+    stop();
+    resetVisuals();
+    enterStep(0, false);
+    if (!prefersReduced) play();
+  });
+
+  renderDots();
+  resetVisuals();
+  enterStep(0, false);
+  if (!prefersReduced) {
+    timer = setTimeout(advance, STEPS[0].dur + 500);
+  } else {
+    stop();
+  }
+})();
+</script>
+</body>
+</html>

@@ -12504,3 +12504,59 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v276->v277, app version v7.19->v7.20. carrier3d.js
   untouched, CARRIER3D_VERSION stays 59.
+
+124. Paint-Mark Method animated walkthrough (guides/paint-mark-method.html)
+
+  Person asked for an animation showing the O/R % technique end to
+  end: extend an outrigger to a no-load % to mark the plate's outer
+  edge in paint, retract to the real working stage, set up the crane,
+  lay the bog mat against the mark, then extend fully to prove the
+  plate lands exactly on the mat's centre. Built as a standalone
+  6-step SVG/JS animation (telescoping beam - fixed base, width grows,
+  rather than a rigid block floating off the carrier - foot/plate
+  translates separately, both driven from one JS tween loop per frame
+  so the beam width, foot position and readout % can never visually
+  drift apart), with step dots, autoplay, and a prefers-reduced-motion
+  fallback that snaps instantly with no autoplay.
+
+  First published as a private Claude Artifact and pushed to the
+  person's phone as a link. Person immediately caught a real bug from
+  the first version: the little person was painting the plate's
+  CENTRE, not its outer edge, because the plate rect's local geometry
+  is centred on the beam's fixed pivot (BEAM_X0) and the mark/mat math
+  had been keyed off that same centre-based plateX() output. Fixed by
+  introducing a separate outerEdgeX() (plateX() + the plate rect's own
+  local half-width) and rederiving the mark position and the "100%"
+  reference point from that instead - both had to move together or
+  the "lands exactly on centre" payoff at 100% would no longer be
+  geometrically true. Re-verified via Playwright element bounding
+  boxes (not just eyeballing) that the mark now lands on the plate's
+  rendered right edge, not its centre, and that the 100% alignment
+  still fires correctly against the corrected geometry.
+
+  Person then asked whether other users could reach the private
+  Artifact link, and pushed back on keeping it there - "can you not
+  just wire it into the pwa GitHub some how?" - so it was rebuilt as a
+  real page in the repo (guides/paint-mark-method.html, full standalone
+  HTML document rather than an Artifact-hosted fragment, since it no
+  longer has the Artifact host's auto-injected charset/viewport meta
+  and CDN allowlist to rely on) and linked from the Bog Mat Marking
+  card via a new "How O/R % Marking Works" button, shown/hidden with
+  the same showPctCol condition that already gates the O/R % table
+  column so the link never appears for a crane the feature doesn't
+  cover. Added to sw.js's APP_SHELL (not left to fall into
+  CONTENT_CACHE) since this is genuinely-edited explainer content, not
+  a stable one-off export - proven by the fact the very first version
+  already needed a correctness fix above.
+
+  Verified: full autoplay sequence sampled every 500ms confirms all 6
+  steps advance in order with correct pct tweening and a clean loop
+  back to step 1; light theme and prefers-reduced-motion both checked
+  separately (reduced-motion holds at the jumped-to step with no
+  autoplay drift); the standalone repo copy re-tested after the
+  Artifact-to-real-page conversion (proper DOCTYPE/charset, relative
+  ../icons/../index.html paths, no page errors, alignment class still
+  fires).
+
+  CACHE_VERSION v277->v278, app version v7.20->v7.21. carrier3d.js
+  untouched, CARRIER3D_VERSION stays 59.
