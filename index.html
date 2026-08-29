@@ -1521,7 +1521,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.16</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.17</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -6719,7 +6719,19 @@
       '1160': [[0, 2.45], [50, 5.38], [75, 6.84], [100, 8.30]],
       '1250': [[0, 2.70], [50, 5.50], [75, 6.90], [100, 8.30]],
       '1300': [[0, 2.68], [50, 5.60], [75, 7.06], [100, 8.53]],
-      '1650': [[0, 2.62], [25, 4.36], [50, 6.10], [75, 7.84], [100, 9.58]]
+      '1650': [[0, 2.62], [25, 4.36], [50, 6.10], [75, 7.84], [100, 9.58]],
+      // LRT 1100-2.1 - straight from its own OEM manual's "1.03 Technical
+      // data > 3.1 Support base" table (pulled via the person's Nextcloud
+      // share, see methodology.txt). Only two named stages exist in that
+      // table (61% and 100% - this chassis doesn't have the 0/50/75/100%
+      // step pattern the LTM fleet uses), so only two points here, unlike
+      // every other entry above. That means outriggerPercentForTarget
+      // can't independently cross-check linearity for this crane the way
+      // it could for the 1650 (5 points, all mutually consistent) - two
+      // points always look linear. Treated as linear anyway since that's
+      // this crane's own real hydraulic extension behavior (continuous,
+      // not pinned steps), not an assumption glossed over.
+      '1100': [[61, 5.5], [100, 7.3]]
     };
 
     // LTM 1110-5.1's own Support Base table is asymmetric front/rear (see
@@ -6767,13 +6779,23 @@
     // cylinder, distinct from the beam/cylinder itself) - needed to
     // convert OUTRIGGER_STAGE_TABLE's own centerline-to-centerline span
     // figures into a distance to the plate's OUTER edge (see
-    // outriggerPercentForTarget below). Only the 1650 confirmed so far,
-    // straight from its own OEM manual's "Support plate" chapter
-    // (Fig.158043, 0.7m x 0.7m - the 0.7m figure is the one that matters
-    // here, along the beam's own extension axis). Add each crane's own
-    // real figure here as it's confirmed - never assumed to be the same
-    // across models. See methodology.txt.
-    const SUPPORT_PLATE_WIDTH_M = { '1650': 0.7 };
+    // outriggerPercentForTarget below). Every crane's own real figure,
+    // straight from its OWN OEM manual's "1.03 Technical data > Support
+    // plate [dimensions]" chapter (pulled via the person's Nextcloud
+    // share, one PDF per crane - see methodology.txt) - every one of
+    // them a square plate (length == width), but never assumed to be
+    // the same size across models, and each pulled from its own real
+    // source rather than copied from a sibling crane.
+    // LTM 1110-5.1 deliberately has NO entry yet - its own Technical
+    // Data support base table is genuinely asymmetric front/rear (rear
+    // c1/c4 up to 8.3m, front c2/c3 up to 7.0m, at the SAME 100% figure)
+    // and this app's own OUTRIGGER_STAGE_TABLE['1110'] only has the
+    // front-axle reading (see that table's own comment) -
+    // outriggerPercentForTarget has no per-corner front/rear awareness
+    // yet, so adding this crane's plate width now would silently apply
+    // the front-only table to the rear corners too, which is wrong.
+    // Needs that corner-aware extension built first, not just data.
+    const SUPPORT_PLATE_WIDTH_M = { '1650': 0.7, '1100': 0.5, '1130': 0.55, '1160': 0.6, '1250': 0.6, '1300': 0.6 };
 
     // "Outrigger as a tape measure" - person's own field technique,
     // worked through and confirmed step by step before building this:

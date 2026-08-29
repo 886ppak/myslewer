@@ -12303,3 +12303,80 @@ cranes get their own subsections as they're built.
   get their own support plate widths added the same way once confirmed,
   same incremental pattern used for every other per-crane data set in
   this app.
+
+120. "Outrigger as a tape measure" extended to 5 more cranes - real OEM data
+
+  Person: "yup look back and get them all from the operator manual in
+  technical data section, you have my nextcloud link to all my cranes
+  and manuals don't tell me you don't as I told you to save it" - a
+  fair correction. Searched this session's own durable records first:
+  methodology.txt 24 documents the WEBDAV METHOD (curl -u "<token>:"
+  against local.idull.au/public.php/webdav/) but the actual share
+  TOKEN was never captured as literal reusable text anywhere durable -
+  only described in prose, and per methodology.txt 24's own note "each
+  new share...fresh token, always re-derive from the latest link they
+  give." The last known token still worked (tested live) but was
+  scoped to a narrower share (Carrier/Counterweight/Crane_postioning
+  CAD exports only, no manuals) - explained this plainly and asked for
+  the current link rather than guessing further. Person supplied it:
+  https://local.idull.au/index.php/s/xrBg5CyeLDXCdT6 - a genuinely
+  broader share, one folder per crane (LRT1100-2.1, LTM1110-5.1,
+  LTM1130-5.1, LTM1160-5.2, LTM1250-5.1, LTM1300-6.2, LTM1650-8.1, plus
+  a few not yet in this app).
+
+  Downloaded each crane's real Operating_instructions_Crane PDF (sizes
+  37-108MB) and located "1.03 Technical data > 3 Support / 3.1 Support
+  base / 3.2 Support plate [dimensions]" directly via PyMuPDF text
+  search, not assumed page numbers. Strong cross-validation before
+  trusting any of it: every ALREADY-SHIPPED OUTRIGGER_STAGE_TABLE entry
+  (1130, 1160, 1250, 1300, 1650, built during the earlier Driving w/
+  Equipment work) matched its manual's own support-base table exactly,
+  digit for digit - real confirmation the existing data was sourced
+  correctly the first time, not just a new coincidence.
+
+  New support plate widths added (all square, length==width):
+  - 1100 (LRT 1100-2.1): 500mm
+  - 1130 (LTM 1130-5.1): 550mm
+  - 1160 (LTM 1160-5.2): 600mm
+  - 1250 (LTM 1250-5.1): 600mm
+  - 1300 (LTM 1300-6.2): 600mm
+  (1650 already had 700mm, confirmed again unchanged.)
+
+  New OUTRIGGER_STAGE_TABLE entry: '1100': [[61, 5.5], [100, 7.3]] - a
+  genuinely NEW crane in this table (LRT 1100 had never been in the
+  Driving w/ Equipment feature that originally built this table).
+  Confirmed adding it is safe: that crane has zero rows wired into the
+  Driving w/ Equipment tab yet (explicit "hold these" comment already
+  in the code from earlier), so outriggerStagePercent() - the OTHER
+  consumer of this table - can never actually be called with modelKey
+  '1100' today; this new entry only feeds the new feature.
+
+  LTM 1110-5.1 deliberately left OUT this round, even though its own
+  manual (found by exploring one level deeper than where the CD-ROM-
+  style launcher folder first suggested nothing existed) does have a
+  Support plate figure (500mm). Its Technical Data support base table
+  is genuinely asymmetric front/rear (rear c1/c4 up to 8.3m, front
+  c2/c3 up to 7.0m, same "100%" label) - this app's own
+  OUTRIGGER_STAGE_TABLE['1110'] only ever captured the FRONT reading
+  (see that entry's own comment, from the Driving w/ Equipment work),
+  and outriggerPercentForTarget has no per-corner front/rear awareness
+  yet. Adding the plate width now would silently feed the front-only
+  table to rear-corner calculations too, giving a wrong number with no
+  visible sign anything was off - correctly held back rather than
+  shipping a plausible-looking bug, pending a corner-aware extension.
+
+  Verification: pure-math round-trip tests across a spread of
+  percentages for each of the 5 newly-enabled cranes (all passing,
+  matching each crane's own actual OEM range), correct endpoint
+  resolution, 1110 confirmed to still return null, 1650 confirmed
+  unaffected. Also re-ran the full table-wiring test (methodology.txt
+  119) against a SECOND crane (1130, not just 1650) with hand-verified
+  expected numbers (20.2%/59% for a made-up leg position) - matched
+  exactly, confirming the feature generalizes correctly rather than
+  only working for the one crane it was built and tested against
+  first.
+
+  CACHE_VERSION v273->v274, app version v7.16->v7.17. carrier3d.js
+  untouched, CARRIER3D_VERSION stays 58. 6 of 7 cranes now covered;
+  1110 needs the corner-aware extension before its own confirmed plate
+  width can be safely added.

@@ -995,3 +995,33 @@ a working record, not app content.
   (CACHE_VERSION v272->v273, app v7.15->v7.16, CARRIER3D_VERSION
   57->58). Scoped to the 1650 only - other cranes need their own
   confirmed plate width first. See methodology.txt 119.
+- "yup look back and get the them all from the operator manual in
+  technical data section, you have my next cloud link to all my cranes
+  and manuals don't tell me you don't as I told you to save it and
+  also you seem to need to use curl" - fair correction. Checked this
+  session's own durable records first: the WebDAV method was saved
+  (methodology.txt 24) but the actual share token never was, only
+  described in prose - explained that plainly, confirmed the last
+  known token still worked but was scoped too narrowly (no manuals),
+  and asked for the current link. Person supplied it:
+  https://local.idull.au/index.php/s/xrBg5CyeLDXCdT6.
+  **Status: shipped for 5 more cranes.** Downloaded each crane's real
+  Operating_instructions_Crane PDF via curl/WebDAV and located "1.03
+  Technical data > Support plate" directly (not assumed page numbers).
+  Every already-shipped OUTRIGGER_STAGE_TABLE entry (1130/1160/1250/
+  1300/1650) cross-validated exactly against its own manual before
+  trusting anything new. Added confirmed support plate widths: 1100
+  (500mm), 1130 (550mm), 1160/1250/1300 (600mm each) - unlocking the
+  "Extend To %" feature for those 5 cranes too. Also added a brand new
+  OUTRIGGER_STAGE_TABLE['1100'] entry (61%/100%, LRT 1100 was never in
+  this table before), confirmed safe since that crane has no rows
+  wired into the unrelated Driving w/ Equipment feature yet. LTM 1110
+  deliberately left out - its support base is genuinely asymmetric
+  front/rear and this app's existing table only has the front reading,
+  so adding its plate width now would silently apply the wrong table
+  to the rear corners; needs a corner-aware extension first, not just
+  data. Verified with round-trip math tests per crane plus a full
+  table-wiring test against a second crane (1130) with hand-checked
+  expected numbers. Shipped to main (CACHE_VERSION v273->v274, app
+  v7.16->v7.17; carrier3d.js untouched, CARRIER3D_VERSION stays 58).
+  See methodology.txt 120.
