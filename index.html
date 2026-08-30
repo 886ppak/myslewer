@@ -188,6 +188,10 @@
     .ll-breadcrumb button:disabled { color: var(--text-main); cursor: default; text-decoration: none; font-weight: 700; }
     .ll-breadcrumb .ll-crumb-sep { color: var(--text-muted); }
     .ll-node-list { display: flex; flex-direction: column; gap: 6px; }
+    .ll-node-row-wrap { display: flex; align-items: stretch; gap: 6px; }
+    .ll-node-row-wrap .ll-node-row { flex: 1; }
+    .ll-node-admin-btn { flex-shrink: 0; width: 38px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-muted); font-size: 1rem; cursor: pointer; }
+    .ll-node-admin-btn:hover { border-color: var(--accent-gold); color: var(--accent-gold); }
     .ll-node-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; text-align: left; font-family: inherit; font-size: 0.88rem; color: var(--text-main); width: 100%; }
     .ll-node-row:hover { border-color: var(--accent-gold); }
     .ll-node-icon { flex-shrink: 0; font-size: 1.1rem; }
@@ -1333,6 +1337,13 @@
         });
       };
 
+      // Admin-only (see firestore.rules' own comment on liftLibraryCategories'
+      // update rule) - rename and/or move (reparent) an existing category.
+      // Partial update: pass only the field(s) actually changing.
+      window.__liftLibraryUpdateCategory = function (categoryId, changes) {
+        return updateDoc(doc(db, 'liftLibraryCategories', categoryId), changes);
+      };
+
       window.__liftLibraryGetEntries = function (categoryId) {
         return getDocs(query(collection(db, 'liftLibraryEntries'), where('categoryId', '==', categoryId)));
       };
@@ -1676,7 +1687,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.28</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.29</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -1895,6 +1906,13 @@
         <div id="ll-search-results" class="ll-node-list" style="display:none;"></div>
 
         <div id="ll-browse-wrap">
+          <div id="ll-move-banner" style="display:none; background:var(--input-bg); border:1px solid var(--accent-gold); border-radius:6px; padding:10px 12px; margin-bottom:10px; font-size:0.8rem;">
+            <div id="ll-move-banner-text" style="margin-bottom:8px;"></div>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="toolbar-btn" onclick="llMoveCategoryHere()">Move Here</button>
+              <button type="button" class="toolbar-btn" onclick="llCancelMoveCategory()">Cancel</button>
+            </div>
+          </div>
           <div class="ll-breadcrumb" id="ll-breadcrumb"></div>
           <div id="ll-node-list" class="ll-node-list"></div>
           <div id="ll-empty-msg" class="profile-empty-msg" style="display:none;">Nothing here yet.</div>
@@ -13358,6 +13376,13 @@
     let llLoaded = false;
     let llCurrentParentId = null; // null = root
     let llBreadcrumb = [{ id: null, name: 'Home' }];
+    // Cut/paste-style category move (admin only). Set by
+    // llStartMoveCategory, cleared by llCancelMoveCategory or on a
+    // completed llMoveCategoryHere - the "Move Here" banner in
+    // #ll-browse-wrap tracks this and targets wherever the admin has
+    // since navigated to (llCurrentParentId), not the location the
+    // move started from.
+    let llMovingCategoryId = null;
 
     function llCategoryChildren(parentId) {
       return llAllCategories.filter((c) => c.parentId === parentId);
@@ -13449,14 +13474,38 @@
       document.getElementById('ll-detail-wrap').style.display = 'none';
       llRenderBreadcrumb();
 
+      const moveBanner = document.getElementById('ll-move-banner');
+      if (llMovingCategoryId != null) {
+        const movingCat = llAllCategories.find((c) => c.id === llMovingCategoryId);
+        moveBanner.style.display = movingCat ? '' : 'none';
+        if (movingCat) {
+          document.getElementById('ll-move-banner-text').textContent =
+            `Moving "${movingCat.name}" - browse to the new location, then tap Move Here.`;
+        }
+      } else {
+        moveBanner.style.display = 'none';
+      }
+
       const subcats = llCategoryChildren(llCurrentParentId).sort((a, b) => a.name.localeCompare(b.name));
       const entries = llEntriesInCategory(llCurrentParentId).sort((a, b) => a.title.localeCompare(b.title));
 
-      const rows = subcats.map((c) => `
+      const rows = subcats.map((c) => {
+        const navBtn = `
         <button type="button" class="ll-node-row" onclick="llNavigateInto('${c.id}')">
           <span class="ll-node-icon">&#128193;</span>
           <span class="ll-node-label">${ceEscapeHtml(c.name)}</span>
-        </button>`).join('') + entries.map((e) => `
+        </button>`;
+        if (!window.__isAdmin) return navBtn;
+        // Admin-only reorganise actions, siblings of the nav button
+        // rather than nested inside it (a <button> can't contain
+        // another <button>) - see firestore.rules' own comment on
+        // liftLibraryCategories' update rule for why this is admin-only.
+        return `
+        <div class="ll-node-row-wrap">${navBtn}
+          <button type="button" class="ll-node-admin-btn" onclick="llPromptRenameCategory('${c.id}')" aria-label="Rename category" title="Rename">&#9998;</button>
+          <button type="button" class="ll-node-admin-btn" onclick="llStartMoveCategory('${c.id}')" aria-label="Move category" title="Move">&#8644;</button>
+        </div>`;
+      }).join('') + entries.map((e) => `
         <button type="button" class="ll-node-row" onclick="llOpenEntry('${e.id}')">
           <span class="ll-node-icon">&#128203;</span>
           <span class="ll-node-label">${ceEscapeHtml(e.title)}${e.craneModel ? `<div class="ll-node-sub">${ceEscapeHtml(e.craneModel)}</div>` : ''}</span>
@@ -13464,6 +13513,82 @@
 
       document.getElementById('ll-node-list').innerHTML = rows;
       document.getElementById('ll-empty-msg').style.display = (subcats.length === 0 && entries.length === 0) ? '' : 'none';
+    }
+
+    function llPromptRenameCategory(categoryId) {
+      const cat = llAllCategories.find((c) => c.id === categoryId);
+      if (!cat) return;
+      const name = window.prompt('Rename category:', cat.name);
+      if (!name || !name.trim() || name.trim() === cat.name) return;
+      const trimmed = name.trim().slice(0, 80);
+      window.__liftLibraryUpdateCategory(categoryId, { name: trimmed })
+        .then(() => {
+          cat.name = trimmed;
+          llRenderBrowse();
+        })
+        .catch((err) => {
+          console.error('Could not rename category', err);
+          showToast('Could not rename - try again.');
+        });
+    }
+
+    function llStartMoveCategory(categoryId) {
+      const cat = llAllCategories.find((c) => c.id === categoryId);
+      if (!cat) return;
+      llMovingCategoryId = categoryId;
+      llRenderBrowse();
+    }
+
+    function llCancelMoveCategory() {
+      llMovingCategoryId = null;
+      llRenderBrowse();
+    }
+
+    // Walks UP from candidateAncestorId looking for categoryId - true if
+    // candidateAncestorId IS categoryId, or sits anywhere underneath it.
+    // Guards llMoveCategoryHere against creating a cycle (moving a
+    // category into one of its own subcategories would orphan that
+    // whole branch - nothing above it could ever reach it again).
+    function llIsSelfOrDescendant(candidateAncestorId, categoryId) {
+      let cur = candidateAncestorId;
+      let guard = 0;
+      while (cur != null && guard < 200) {
+        if (cur === categoryId) return true;
+        const cat = llAllCategories.find((c) => c.id === cur);
+        if (!cat) break;
+        cur = cat.parentId;
+        guard++;
+      }
+      return false;
+    }
+
+    function llMoveCategoryHere() {
+      const categoryId = llMovingCategoryId;
+      const cat = llAllCategories.find((c) => c.id === categoryId);
+      if (!cat) { llMovingCategoryId = null; llRenderBrowse(); return; }
+
+      const newParentId = llCurrentParentId;
+      if (llIsSelfOrDescendant(newParentId, categoryId)) {
+        showToast("Can't move a category into itself or one of its own subcategories.");
+        return;
+      }
+      if (newParentId === cat.parentId) {
+        llMovingCategoryId = null;
+        llRenderBrowse();
+        return;
+      }
+
+      window.__liftLibraryUpdateCategory(categoryId, { parentId: newParentId })
+        .then(() => {
+          cat.parentId = newParentId;
+          llMovingCategoryId = null;
+          showToast(`Moved "${cat.name}".`);
+          llRenderBrowse();
+        })
+        .catch((err) => {
+          console.error('Could not move category', err);
+          showToast('Could not move - try again.');
+        });
     }
 
     function llPromptAddCategory() {

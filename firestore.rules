@@ -314,11 +314,26 @@ service cloud.firestore {
     // nesting depth hardcoded into rules, which doesn't fit a tree meant
     // to be extended indefinitely; a parentId query works at any depth
     // without a rules change. Listable in full (unlike pools) since
-    // browsing/searching the whole tree is the point. Immutable once
-    // created for now - no rename/delete from the client yet, since a
-    // delete would need to also decide what happens to any children or
-    // entries under it; a typo just means creating a corrected node
-    // rather than fixing the old one in place.
+    // browsing/searching the whole tree is the point. Still no delete
+    // from the client - that would need to also decide what happens to
+    // any children or entries under it. Rename/move (changing name
+    // and/or parentId) IS now admin-only - the user base builds the
+    // tree by creating freely, but only an admin can reorganise it
+    // afterward (e.g. a flat "Royhill Mine Crusher 1" node moved to
+    // become a proper Royhill > Mine > ROM > 2 > Crusher > 1 >
+    // Secondary Crushers leaf once that structure exists) - a curation
+    // step on top of the free-for-all build step, not instead of it.
+    // Moving a category is just changing this ONE doc's parentId - its
+    // whole subtree (further categories AND entries, since entries
+    // reference categoryId directly, never a path) comes along for
+    // free, no cascade needed. createdBy/createdByName/createdAt stay
+    // fixed (diff().affectedKeys() only allows name/parentId to
+    // actually change) - moving/renaming a category doesn't rewrite
+    // who originally made it or when. Cycle prevention (can't move a
+    // category into its own descendant) is enforced client-side only -
+    // rules can't cheaply walk an arbitrary-depth ancestor chain the
+    // way a flat parentId tree needs - direct self-parenting is still
+    // blocked here as a cheap baseline.
     match /liftLibraryCategories/{categoryId} {
       allow get, list: if request.auth != null;
       allow create: if request.auth != null
@@ -331,7 +346,17 @@ service cloud.firestore {
                              && exists(/databases/$(database)/documents/liftLibraryCategories/$(request.resource.data.parentId))))
                      && request.resource.data.createdBy == request.auth.uid
                      && request.resource.data.createdAt is int;
-      allow update, delete: if false;
+      allow update: if request.auth != null
+                     && isAdmin()
+                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'parentId'])
+                     && request.resource.data.name is string
+                     && request.resource.data.name.size() > 0
+                     && request.resource.data.name.size() <= 80
+                     && (request.resource.data.parentId == null
+                         || (request.resource.data.parentId is string
+                             && request.resource.data.parentId != categoryId
+                             && exists(/databases/$(database)/documents/liftLibraryCategories/$(request.resource.data.parentId))));
+      allow delete: if false;
     }
 
     // The actual lift write-ups. entryId is generated CLIENT-SIDE before

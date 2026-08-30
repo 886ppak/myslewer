@@ -13365,3 +13365,72 @@ cranes get their own subsections as they're built.
   133/134 which only touched functions/ - same rule as always, bump on
   any real app-shell change regardless of whether live data exists yet
   to exercise the new path.
+
+136. Lift Plan Library: admin-only category rename/move (reparent)
+
+  Concrete example from the person: a user creates a flat "Royhill
+  Mine Crusher 1" category, but it should really live at Royhill >
+  Mine > ROM > 2 > Crusher > 1 > Secondary Crushers - distinct from
+  Royhill > Port > ... or a second Crusher 2 branch. The free-for-all
+  build-the-tree-as-you-go design (section ~127/firestore.rules' own
+  liftLibraryCategories comment) was deliberate, but never had a
+  curation step on top of it - categories were flat-out immutable
+  once created (allow update, delete: if false) specifically because a
+  delete would need to decide what happens to any children/entries
+  underneath. Rename/move doesn't have that problem at all in a flat
+  parentId tree: moving a category is changing ONE doc's parentId,
+  and its entire subtree (further categories AND entries, since
+  entries reference categoryId directly, never a materialized path)
+  comes along for free - no cascade, no rewriting anything else.
+  Delete stays firmly off the table (still `if false`) - only
+  rename/move got added, and admin-only per the person's own framing
+  ("I want the ability as the admin").
+
+  firestore.rules: liftLibraryCategories' update rule now allows an
+  admin to change name and/or parentId, using
+  diff(resource.data).affectedKeys().hasOnly(['name','parentId']) (an
+  idiom already used elsewhere in this same file, for pool invite
+  status) so createdBy/createdByName/createdAt can never be touched by
+  an edit - moving or renaming a category doesn't rewrite who actually
+  made it or when. Direct self-parenting (parentId == the category's
+  own id) is rejected at the rules level as a cheap baseline check.
+  The DEEPER cycle case - moving a category into one of its own
+  descendants, which would orphan that whole branch - can't be cheaply
+  expressed in rules (no efficient arbitrary-depth ancestor walk), so
+  that's enforced client-side only (llIsSelfOrDescendant, walking up
+  from the proposed new parent looking for the category being moved)
+  before the write is ever attempted.
+
+  UI: a cut/paste pattern rather than a tree-picker modal (nothing in
+  this app uses modals) - admin taps a small "move" icon-button next to
+  a category (a new, admin-only <div class="ll-node-row-wrap"> sibling
+  layout, since a <button> can't contain another <button> the way the
+  existing plain category row already is one), a persistent banner
+  appears ("Moving 'X' - browse to the new location, then tap Move
+  Here"), the admin browses normally, and "Move Here" in that banner
+  targets wherever they've navigated to. A separate small "rename" icon
+  reuses the exact same window.prompt() pattern the original "+ Add
+  Category Here" flow already established, just pre-filled with the
+  current name. Both actions only render for window.__isAdmin - a
+  regular user's category rows look exactly as they did before.
+
+  Verified locally first (Playwright, no production site): a small
+  synthetic tree (Royhill > Port, Royhill > Mine > ROM > Crusher 1,
+  plus a flat "Royhill Mine Crusher 1" node) - confirmed non-admin sees
+  no action buttons at all, admin does; rename updates both the write
+  call and local state; attempting to move "Mine" into its own
+  descendant "Crusher 1" is blocked with zero write attempted and the
+  move stays "in progress" (lets the admin navigate elsewhere and
+  retry, rather than silently cancelling); a real move (the flat node
+  into Crusher 1) succeeds and clears the in-progress state. Then
+  published the updated firestore.rules live and ran the same
+  discipline as every prior rules change - real throwaway accounts, not
+  hypotheticals: a non-admin's rename attempt on their own category is
+  rejected, an admin's rename and move both succeed, admin self-
+  parenting is rejected, and an admin attempting to rewrite createdBy
+  through the update path is rejected (confirming the diff().
+  affectedKeys() guard actually works, not just that it compiles).
+  Cleaned up all test categories/accounts and the service account key
+  after.
+
+  CACHE_VERSION v285 -> v286, app-version v7.28 -> v7.29.

@@ -1383,3 +1383,24 @@ a working record, not app content.
   the original. All test data and the service account key cleaned up
   after. CACHE_VERSION -> v285, app-version -> v7.28. See
   methodology.txt 135.
+- "I want the ability as the admin to reassign where these lift
+  libarys are stored in its catorgies" - concrete example: a flat
+  "Royhill Mine Crusher 1" category that should really live at Royhill
+  > Mine > ROM > 2 > Crusher > 1 > Secondary Crushers, distinct from a
+  Royhill > Port branch or a second Crusher 2.
+  **Status: done.** Categories were flat-out immutable before (rules:
+  `allow update, delete: if false`) specifically because deleting one
+  would need to decide what happens to its children/entries - but
+  rename/move doesn't have that problem in a flat parentId tree at
+  all: moving a category is one field change, its whole subtree comes
+  along automatically. Added admin-only rename + move (still no
+  delete). UI is cut/paste style - tap Move on a category, browse to
+  the new spot, tap Move Here in a persistent banner; a separate
+  rename icon reuses the app's existing prompt()-based rename pattern.
+  Cycle prevention (can't move a category into its own descendant)
+  enforced client-side; rules block admin-only access, self-parenting,
+  and any attempt to rewrite createdBy/createdAt through the update
+  path. Verified locally (Playwright) and against live rules with real
+  throwaway accounts - 8/8 checks passed, including confirming a
+  non-admin genuinely can't do any of this. CACHE_VERSION -> v286,
+  app-version -> v7.29. See methodology.txt 136.
