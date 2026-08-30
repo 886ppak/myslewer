@@ -1593,3 +1593,17 @@ a working record, not app content.
   over the exact commands to run from an account with owner/IAM-admin
   rights - once that's done, the same deploy command should succeed
   immediately. See methodology.txt 146.
+- "try again I temp added to your service account" (roles/iam.admin,
+  then after that turned out not to be enough, "can owner access" /
+  "gave" - roles/owner).
+  **Status: fully deployed and verified live.** The video-migration
+  function is ACTIVE - confirmed via the Cloud Functions API directly
+  (correct trigger, correct bucket, correct config), then proved it
+  actually works end-to-end against real infrastructure: uploaded a
+  real test video to Storage, watched it migrate to the real Nextcloud
+  server within seconds, confirmed the Storage original was actually
+  deleted, then cleaned up every trace (the throwaway Firestore entry,
+  and the test file/folder on Nextcloud itself). Also set the Artifact
+  Registry cleanup policy the deploy asked for. Deleted my local copy
+  of the service account key now that it's done - please revoke the
+  temporary Owner grant on your end too. See methodology.txt 147.

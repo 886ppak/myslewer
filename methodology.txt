@@ -14113,3 +14113,75 @@ cranes get their own subsections as they're built.
   Committed the firebase.json/.firebaserc pipeline addition and the
   region fix - infra/tooling changes, no user-facing app behavior, so
   no CACHE_VERSION/app-version bump for this entry.
+
+147. migrateLiftLibraryVideoToNextcloud is live - deployed, tested
+     end-to-end against real infrastructure, verified
+
+  Person granted the deploying service account roles/iam.admin, then
+  (once that turned out insufficient) roles/owner, explicitly framed
+  as temporary both times. Each grant checked for real before retrying
+  rather than just trying again and hoping - getIamPolicy to see the
+  account's own actual roles, testIamPermissions to confirm exactly
+  which permission was still missing after iam.admin alone (it grants
+  control over IAM resources like service accounts and custom roles,
+  NOT resourcemanager.projects.setIamPolicy - the specific permission
+  that actually modifies who holds what role ON the project itself,
+  which needs roles/resourcemanager.projectIamAdmin or roles/owner).
+  Reported that distinction precisely rather than just relaying "still
+  blocked, try something bigger."
+
+  With roles/owner, the retry got further but hit one more real,
+  specific gap: "Permission storage.buckets.get denied... Please
+  verify that... the Eventarc service account has permission" during
+  trigger creation - NOT the same 4 bindings from 146 (those had
+  already landed correctly this time, confirmed via getIamPolicy
+  before assuming it was the same issue again). Recognized this as
+  most likely IAM propagation lag (the 4 bindings had JUST been
+  granted moments earlier in the SAME deploy attempt) rather than
+  reaching for another permission grant - let the deploy's own
+  30-60s of preliminary API-enablement steps serve as the wait on
+  retry instead of a blind sleep, and the second attempt succeeded
+  cleanly: functions[migrateLiftLibraryVideoToNextcloud(us-west1)]
+  Successful create operation.
+
+  Didn't stop at "the CLI said success" for something this
+  infrastructure-heavy, with this many layers between "deployed" and
+  "actually does the right thing":
+  - Fetched the function back via the Cloud Functions API directly -
+    confirmed state ACTIVE, eventTrigger watching the correct bucket
+    (myslewer-ed06f.firebasestorage.app) with the right event type,
+    memory/timeout matching the code, secret correctly wired.
+  - Set the Artifact Registry cleanup policy the deploy asked for
+    (7-day retention on container images in us-west1) - a real,
+    if small, ongoing cost otherwise.
+  - Ran a REAL end-to-end test against live infrastructure, not a
+    simulation: created a throwaway Firestore entry with a pending
+    video reference, uploaded an actual small video/mp4 file to the
+    exact Storage path via the raw GCS API, then polled Firestore
+    until the video field flipped to nextcloud:true - which it did on
+    the very first poll (migrated within seconds of upload, exactly
+    the design goal from 145). Independently confirmed the Storage
+    original was actually gone (404 on a direct lookup) rather than
+    just trusting the function's own logic did what it claims to.
+  - Cleaned up every trace of that test afterward: deleted the
+    throwaway Firestore doc, and - since the test genuinely did
+    migrate to the person's real Nextcloud server - fetched the app
+    password from Secret Manager myself and issued real WebDAV DELETEs
+    for both the test file and its now-empty folder, rather than
+    leaving synthetic test clutter in their actual backup archive.
+
+  Deleted the local copy of the service account key once finished
+  (it was only ever in this session's scratchpad, outside the repo,
+  never in git) - reasonable hygiene once a credential carrying
+  temporary Owner access is no longer needed, and flagged clearly that
+  the person should revoke the temporary Owner grant on their end too,
+  same as they said they intended to when they granted it.
+
+  All three Lift Library Cloud Functions confirmed ACTIVE afterward
+  (cleanupOrphanedLiftLibraryPhotos, backupLiftLibraryPhotosToNextcloud
+  untouched by this - only migrateLiftLibraryVideoToNextcloud was ever
+  in the deploy's scope).
+
+  Nothing code-side changed in this entry beyond functions/index.js's
+  already-committed region fix (146) - this entry is the deploy/
+  verification record, not a further code change.
