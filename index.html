@@ -1430,6 +1430,26 @@
         return deleteObject(storageRef(storage, path));
       };
 
+      // Same upload mechanics as __liftLibraryUploadPhoto (identical
+      // uploadBytes()/customMetadata/generated-name pattern - separate
+      // function only because the caller needs to think about videos and
+      // photos differently, not because the Storage write itself
+      // differs) - this is what
+      // functions/index.js's migrateLiftLibraryVideoToNextcloud reacts
+      // to the moment it finishes, moving the file to Nextcloud within
+      // seconds rather than leaving it in Storage for the monthly photo
+      // sweep (see that function's own comment on why video specifically
+      // can't wait that long).
+      window.__liftLibraryUploadVideo = function (entryId, file) {
+        const extMatch = /\.([a-zA-Z0-9]+)$/.exec(file.name || '');
+        const ext = extMatch ? extMatch[1].toLowerCase() : 'mp4';
+        const safeName = `video_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const path = `liftLibrary/${entryId}/${safeName}`;
+        const fileRef = storageRef(storage, path);
+        const metadata = { customMetadata: { loggedByUid: auth.currentUser.uid } };
+        return uploadBytes(fileRef, file, metadata).then(() => getDownloadURL(fileRef)).then((url) => ({ url, path }));
+      };
+
       window.__liftLibraryDeleteEntry = function (entryId) {
         return deleteDoc(doc(db, 'liftLibraryEntries', entryId));
       };
@@ -1711,7 +1731,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.6</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.7</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2057,6 +2077,16 @@
             <input type="file" id="ll-form-photo-input" accept="image/*" multiple onchange="llOnPhotoFilesSelected(event)">
             <div id="ll-form-photo-status" style="font-size:0.78rem; color:var(--text-muted); margin-top:6px;"></div>
             <div id="ll-form-photo-grid" class="ll-photo-grid"></div>
+          </div>
+
+          <!-- One video per entry, deliberately - see llOnVideoFileSelected's
+               own comment on why this stays a single slot rather than a
+               list like Photos. -->
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Video <span style="font-weight:400; text-transform:none;">(optional, one per entry, max 150MB)</span></label>
+            <input type="file" id="ll-form-video-input" accept="video/*" onchange="llOnVideoFileSelected(event)">
+            <div id="ll-form-video-status" style="font-size:0.78rem; color:var(--text-muted); margin-top:6px;"></div>
+            <div id="ll-form-video-preview"></div>
           </div>
 
           <div class="form-group" style="margin-bottom:12px;">
@@ -13736,12 +13766,30 @@
         ? `<div class="ll-detail-row"><span class="ll-detail-label">External link</span><span class="ll-detail-value"><a href="${ceEscapeHtml(entry.externalLink)}" target="_blank" rel="noopener noreferrer">Open</a></span></div>`
         : '';
 
+      // Deliberately NOT offering a play control while a video is still
+      // `pending` (i.e. migrateLiftLibraryVideoToNextcloud hasn't rewired
+      // it to its Nextcloud URL yet) - the whole point of migrating
+      // immediately rather than on the monthly cron is that ordinary
+      // viewers never hit Firebase Storage's egress cost at all, and
+      // this window is normally seconds long in practice (see that
+      // function's own comment), not worth trading away for a playable-
+      // a-little-sooner preview. preload="none" once it IS playable, for
+      // the same bandwidth reasoning - a person opening this entry to
+      // read the rigging notes shouldn't silently start downloading a
+      // video they may never tap play on.
+      const videoHtml = entry.video
+        ? (entry.video.nextcloud
+            ? `<div style="margin-top:14px;"><video controls preload="none" style="width:100%; max-width:360px; border-radius:6px; border:1px solid var(--border-color); display:block;"><source src="${ceEscapeHtml(entry.video.url)}"></video></div>`
+            : `<div class="ll-detail-row"><span class="ll-detail-label">Video</span><span class="ll-detail-value">Processing — check back shortly</span></div>`)
+        : '';
+
       document.getElementById('ll-detail-content').innerHTML = `
         <div class="card-title" style="margin-bottom:10px;">${ceEscapeHtml(entry.title)}</div>
         ${rows.map(([label, val]) => `<div class="ll-detail-row"><span class="ll-detail-label">${ceEscapeHtml(label)}</span><span class="ll-detail-value">${ceEscapeHtml(String(val))}</span></div>`).join('')}
         ${linkHtml}
         ${notesHtml}
         ${photosHtml}
+        ${videoHtml}
       `;
     }
 
@@ -13783,6 +13831,11 @@
         if (p && p.path) photoPaths.push(p.path);
         if (p && p.annotatedPath) photoPaths.push(p.annotatedPath);
       });
+      // Same story for a still-pending video's Storage path - a
+      // migrated one has none left to clean up (moved to Nextcloud,
+      // Storage original already deleted by
+      // migrateLiftLibraryVideoToNextcloud itself).
+      if (entry.video && entry.video.path) photoPaths.push(entry.video.path);
       Promise.all(photoPaths.map((path) => window.__liftLibraryDeletePhoto(path).catch(() => {})))
         .then(() => window.__liftLibraryDeleteEntry(entryId))
         .then(() => {
@@ -13817,6 +13870,16 @@
     let llPendingPhotoFiles = [];
     let llPendingPhotoUrls = [];
     let llCurrentFormEntryId = null;
+    // A not-yet-uploaded video, same "deferred to submit-time" treatment
+    // as pending photos above and for the same reason - and, unlike
+    // photos, deliberately just ONE slot (a File, not an array): a real
+    // phone video already costs 10-50x what a photo does to store and
+    // migrate, letting someone attach several per entry the way they can
+    // photos would multiply that cost for comparatively little benefit
+    // over just re-recording or trimming down to the one clip that
+    // matters. Revisit if that turns out too restrictive in practice.
+    let llPendingVideoFile = null;
+    let llPendingVideoUrl = null;
 
     // Maps #ll-crane's own option values to the OTHER two crane data
     // tables' differing key conventions (see COUNTERWEIGHT_DATA/
@@ -13893,6 +13956,16 @@
     // Submit is actually pressed.
     let llExistingPhotos = [];
     let llRemovedExistingPhotoPaths = [];
+    // An entry being edited's already-saved video (if any) - same shape
+    // as the Firestore field itself: {url, path, pending:true} while
+    // still waiting on migrateLiftLibraryVideoToNextcloud, or
+    // {url, nextcloud:true} once it's landed. Removing it during an edit
+    // only clears this in-memory reference and queues its Storage path
+    // (if it still has one - a migrated video no longer does, same
+    // accepted "can't reach into Nextcloud from the client" gap as
+    // removing a migrated photo) for deletion at actual submit time.
+    let llExistingVideo = null;
+    let llRemovedExistingVideoPath = null;
     // Parallel to llPendingPhotoFiles/llPendingPhotoUrls - each pending
     // (not-yet-uploaded) photo's own array of {color, x, y} dot markers,
     // same shape as a saved photo's own `annotations` field. Merged into
@@ -13935,6 +14008,11 @@
       llExistingPhotos = [];
       llRemovedExistingPhotoPaths = [];
       llPendingPhotoAnnotations = [];
+      if (llPendingVideoUrl) URL.revokeObjectURL(llPendingVideoUrl);
+      llPendingVideoFile = null;
+      llPendingVideoUrl = null;
+      llExistingVideo = null;
+      llRemovedExistingVideoPath = null;
 
       document.getElementById('ll-form-title').value = '';
       document.getElementById('ll-form-asset').value = '';
@@ -13949,6 +14027,9 @@
       document.getElementById('ll-form-photo-input').value = '';
       document.getElementById('ll-form-photo-status').textContent = '';
       llRenderPendingPhotos();
+      document.getElementById('ll-form-video-input').value = '';
+      document.getElementById('ll-form-video-status').textContent = '';
+      llRenderPendingVideo();
       document.getElementById('ll-form-error').style.display = 'none';
       document.getElementById('ll-form-location').textContent = 'Filing under: ' + llBreadcrumbPathLabel(llCurrentParentId);
       const btn = document.getElementById('ll-form-submit-btn');
@@ -13987,6 +14068,11 @@
         : [];
       llRemovedExistingPhotoPaths = [];
       llPendingPhotoAnnotations = [];
+      if (llPendingVideoUrl) URL.revokeObjectURL(llPendingVideoUrl);
+      llPendingVideoFile = null;
+      llPendingVideoUrl = null;
+      llExistingVideo = entry.video ? Object.assign({}, entry.video) : null;
+      llRemovedExistingVideoPath = null;
 
       document.getElementById('ll-form-title').value = entry.title || '';
       document.getElementById('ll-form-asset').value = entry.asset || '';
@@ -14015,6 +14101,9 @@
       document.getElementById('ll-form-photo-input').value = '';
       document.getElementById('ll-form-photo-status').textContent = '';
       llRenderPendingPhotos();
+      document.getElementById('ll-form-video-input').value = '';
+      document.getElementById('ll-form-video-status').textContent = '';
+      llRenderPendingVideo();
       document.getElementById('ll-form-error').style.display = 'none';
       document.getElementById('ll-form-location').textContent = 'Filing under: ' + llBreadcrumbPathLabel(entry.categoryId);
       const btn = document.getElementById('ll-form-submit-btn');
@@ -14031,6 +14120,9 @@
       llPendingPhotoUrls.forEach((u) => URL.revokeObjectURL(u));
       llPendingPhotoFiles = [];
       llPendingPhotoUrls = [];
+      if (llPendingVideoUrl) URL.revokeObjectURL(llPendingVideoUrl);
+      llPendingVideoFile = null;
+      llPendingVideoUrl = null;
       document.getElementById('ll-form-wrap').style.display = 'none';
       document.getElementById('ll-browse-wrap').style.display = '';
     }
@@ -14245,6 +14337,74 @@
       llRenderPendingPhotos();
     }
 
+    // Renders whichever video is actually current - a not-yet-uploaded
+    // pending file takes priority (it's what Submit will actually send;
+    // an edit session can have both a still-existing saved video AND a
+    // freshly picked replacement sitting in llPendingVideoFile at once,
+    // see llOnVideoFileSelected), otherwise the entry's already-saved
+    // one if editing, otherwise nothing. preload="metadata" (not "auto")
+    // even for the pending/local blob: case - consistent habit matters
+    // more than the (here, non-existent) bandwidth savings, since an
+    // existing entry's video is genuinely remote and full eager preload
+    // there would undercut the whole point of this feature.
+    function llRenderPendingVideo() {
+      const el = document.getElementById('ll-form-video-preview');
+      if (llPendingVideoFile) {
+        el.innerHTML = `
+          <div style="position:relative; margin-top:8px; max-width:220px;">
+            <video src="${llPendingVideoUrl}" controls preload="metadata" style="width:100%; border-radius:6px; border:1px solid var(--border-color); display:block;"></video>
+            <button type="button" onclick="llRemovePendingVideo()" aria-label="Remove video" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&times;</button>
+          </div>`;
+      } else if (llExistingVideo) {
+        const label = llExistingVideo.nextcloud ? '' : ' (still processing - previewable here, but may take a minute)';
+        el.innerHTML = `
+          <div style="position:relative; margin-top:8px; max-width:220px;">
+            <video src="${ceEscapeHtml(llExistingVideo.url)}" controls preload="metadata" style="width:100%; border-radius:6px; border:1px solid var(--border-color); display:block;"></video>
+            <button type="button" onclick="llRemoveExistingVideo()" aria-label="Remove video" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&times;</button>
+            <div style="font-size:0.72rem; color:var(--text-muted); margin-top:2px;">${label}</div>
+          </div>`;
+      } else {
+        el.innerHTML = '';
+      }
+    }
+
+    // One slot, not a list (see llPendingVideoFile's own comment on
+    // why) - a new selection REPLACES whatever was pending, it doesn't
+    // add to it. 150MB matches storage.rules' own video cap exactly, so
+    // a rejection here is never a surprise at actual submit time.
+    function llOnVideoFileSelected(event) {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+      const MAX_SIZE = 150 * 1024 * 1024;
+      if (file.size > MAX_SIZE) {
+        document.getElementById('ll-form-video-status').textContent = 'Skipped - over 150MB.';
+        return;
+      }
+      if (llPendingVideoUrl) URL.revokeObjectURL(llPendingVideoUrl);
+      llPendingVideoFile = file;
+      llPendingVideoUrl = URL.createObjectURL(file);
+      document.getElementById('ll-form-video-status').textContent = '';
+      llRenderPendingVideo();
+    }
+
+    function llRemovePendingVideo() {
+      if (llPendingVideoUrl) URL.revokeObjectURL(llPendingVideoUrl);
+      llPendingVideoFile = null;
+      llPendingVideoUrl = null;
+      llRenderPendingVideo();
+    }
+
+    function llRemoveExistingVideo() {
+      // Same accepted gap as llRemoveExistingPhoto - a migrated video's
+      // Nextcloud copy can't be reached from the client (no WebDAV
+      // credentials here), only a still-pending one's Storage path can
+      // actually be queued for deletion.
+      if (llExistingVideo && llExistingVideo.path) llRemovedExistingVideoPath = llExistingVideo.path;
+      llExistingVideo = null;
+      llRenderPendingVideo();
+    }
+
     // The photo-markup tool: tap a spot on a photo to drop a 🟢 or 🔴
     // dot there - meant for exactly one thing (see the original
     // brainstorm), denoting which end of a rigging log needs
@@ -14454,27 +14614,45 @@
 
       const btn = document.getElementById('ll-form-submit-btn');
       btn.disabled = true;
-      btn.textContent = llPendingPhotoFiles.length ? 'Uploading photos...' : 'Submitting...';
+      btn.textContent = llPendingVideoFile ? 'Uploading video...' : (llPendingPhotoFiles.length ? 'Uploading photos...' : 'Submitting...');
 
       const weightRaw = document.getElementById('ll-form-weight').value;
       const craneSelect = document.getElementById('ll-crane');
       const entryId = isEditing ? llEditingEntryId : llCurrentFormEntryId;
 
-      // Photo removals queued during editing only actually happen now -
-      // best-effort (an admin editing someone ELSE's entry can't delete
-      // THEIR photo from Storage, same accepted gap as llDeleteEntry's
-      // own comment explains) - the removal still sticks in the
-      // Firestore doc's photos list either way, just the Storage object
-      // itself may be left orphaned for the monthly cleanup sweep to
-      // catch instead.
-      Promise.all(llRemovedExistingPhotoPaths.map((p) => window.__liftLibraryDeletePhoto(p).catch(() => {})))
-        .then(() => Promise.all(llPendingPhotoFiles.map((file) => window.__liftLibraryUploadPhoto(entryId, file))))
-        .then((newPhotos) => newPhotos.map((p, i) => (
-          llPendingPhotoAnnotations[i] && llPendingPhotoAnnotations[i].length
-            ? Object.assign({ annotations: llPendingPhotoAnnotations[i] }, p)
-            : p
-        )))
-        .then((newPhotos) => {
+      // Photo (and video, if one was removed this edit) removals queued
+      // during editing only actually happen now - best-effort (an admin
+      // editing someone ELSE's entry can't delete THEIR file from
+      // Storage, same accepted gap as llDeleteEntry's own comment
+      // explains) - the removal still sticks in the Firestore doc either
+      // way, just the Storage object itself may be left orphaned for the
+      // monthly cleanup sweep to catch instead.
+      const removedPaths = llRemovedExistingPhotoPaths.slice();
+      if (llRemovedExistingVideoPath) removedPaths.push(llRemovedExistingVideoPath);
+      Promise.all(removedPaths.map((p) => window.__liftLibraryDeletePhoto(p).catch(() => {})))
+        // Video first, and awaited on its own - it's the one thing here
+        // migrateLiftLibraryVideoToNextcloud is racing against (see that
+        // function's own comment), so the sooner its Firestore reference
+        // exists, the sooner that race resolves in the trigger's favour.
+        .then(() => (
+          llPendingVideoFile
+            ? window.__liftLibraryUploadVideo(entryId, llPendingVideoFile).then(({ url, path }) => ({ url, path, pending: true }))
+            : Promise.resolve(llExistingVideo)
+        ))
+        .then((video) => {
+          if (llPendingPhotoFiles.length) btn.textContent = 'Uploading photos...';
+          return Promise.all(llPendingPhotoFiles.map((file) => window.__liftLibraryUploadPhoto(entryId, file)))
+            .then((newPhotos) => ({ video, newPhotos }));
+        })
+        .then(({ video, newPhotos }) => ({
+          video,
+          newPhotos: newPhotos.map((p, i) => (
+            llPendingPhotoAnnotations[i] && llPendingPhotoAnnotations[i].length
+              ? Object.assign({ annotations: llPendingPhotoAnnotations[i] }, p)
+              : p
+          ))
+        }))
+        .then(({ video, newPhotos }) => {
           // Bake annotations into a real, standalone image (see
           // llCompositePhoto's own comment) for every photo that has
           // any right now - existing photos included, since annotations
@@ -14513,9 +14691,9 @@
                 return p;
               });
             });
-          }));
+          })).then((allPhotos) => ({ video, allPhotos }));
         })
-        .then((allPhotos) => {
+        .then(({ video, allPhotos }) => {
           // Minimal, consistent shape regardless of edit history - a
           // photo whose annotations were all removed during this edit
           // shouldn't persist a stale/empty annotations: [] field.
@@ -14529,6 +14707,20 @@
             return clean;
           };
           const data = { categoryId, title, photos: allPhotos.map(cleanPhoto) };
+          // One object, not a list - see llPendingVideoFile's own
+          // comment. A fresh upload lands as {url, path, pending:true};
+          // migrateLiftLibraryVideoToNextcloud rewires it to
+          // {url, nextcloud:true} within seconds on its own, the same
+          // "the client writes the pending stub, a Cloud Function
+          // rewires it later" shape photos already use, just far faster
+          // here since bandwidth (not just storage) is what's at stake.
+          if (video) {
+            const cleanVideo = { url: video.url };
+            if (video.path) cleanVideo.path = video.path;
+            if (video.pending) cleanVideo.pending = true;
+            if (video.nextcloud) cleanVideo.nextcloud = true;
+            data.video = cleanVideo;
+          }
           const asset = document.getElementById('ll-form-asset').value.trim();
           const part = document.getElementById('ll-form-part').value.trim();
           const link = document.getElementById('ll-form-link').value.trim();

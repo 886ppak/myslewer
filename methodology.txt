@@ -13922,3 +13922,109 @@ cranes get their own subsections as they're built.
   the person to decide if/when to pursue.
 
   CACHE_VERSION v293 -> v294, app-version v8.5 -> v8.6.
+
+145. Lift Plan Library: video upload, migrated to Nextcloud immediately
+     (not on the monthly cron)
+
+  Person's request, following straight on from 143 (photo baking) and
+  the earlier video cost discussion: "can we wire it so it pushes
+  videos straight to nextcloud after upload with a cloud function and
+  then rewires that upload to the lift library" - exactly addressing
+  the gap flagged before building anything: the existing monthly
+  photo backup only solves long-term STORAGE cost, not the EGRESS cost
+  every VIEW incurs while a file still sits in Firebase Storage - fine
+  for a 2-5MB photo, a real problem for a 20-100MB+ video that would
+  otherwise sit there (and get downloaded by everyone who opens the
+  entry) for up to a month before migrating.
+
+  Architecture: client uploads the video to Firebase Storage exactly
+  like a photo (same uploadBytes()/customMetadata/generated-name
+  pattern - a new __liftLibraryUploadVideo, not a rewrite of the
+  existing one, since the mechanics genuinely don't differ). A NEW
+  Cloud Function, migrateLiftLibraryVideoToNextcloud, is a Storage
+  onObjectFinalized TRIGGER (not another scheduled cron) scoped to
+  liftLibrary/ AND video/* content types specifically (photos stay on
+  the existing monthly sweep, untouched) - fires within seconds of the
+  upload finishing, reuses the exact same ncEnsureFolder/ncUpload/
+  ncCreatePublicShareUrl WebDAV helpers the photo backup already has
+  (no duplicated Nextcloud logic), and rewires the owning Firestore
+  entry's `video` field to the Nextcloud share URL before deleting the
+  Storage original - same "Firestore updated first, delete only after
+  that's confirmed" safety ordering the photo backup already
+  established.
+
+  Deliberately NOT a client-called HTTP/callable function proxying the
+  upload straight to Nextcloud (skipping Storage entirely) - considered
+  it, ruled it out: a real video can be 50-150MB, past what an HTTP-
+  triggered Cloud Function can hold in one request without a lot more
+  plumbing, and a Storage upload via the SDK gets real resumable-
+  upload/retry behaviour for free over a flaky mobile connection that
+  a single big HTTP POST wouldn't. The Storage-trigger approach keeps
+  the existing, working client upload path completely unchanged and
+  just reacts to it - video still touches Storage, but for seconds
+  instead of up to a month, and never for a casual viewer's download.
+
+  Caught a real race condition before shipping, not after: the trigger
+  can fire from the SAME upload finishing that the client is still
+  mid-way through handling (photo compositing and the rest of the
+  entry's own fields get built AFTER the video upload settles, and the
+  Firestore write itself only happens at the very end of
+  llSubmitEntry) - meaning the function can genuinely see no `video`
+  field yet, not an already-migrated or unrelated one. Fixed with a
+  short retry loop (up to 6 attempts, 4s apart) in the function itself
+  rather than restructuring llSubmitEntry into two separate Firestore
+  writes just to close the gap - simpler, and comfortably covers the
+  realistic delay.
+
+  Kept deliberately to ONE video per entry (a field, not an array like
+  photos) - a real video already costs far more than a photo to store
+  and migrate; letting someone attach several the way they can photos
+  would multiply that for comparatively little benefit over trimming
+  down to the one clip that actually matters. Revisit if that's too
+  restrictive in practice.
+
+  Data model: entry.video is {url, path, pending:true} the moment the
+  client's own upload finishes, rewired by the trigger to
+  {url, nextcloud:true} once migrated - same sparse-field shape as
+  photos. storage.rules extended to accept video/* up to 150MB
+  alongside the existing image/* 15MB allowance (same create rule, one
+  new OR branch, not a separate match block). firestore.rules'
+  liftLibraryEntries create hasOnly() list extended with 'video' (the
+  update rule already had no field restriction, so editing an existing
+  entry to add/change a video needed no rules change there).
+
+  UI: detail view deliberately withholds a play control while a video
+  is still `pending` ("Processing — check back shortly" instead) -
+  the entire point of migrating immediately is that ordinary viewers
+  never hit Storage egress at all, and trading that away for a
+  slightly-earlier preview during what's normally a several-second
+  window isn't worth it. Once migrated, the <video> uses
+  preload="none" for the same reason - opening an entry to read the
+  rigging notes shouldn't silently start downloading a video nobody's
+  asked to play yet.
+
+  Verified all the client-side logic with Playwright (stubbed Firebase
+  functions, no real upload) before considering this done: an oversized
+  file is rejected client-side with the right message and no state
+  change; a valid selection previews correctly and a full submit
+  produces exactly the right {url, path, pending:true} shape with one
+  upload call; removing an existing still-pending video during an edit
+  clears the field entirely from the saved data and correctly queues
+  its Storage path for deletion; and the detail view renders the
+  "Processing" message for a pending video vs. a real, correctly-
+  sourced <video> tag once migrated.
+
+  IMPORTANT - not yet actually live: this session has no gcloud/
+  firebase CLI or service account credentials (confirmed by checking
+  before starting, not assumed), so the code is written and committed
+  but NOT deployed. Same manual process this project has always used
+  for infra changes: storage.rules and firestore.rules need pasting
+  into the Firebase Console's Rules tabs by hand, and the new
+  migrateLiftLibraryVideoToNextcloud function needs an actual
+  `firebase deploy --only functions` run from wherever this project's
+  prior Cloud Functions deploys happened. Until then, trying to attach
+  a video in the live app will fail cleanly (the existing "could not
+  save" error path, not a crash) since the currently-live storage.rules
+  still only accepts image/*.
+
+  CACHE_VERSION v294 -> v295, app-version v8.6 -> v8.7.

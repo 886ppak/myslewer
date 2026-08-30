@@ -1,4 +1,5 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onObjectFinalized } = require('firebase-functions/v2/storage');
 const { defineString, defineSecret } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
@@ -249,5 +250,119 @@ exports.backupLiftLibraryPhotosToNextcloud = onSchedule(
     }
 
     console.log(`Lift Library Nextcloud backup: migrated ${migratedCount} photo(s), ${failedCount} failure(s).`);
+  }
+);
+
+// Video gets a DIFFERENT migration cadence than photos - immediately,
+// per-upload, rather than batched once a month - because the two have a
+// genuinely different cost shape. A photo sitting in Firebase Storage
+// for up to a month is cheap even at real usage (a few MB, viewed a
+// handful of times). A video is 10-50x the size, and every VIEW during
+// that month - not just the eventual migration - is a full download
+// billed as Storage egress; the monthly cron's whole "it's fine, it's
+// backed up eventually" reasoning doesn't cover that, and was flagged
+// to the person as a real gap before this was built, not assumed away.
+// Firing on upload instead of waiting for the cron shrinks that exposed
+// window from "up to a month, viewed by everyone" to "seconds, viewed
+// by nobody" - normal viewers only ever hit this video's Nextcloud
+// share link, never Firebase Storage.
+//
+// A Storage OBJECT trigger (not a client-called callable) so the
+// existing upload path in index.html doesn't change at all - the
+// client still does a normal resumable uploadBytes() straight to
+// Storage (the only way to get real progress/retry over a flaky mobile
+// connection for a 100MB+ file; a callable/HTTP function would need
+// the whole file in one request and hit Cloud Functions' request-size
+// ceiling on anything but a short clip). This just reacts once that
+// upload finishes.
+//
+// Scoped to liftLibrary/ AND to video/* content types specifically -
+// this bucket also receives photo uploads (handled by the monthly
+// backupLiftLibraryPhotosToNextcloud above) and this function's OWN
+// output would never re-trigger itself even without the filter (this
+// only ever calls .delete() on the Storage original, never creates a
+// new object there), but the content-type check still keeps this
+// function from doing any work at all on the vastly more common photo
+// uploads - cheap to skip, no reason not to.
+exports.migrateLiftLibraryVideoToNextcloud = onObjectFinalized(
+  {
+    region: 'australia-southeast1',
+    secrets: [NEXTCLOUD_APP_PASSWORD],
+    // Real phone video easily runs 50-150MB - well past the default
+    // Cloud Functions memory/timeout for a function that has to hold
+    // the whole file in memory to relay it to Nextcloud (no streaming
+    // WebDAV client here, same download-then-PUT approach as the photo
+    // backup above, just one file instead of a whole month's batch).
+    memory: '512MiB',
+    timeoutSeconds: 300,
+  },
+  async (event) => {
+    const filePath = event.data.name;
+    const contentType = event.data.contentType || '';
+    if (!filePath.startsWith('liftLibrary/') || !contentType.startsWith('video/')) return;
+
+    // liftLibrary/{entryId}/{fileName} - same layout photos use (see
+    // index.html's __liftLibraryUploadVideo), entryId is always the
+    // first path segment after the prefix.
+    const parts = filePath.split('/');
+    const entryId = parts[1];
+    const fileName = parts[parts.length - 1];
+    if (!entryId || !fileName) return;
+
+    const db = getFirestore();
+    const bucket = getStorage().bucket();
+    const backupBase = NEXTCLOUD_BACKUP_PATH.value();
+
+    const docRef = db.collection('liftLibraryEntries').doc(entryId);
+    // index.html's own submit only writes the Firestore doc AFTER the
+    // video upload's own uploadBytes() promise resolves (photo
+    // compositing and the rest of the entry's fields still happen in
+    // between) - this trigger fires from the SAME upload finishing, so
+    // it can genuinely win that race and see no `video` field yet, not
+    // just an already-migrated or already-removed one. A few short
+    // retries covers that realistic gap without having to restructure
+    // the client into writing the entry doc in two passes; if `video`
+    // still doesn't reference this exact path after that, this really
+    // is stale (already migrated by an earlier run of this same
+    // trigger, superseded by a re-upload, or the entry write itself
+    // failed and the video is genuinely orphaned) and it correctly
+    // does nothing rather than guessing.
+    let entry = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const snap = await docRef.get();
+      if (!snap.exists) return; // entry deleted between upload and this trigger firing
+      entry = snap.data();
+      if (entry.video && entry.video.path === filePath) break;
+      entry = null;
+      if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 4000));
+    }
+    if (!entry) return;
+
+    try {
+      const [bytes] = await bucket.file(filePath).download();
+      const entryFolder = `${backupBase}/${entryId}`;
+      const davPath = `${entryFolder}/${fileName}`;
+
+      await ncEnsureFolder(entryFolder);
+      await ncUpload(davPath, bytes, contentType);
+      const shareUrl = await ncCreatePublicShareUrl(davPath);
+
+      // Same ordering discipline as the photo backup above: Firestore
+      // doc updated to the new Nextcloud-backed reference FIRST, and
+      // only once that's confirmed does the Storage original get
+      // deleted - a failure partway through leaves the original safely
+      // in Storage (still playable from there, just not yet what this
+      // function considers "done") rather than losing the only copy.
+      await docRef.update({ video: { url: `${shareUrl}/download`, nextcloud: true } });
+      await bucket.file(filePath).delete();
+      console.log(`Migrated video for entry ${entryId} to Nextcloud.`);
+    } catch (err) {
+      console.error(`Failed to migrate video ${filePath} (entry ${entryId}):`, err.message);
+      // Left as-is (still pending, still in Storage) rather than
+      // guessing at a fix - a real network/auth failure here means the
+      // video is still perfectly fine and playable straight from
+      // Storage in the meantime; nothing is lost, it just missed this
+      // one migration attempt.
+    }
   }
 );

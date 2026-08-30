@@ -1547,3 +1547,31 @@ a working record, not app content.
   app doesn't have yet). Nothing built from that yet - open question
   for the person on whether/how to pursue it.
   CACHE_VERSION -> v294, app-version -> v8.6.
+- "can we wire it so it pushes videos straight to nextcloud after
+  upload with a cloud function and then rewires that upload to the
+  lift libary ?" - following on from flagging that the existing
+  monthly photo backup only solves storage cost, not the bandwidth
+  every view costs while a video sits in Firebase Storage.
+  **Status: code done, not yet deployed** (see below). Client uploads
+  video to Storage exactly like a photo; a new Cloud Function
+  (migrateLiftLibraryVideoToNextcloud) triggers the moment that upload
+  finishes - not on the monthly cron - reuses the same Nextcloud
+  WebDAV code the photo backup already has, and rewires the entry's
+  video field to the Nextcloud URL within seconds, so ordinary viewers
+  never download it from Firebase Storage at all. Caught and fixed a
+  real race condition (the trigger can fire before the client's own
+  Firestore write lands) before shipping, with a short retry loop in
+  the function. One video per entry (not a list, given the size/cost
+  gap vs. photos), max 150MB. Detail view withholds playback while
+  still processing rather than serving it straight from Storage in the
+  meantime. All client-side logic verified with Playwright (upload
+  size rejection, submit shape, removal + cleanup, detail-view
+  rendering both states).
+  **Deploy gap, flagged explicitly:** this session has no Firebase/
+  gcloud credentials (checked, not assumed) - storage.rules and
+  firestore.rules changes need pasting into the Firebase Console by
+  hand, and the new function needs `firebase deploy --only functions`
+  run from somewhere with access, same as every prior infra change on
+  this project. Until then, video upload fails cleanly (existing error
+  path) rather than working.
+  CACHE_VERSION -> v295, app-version -> v8.7. See methodology.txt 145.

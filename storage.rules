@@ -14,9 +14,17 @@ service firebase.storage {
     // generated client-side before either the Firestore doc or these
     // photos exist, so the two are always linked by the same id with no
     // round trip needed. Read is open to any signed-in user, same bar as
-    // the Firestore side. Upload just needs to be a real image under a
-    // sane size (15MB - generous for a phone photo, not generous enough
-    // for someone to use this as general file storage).
+    // the Firestore side. Upload just needs to be a real image (15MB cap
+    // - generous for a phone photo, not generous enough for someone to
+    // use this as general file storage) or a real video (150MB cap - a
+    // real phone video easily runs 20-100MB+; still bounded, not
+    // "whatever the phone recorded"). Video gets its own, much shorter
+    // life in this bucket than photos do - see functions/index.js's own
+    // migrateLiftLibraryVideoToNextcloud, which moves it to Nextcloud
+    // within seconds of this create succeeding rather than waiting for
+    // the monthly photo sweep, since every VIEW of a Storage-hosted
+    // video (not just eventual migration) is real egress cost at 10-50x
+    // a photo's size.
     //
     // Ownership for delete was originally checked by looking back at the
     // OWNING FIRESTORE DOC's loggedByUid via firestore.get() - one
@@ -28,19 +36,21 @@ service firebase.storage {
     // Storage's Always Free tier), so the function isn't even available
     // and every delete silently failed, including for the actual owner.
     // Stamping loggedByUid directly into the object's own customMetadata
-    // at upload time (see index.html's __liftLibraryUploadPhoto) avoids
-    // the cross-service call entirely - a second source of truth, but
-    // one that can't be tripped up by an unrelated region choice on
-    // either side ever again. create requires the metadata match the
-    // uploader so nobody can stamp someone else's uid on their own
-    // photo. No update - a wrong photo means delete and re-upload, not
-    // overwrite in place.
+    // at upload time (see index.html's __liftLibraryUploadPhoto/
+    // __liftLibraryUploadVideo) avoids the cross-service call entirely -
+    // a second source of truth, but one that can't be tripped up by an
+    // unrelated region choice on either side ever again. create requires
+    // the metadata match the uploader so nobody can stamp someone else's
+    // uid on their own photo/video. No update - a wrong file means
+    // delete and re-upload, not overwrite in place.
     match /liftLibrary/{entryId}/{fileName} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
-                     && request.resource.size < 15 * 1024 * 1024
-                     && request.resource.contentType.matches('image/.*')
-                     && request.resource.metadata.loggedByUid == request.auth.uid;
+                     && request.resource.metadata.loggedByUid == request.auth.uid
+                     && (
+                          (request.resource.contentType.matches('image/.*') && request.resource.size < 15 * 1024 * 1024)
+                          || (request.resource.contentType.matches('video/.*') && request.resource.size < 150 * 1024 * 1024)
+                        );
       allow update: if false;
       allow delete: if request.auth != null
                      && resource.metadata.loggedByUid == request.auth.uid;
