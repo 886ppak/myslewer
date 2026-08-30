@@ -1221,3 +1221,25 @@ a working record, not app content.
   use in this project) got blocked by this environment's own safety
   classifier - explained the gap rather than working around it. See
   methodology.txt 128.
+- "can you just tell me what the options are for the storage bucket
+  locations, and then I'll tell you which one to choose?" - explained
+  region vs multi-region, dual-region unsupported for Firebase's
+  default bucket, suggested australia-southeast1 for latency but
+  flagged that the Storage "Always Free" tier is specifically tied to
+  us-west1. Person picked australia-southeast1 first, then "lets go
+  with where it is free" - switched to us-west1 before creating
+  anything. Direct GCS bucket creation failed (the .firebasestorage.app
+  domain is Firebase-reserved, needs Firebase's own control-plane API,
+  not a raw bucket insert); that API was disabled on the project -
+  gave the person a direct console activation link rather than asking
+  for a broader service-account grant to flip it on. Once enabled, a
+  second narrow permission gap showed up (firebasestorage.admin, not
+  covered by storage.admin) - named the exact role, person had already
+  granted it under its console label "Cloud Storage for Firebase Admin
+  (beta)".
+  **Status: done.** Bucket created (us-west1), linked to Firebase,
+  storage.rules published and re-verified byte-identical to the repo
+  file. Scratchpad key/scripts deleted after. See methodology.txt 129.
+  Lift Plan Library Phase 1 is now fully live end-to-end (Firestore
+  rules, Storage rules, bucket all real) - photo upload in the
+  contribution form should work in production.

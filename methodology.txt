@@ -12835,3 +12835,78 @@ cranes get their own subsections as they're built.
 
   No CACHE_VERSION/app-version bump - pure rules deploy plus this log
   entry, no index.html/sw.js changes.
+
+129. Created the Lift Plan Library's Storage bucket and published
+     storage.rules to it, closing out section 128's remaining gap
+
+  Continuation of the same service-account episode as 128. Asked the
+  person for the bucket location choice rather than picking it myself
+  (one-time, unchangeable) - explained region vs multi-region, that
+  dual-region isn't supported for Firebase's default bucket at all,
+  suggested australia-southeast1 for latency given the crew is
+  Australia-based, but flagged that Cloud Storage's "Always Free" tier
+  is specifically tied to us-west1, not any other location - a real
+  tradeoff, not a free pick. Person's call, after initially picking
+  australia-southeast1: "lets go with where it is free" - switched to
+  us-west1 before running anything, no bucket had been created yet at
+  that point so nothing needed undoing.
+
+  First attempt used the raw Cloud Storage JSON API
+  (storage.googleapis.com/storage/v1/b, bucket name
+  myslewer-ed06f.firebasestorage.app) - failed with "Another user owns
+  the domain ... or a parent domain". Root cause: the
+  *.firebasestorage.app domain suffix is Google-verified and reserved
+  for Firebase's own provisioning path - a bucket with that name can
+  only be created through Firebase's own control-plane API
+  (firebasestorage.googleapis.com), not a direct GCS bucket insert,
+  regardless of IAM rights on the project.
+
+  Checked whether that API was even enabled first - it wasn't
+  (SERVICE_DISABLED on firebasestorage.googleapis.com), and the
+  service account only had serviceusage.serviceUsageViewer, not
+  .Admin, so enabling it wasn't something this key could do alone.
+  Gave the person the direct console activation URL rather than asking
+  for a broader grant just to flip one API on - person enabling it
+  themselves is strictly narrower than adding serviceusage.Admin to
+  the service account's permanent permissions for a one-off toggle.
+
+  With the API enabled, GetDefaultBucket still came back 403
+  IAM_PERMISSION_DENIED - firebasestorage.defaultBucket.get isn't
+  covered by storage.admin or serviceusage.serviceUsageViewer, it's a
+  distinct Firebase-control-plane permission. Named the specific role
+  needed (roles/firebasestorage.admin, "Firebase Storage Admin") rather
+  than a broader ask. Person had in fact already granted it under its
+  console display name "Cloud Storage for Firebase Admin (beta)" by
+  the time this came up, alongside Firebase Admin, Firebase Rules
+  Admin, Firebase Authentication Admin, Cloud Datastore User, Service
+  Usage Viewer and Storage Admin - a wider set than what any single
+  step here actually needed, granted on the person's own initiative
+  rather than a specific request each time.
+
+  CreateDefaultBucket's request-body field name isn't documented in
+  the discovery doc surfaced by the API's own error messages - probed
+  it directly (empty body rejected as INVALID_ARGUMENT with no further
+  detail, {locationId: ...} rejected by name, {location: ...} worked)
+  rather than guessing off training-data recall of an API this
+  narrow. Same for the release-publish step: reused the section
+  79/128 create-ruleset-then-point-a-release-at-it pattern, but the
+  release resource for Storage needs to be POST-created first (PATCH
+  on a not-yet-existing release name failed with a misleading "Unknown
+  name \"rulesetName\": Cannot find field" - not a real schema
+  mismatch, just PATCH refusing to operate on a release that doesn't
+  exist yet under that exact resource path).
+
+  Verified the same way as 128's Firestore fix: re-fetched the live
+  storage.rules ruleset content after publishing and diffed it
+  byte-for-byte against the repo file - exact match. Also confirmed
+  the bucket's actual location/storageClass via a direct GCS API GET
+  rather than trusting the create response alone.
+
+  Deleted the scratchpad fb_admin/ directory (key file, all the probe
+  scripts) immediately after verification, same discipline as 128 -
+  the key never touched anything under this project's own path.
+
+  No CACHE_VERSION/app-version bump - no index.html/sw.js changes,
+  storage.rules content itself was already committed unchanged in
+  a8ec5be/2e118dc, this was purely provisioning + publishing what
+  already existed in the repo.
