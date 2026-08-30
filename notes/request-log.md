@@ -1456,3 +1456,17 @@ a working record, not app content.
   removal, and confirmed the edit-form copy is now fully independent
   of the live entry. CACHE_VERSION -> v289, app-version -> v8.1. See
   methodology.txt 139.
+- "the annotate tool works very good ! is there a way we can also add
+  an arrow that can be pulled and turned to point at something
+  specific ?" - extended the photo annotator with a third marker type
+  alongside the green/red dots.
+  **Status: done.** An arrow gets two drag handles: its round tail
+  (drag to reposition, tap to remove - the "pulled" part) and a small
+  ➤ head (drag-only, rotates the arrow around the tail - the "turned"
+  part). Dots are completely unchanged, including their on-disk shape,
+  so every already-saved entry keeps working with no migration.
+  Verified locally (Playwright, real PointerEvent drag simulation):
+  placement, head-drag rotation, tail-drag reposition, and the drag-
+  vs-tap disambiguation that stops a just-finished drag from also
+  deleting the arrow. CACHE_VERSION -> v290, app-version -> v8.2. See
+  methodology.txt 140.

@@ -13600,3 +13600,72 @@ cranes get their own subsections as they're built.
   errors in either run.
 
   CACHE_VERSION v288 -> v289, app-version v8.0 -> v8.1.
+
+140. Lift Plan Library photo annotator: draggable/rotatable arrow marker
+
+  Person liked the green/red dot annotator from 139 and asked for a
+  third marker type: "an arrow that can be pulled and turned to point
+  at something specific" - dots are fine for "this end vs that end"
+  but don't let someone point at one specific bolt, weld, or rigging
+  point in a busy photo.
+
+  Data shape: an arrow annotation is {type:'arrow', x, y, angle} - x/y
+  is the tail (anchor) as the same [0,1] fraction dots already use,
+  angle is degrees for a CSS rotate() (0 = pointing right, clockwise
+  positive). Dots keep their original shape exactly as-is, still with
+  no `type` field at all - every already-saved entry's dot markers
+  read back unchanged, no migration needed. Both llDotsOverlayHtml
+  (renamed llAnnotationsOverlayHtml, now genuinely covers more than
+  dots) and the interactive editor's own renderer just branch on
+  `a.type === 'arrow'`.
+
+  Took "pulled and turned" literally as two separate gestures rather
+  than picking one: the arrow gets TWO handles once placed - a round
+  tail button at its anchor (drag to reposition the whole arrow - the
+  "pulled" part; tap without dragging to remove it, same affordance as
+  a dot) and a small ➤ head button at its tip (drag-only, rotates the
+  arrow around the fixed tail - the "turned" part, computed live from
+  the tail's screen position and the pointer's current position via
+  atan2). Both funnel through one shared document-level pointermove/
+  pointerup pair rather than per-handle listeners, specifically so a
+  full re-render mid-drag (the existing codebase pattern - mutate the
+  array, re-render the whole chunk, same as every other list in this
+  app) never orphans a listener the way element-scoped pointer capture
+  would if the dragged element gets destroyed and rebuilt underneath
+  the same finger.
+
+  Had to solve the obvious drag-vs-tap collision on the tail button
+  (it does double duty: drag to move, tap to delete) - a real drag
+  still fires a synthesized click right as the finger/pointer lifts,
+  which would otherwise delete the arrow immediately after someone
+  finished repositioning it. Fixed with a llArrowDragMoved flag set
+  true the moment any pointermove is seen during a drag, checked (and
+  cleared) by the tail's own click handler before it deletes anything,
+  with a stray setTimeout(0) fallback clear in case a drag ever ends
+  with no click at all - so the flag can't get stuck true and silently
+  block a later, unrelated tap-to-remove.
+
+  Kept the arrow's visual line/head a fixed CSS pixel length rather
+  than sized relative to the photo - matches the dot emoji's own fixed
+  font-size, so an arrow looks the same physical size whether it's
+  sitting on a 110px form thumbnail or the full-width detail photo,
+  consistent with how dots already behave. The interactive editor's
+  head-handle position is likewise placed with a fixed-px transform
+  layered on the tail's %-based position (translate(cos*L, sin*L) in
+  plain CSS px) rather than computed from the wrap's actual rendered
+  size - avoids needing to remeasure on every render, and lines up
+  exactly with the read-only overlay's own line length by construction.
+
+  Verified locally (Playwright), one script covering the full
+  interaction end to end (dispatching real PointerEvent objects to
+  exercise the actual pointermove/pointerup listeners, not just
+  calling functions directly): place an arrow in arrow mode (angle 0
+  at the tap point), drag its head straight down and confirm the angle
+  lands at 90°, drag its tail to a new spot and confirm x/y moved while
+  angle stayed untouched, confirm a click fired immediately after the
+  tail drag does NOT delete it, confirm a later plain tap (no drag)
+  DOES delete it, and confirm both read-only render paths
+  (llAnnotationsOverlayHtml for an arrow and for a legacy no-type-field
+  dot) produce the expected HTML. Zero JS console errors.
+
+  CACHE_VERSION v289 -> v290, app-version v8.1 -> v8.2.

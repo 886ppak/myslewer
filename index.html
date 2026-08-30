@@ -211,6 +211,16 @@
     #ll-annotate-imgwrap { position: relative; max-width: 100%; max-height: 65vh; line-height: 0; cursor: crosshair; }
     #ll-annotate-imgwrap img { max-width: 100%; max-height: 65vh; display: block; border-radius: 6px; pointer-events: none; }
     .ll-annotate-dot { position: absolute; transform: translate(-50%, -50%); background: none; border: none; padding: 4px; font-size: 1.6rem; line-height: 1; cursor: pointer; filter: drop-shadow(0 0 3px rgba(0,0,0,0.85)); }
+    /* Arrow marker's two handles - see llRenderAnnotateMarkers. The tail
+       is the anchor/delete target (drag to reposition, tap to remove);
+       the head is drag-only (turns the arrow around the tail) and never
+       deletes it, so it carries no delete affordance of its own.
+       touch-action:none on the head stops the page from trying to
+       scroll while a finger drags it around. */
+    .ll-annotate-arrow-tail { position: absolute; transform: translate(-50%, -50%); width: 16px; height: 16px; border-radius: 50%; background: var(--accent-gold); border: 2px solid rgba(0,0,0,0.65); padding: 0; cursor: grab; touch-action: none; }
+    .ll-annotate-arrow-tail:active { cursor: grabbing; }
+    .ll-annotate-arrow-head { position: absolute; background: none; border: none; padding: 7px; margin: -7px; font-size: 1.25rem; line-height: 1; color: var(--accent-gold); cursor: grab; touch-action: none; filter: drop-shadow(0 0 3px rgba(0,0,0,0.85)); }
+    .ll-annotate-arrow-head:active { cursor: grabbing; }
 
     .nav-tabs { display: flex; justify-content: flex-start; background-color: #181a1d; border-bottom: 2px solid var(--border-color); overflow-x: auto; scrollbar-width: none; }
     /* Left-aligned by default - the base/fallback case, and the only
@@ -1690,7 +1700,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.1</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.2</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2054,21 +2064,23 @@
         </div>
       </div>
 
-      <!-- Photo markup overlay - tap the photo to drop a 🟢/🔴 marker
-           (see llOpenPhotoAnnotator's own comment for what these mean).
-           Fixed full-screen like #access-gate rather than living inside
-           the form/detail cards, since it needs to sit above either one
-           depending on where it was opened from. -->
+      <!-- Photo markup overlay - tap the photo to drop a 🟢/🔴 marker, or
+           place a draggable arrow (see llOpenPhotoAnnotator's own comment
+           for what these mean). Fixed full-screen like #access-gate
+           rather than living inside the form/detail cards, since it
+           needs to sit above either one depending on where it was
+           opened from. -->
       <div id="ll-annotate-overlay" style="display:none; position:fixed; inset:0; z-index:99998; background:rgba(0,0,0,0.92); flex-direction:column; align-items:center; justify-content:center; padding:16px; gap:14px;">
         <div id="ll-annotate-imgwrap" onclick="llAnnotateImageTap(event)">
           <img id="ll-annotate-img" alt="Photo being marked up">
           <div id="ll-annotate-dots"></div>
         </div>
         <div style="display:flex; gap:10px;">
-          <button type="button" class="mode-btn" id="ll-annotate-green-btn" onclick="llSetAnnotateColor('green')">🟢 Green</button>
-          <button type="button" class="mode-btn" id="ll-annotate-red-btn" onclick="llSetAnnotateColor('red')">🔴 Red</button>
+          <button type="button" class="mode-btn" id="ll-annotate-green-btn" onclick="llSetAnnotateMode('green')">🟢 Green</button>
+          <button type="button" class="mode-btn" id="ll-annotate-red-btn" onclick="llSetAnnotateMode('red')">🔴 Red</button>
+          <button type="button" class="mode-btn" id="ll-annotate-arrow-btn" onclick="llSetAnnotateMode('arrow')">➤ Arrow</button>
         </div>
-        <div style="font-size:0.75rem; color:var(--text-muted); text-align:center; max-width:320px;">Tap the photo to place a marker. Tap a marker to remove it.</div>
+        <div style="font-size:0.75rem; color:var(--text-muted); text-align:center; max-width:320px;">Tap the photo to place a marker or arrow. Drag an arrow's round base to move it, its tip to turn it. Tap a marker (or an arrow's base) to remove it.</div>
         <button type="button" class="toolbar-btn" onclick="llCloseAnnotator()">Done</button>
       </div>
     </div>
@@ -13692,7 +13704,7 @@
         ? `<div class="ll-photo-grid">${photos.map((p) => `
             <a href="${ceEscapeHtml(p.url)}" target="_blank" rel="noopener noreferrer" style="position:relative; display:block;">
               <img src="${ceEscapeHtml(p.url)}" alt="Lift photo">
-              ${llDotsOverlayHtml(p.annotations)}
+              ${llAnnotationsOverlayHtml(p.annotations)}
             </a>`).join('')}</div>`
         : '';
       const notesHtml = entry.notes ? `<div class="ll-notes-block"><b>Notes:</b><br>${ceEscapeHtml(entry.notes)}</div>` : '';
@@ -13856,16 +13868,32 @@
     // the real photo record only at submit time, once each file's
     // actually uploaded and has a path to attach them to.
     let llPendingPhotoAnnotations = [];
-    // Tap-to-place 🟢/🔴 markers for denoting which end of a rigging
-    // log needs shortening (or similar) - x/y are fractions [0,1] of
-    // the image's own width/height, not pixels, so a marker lands in
-    // the same relative spot regardless of how large the image is
-    // rendered anywhere it's shown. 'pending' | 'existing' + an index
+    // Tap-to-place markers for denoting which end of a rigging log needs
+    // shortening (or similar), or an arrow for pointing at something more
+    // specific - x/y are fractions [0,1] of the image's own width/height,
+    // not pixels, so a marker lands in the same relative spot regardless
+    // of how large the image is rendered anywhere it's shown. A dot is
+    // {color:'green'|'red', x, y} (no `type` field - the original shape,
+    // kept as-is for every already-saved entry); an arrow is
+    // {type:'arrow', x, y, angle} where angle is degrees for a CSS
+    // rotate() (0 = pointing right, increasing clockwise) and x/y is the
+    // arrow's tail/anchor, not its tip. 'pending' | 'existing' + an index
     // into the matching array above identify which photo is currently
     // open in the annotator.
     let llAnnotatingKind = null;
     let llAnnotatingIndex = null;
-    let llAnnotateColor = 'green';
+    let llAnnotateMode = 'green'; // 'green' | 'red' | 'arrow'
+    // Which arrow (index into the current photo's annotations) is being
+    // dragged right now, if any, and whether it's the tail (reposition)
+    // or the head (rotate) handle - see llArrowTailPointerDown/
+    // llArrowHeadPointerDown. llArrowDragMoved distinguishes a real drag
+    // from a plain tap on the tail so a drag-to-reposition doesn't also
+    // fire the tail's own tap-to-remove action right as the finger lifts.
+    let llArrowDragIndex = null;
+    let llArrowDragMode = null; // 'tail' | 'head'
+    let llArrowDragMoved = false;
+    let llArrowDragAnchorClientX = 0;
+    let llArrowDragAnchorClientY = 0;
 
     function llOpenForm() {
       llCurrentFormEntryId = window.__liftLibraryNewEntryId();
@@ -13976,31 +14004,46 @@
       document.getElementById('ll-browse-wrap').style.display = '';
     }
 
-    // Read-only dot overlay, reused by the form's own thumbnails AND
+    // Read-only marker overlay, reused by the form's own thumbnails AND
     // the entry detail view (llOpenEntry) - x/y are fractions [0,1] of
-    // the image's box, so `inset:0` + percentage positioning lands the
-    // dot in the same relative spot at any render size. pointer-events:
-    // none so it never intercepts clicks meant for whatever it's
-    // sitting on top of (the remove/mark-up buttons, the detail view's
-    // own <a> link to the full photo).
-    function llDotsOverlayHtml(annotations) {
+    // the image's box, so `inset:0` + percentage positioning lands each
+    // marker in the same relative spot at any render size. The arrow's
+    // line is a fixed CSS px length (not a % of the image), same as the
+    // dot emoji's own fixed font-size - both stay a constant visual size
+    // regardless of whether this is a small grid thumbnail or the full
+    // detail-view photo, rather than growing/shrinking with the image.
+    // pointer-events:none throughout so it never intercepts clicks meant
+    // for whatever it's sitting on top of (the remove/mark-up buttons,
+    // the detail view's own <a> link to the full photo) - unlike the
+    // interactive annotator's own markers (llRenderAnnotateMarkers),
+    // nothing here is draggable or clickable.
+    function llAnnotationsOverlayHtml(annotations) {
       if (!annotations || !annotations.length) return '';
-      return `<div style="position:absolute; inset:0; pointer-events:none;">${annotations.map((a) => `
-        <span style="position:absolute; left:${(a.x * 100).toFixed(2)}%; top:${(a.y * 100).toFixed(2)}%; transform:translate(-50%,-50%); font-size:1.15rem; text-shadow:0 0 3px rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.85);">${a.color === 'green' ? '🟢' : '🔴'}</span>`).join('')}</div>`;
+      const ARROW_LEN = 38;
+      return `<div style="position:absolute; inset:0; pointer-events:none;">${annotations.map((a) => {
+        if (a.type === 'arrow') {
+          return `
+        <div style="position:absolute; left:${(a.x * 100).toFixed(2)}%; top:${(a.y * 100).toFixed(2)}%; width:${ARROW_LEN}px; height:3px; background:var(--accent-gold); transform-origin:0 50%; transform:translateY(-50%) rotate(${a.angle}deg); filter:drop-shadow(0 0 2px rgba(0,0,0,0.9));">
+          <div style="position:absolute; right:-9px; top:50%; width:0; height:0; border-style:solid; border-width:5px 0 5px 9px; border-color:transparent transparent transparent var(--accent-gold); transform:translateY(-50%);"></div>
+        </div>`;
+        }
+        return `
+        <span style="position:absolute; left:${(a.x * 100).toFixed(2)}%; top:${(a.y * 100).toFixed(2)}%; transform:translate(-50%,-50%); font-size:1.15rem; text-shadow:0 0 3px rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.85);">${a.color === 'green' ? '🟢' : '🔴'}</span>`;
+      }).join('')}</div>`;
     }
 
     function llRenderPendingPhotos() {
       const existingHtml = llExistingPhotos.map((p, i) => `
         <div style="position:relative;">
           <img src="${ceEscapeHtml(p.url)}" alt="Existing photo">
-          ${llDotsOverlayHtml(p.annotations)}
+          ${llAnnotationsOverlayHtml(p.annotations)}
           <button type="button" onclick="llRemoveExistingPhoto(${i})" aria-label="Remove photo" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&times;</button>
           <button type="button" onclick="llOpenPhotoAnnotator('existing', ${i})" aria-label="Mark up photo" title="Mark up" style="position:absolute; bottom:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&#128205;</button>
         </div>`).join('');
       const pendingHtml = llPendingPhotoUrls.map((url, i) => `
         <div style="position:relative;">
           <img src="${url}" alt="Selected photo">
-          ${llDotsOverlayHtml(llPendingPhotoAnnotations[i])}
+          ${llAnnotationsOverlayHtml(llPendingPhotoAnnotations[i])}
           <button type="button" onclick="llRemovePendingPhoto(${i})" aria-label="Remove photo" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&times;</button>
           <button type="button" onclick="llOpenPhotoAnnotator('pending', ${i})" aria-label="Mark up photo" title="Mark up" style="position:absolute; bottom:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&#128205;</button>
         </div>`).join('');
@@ -14047,8 +14090,10 @@
     // brainstorm), denoting which end of a rigging log needs
     // shortening ("shorten the red end") - nothing to do with the
     // outrigger/C1-C4 toggles elsewhere in this app, purely a freeform
-    // marker on the picture itself. Works the same for a not-yet-
-    // uploaded pending photo or an already-saved existing one -
+    // marker on the picture itself. Also supports a draggable arrow, for
+    // pointing at something more specific than "one end or the other"
+    // (added on request - see methodology.txt). Works the same for a
+    // not-yet-uploaded pending photo or an already-saved existing one -
     // llCurrentAnnotations() returns whichever array is live right now
     // and every other function here just mutates that.
     function llCurrentAnnotations() {
@@ -14066,8 +14111,8 @@
       llAnnotatingIndex = index;
       const url = kind === 'pending' ? llPendingPhotoUrls[index] : llExistingPhotos[index].url;
       document.getElementById('ll-annotate-img').src = url;
-      llSetAnnotateColor('green');
-      llRenderAnnotateDots();
+      llSetAnnotateMode('green');
+      llRenderAnnotateMarkers();
       document.getElementById('ll-annotate-overlay').style.display = 'flex';
     }
 
@@ -14075,19 +14120,48 @@
       document.getElementById('ll-annotate-overlay').style.display = 'none';
       llAnnotatingKind = null;
       llAnnotatingIndex = null;
+      // Defensive cleanup if this is closed mid-drag (e.g. Done tapped
+      // while a finger was still on the arrow head) - without this the
+      // document-level listeners below would linger and keep reacting
+      // to pointer movement over whatever's now underneath.
+      llArrowPointerUp();
       llRenderPendingPhotos();
     }
 
-    function llSetAnnotateColor(color) {
-      llAnnotateColor = color;
-      document.getElementById('ll-annotate-green-btn').classList.toggle('active', color === 'green');
-      document.getElementById('ll-annotate-red-btn').classList.toggle('active', color === 'red');
+    function llSetAnnotateMode(mode) {
+      llAnnotateMode = mode;
+      document.getElementById('ll-annotate-green-btn').classList.toggle('active', mode === 'green');
+      document.getElementById('ll-annotate-red-btn').classList.toggle('active', mode === 'red');
+      document.getElementById('ll-annotate-arrow-btn').classList.toggle('active', mode === 'arrow');
     }
 
-    function llRenderAnnotateDots() {
+    // Renders both marker kinds. A dot is one <button> (tap to remove).
+    // An arrow is three pieces: a plain (non-interactive) line showing
+    // its current direction, a round tail <button> at its anchor point
+    // (drag to move it, tap to remove it), and a small head <button> at
+    // its tip (drag-only, turns the arrow around the tail - see
+    // llArrowHeadPointerDown). The head's position is expressed as a
+    // fixed-pixel translate() layered on top of the tail's own %-based
+    // left/top, so it lines up with the visual line above without this
+    // function needing to measure the wrap's actual rendered size.
+    function llRenderAnnotateMarkers() {
       const anns = llCurrentAnnotations();
-      document.getElementById('ll-annotate-dots').innerHTML = anns.map((a, i) => `
-        <button type="button" class="ll-annotate-dot" style="left:${(a.x * 100).toFixed(2)}%; top:${(a.y * 100).toFixed(2)}%;" onclick="llRemoveAnnotationDot(event, ${i})" aria-label="Remove marker">${a.color === 'green' ? '🟢' : '🔴'}</button>`).join('');
+      const ARROW_LEN = 40;
+      document.getElementById('ll-annotate-dots').innerHTML = anns.map((a, i) => {
+        if (a.type === 'arrow') {
+          const rad = a.angle * Math.PI / 180;
+          const dx = (Math.cos(rad) * ARROW_LEN).toFixed(1);
+          const dy = (Math.sin(rad) * ARROW_LEN).toFixed(1);
+          const leftPct = (a.x * 100).toFixed(2);
+          const topPct = (a.y * 100).toFixed(2);
+          return `
+        <div style="position:absolute; left:${leftPct}%; top:${topPct}%; width:${ARROW_LEN}px; height:3px; background:var(--accent-gold); transform-origin:0 50%; transform:translateY(-50%) rotate(${a.angle}deg); pointer-events:none;"></div>
+        <button type="button" class="ll-annotate-arrow-tail" style="left:${leftPct}%; top:${topPct}%;" onpointerdown="llArrowTailPointerDown(event, ${i})" onclick="llRemoveAnnotationMarker(event, ${i})" aria-label="Drag to move the arrow, tap to remove it"></button>
+        <button type="button" class="ll-annotate-arrow-head" style="left:${leftPct}%; top:${topPct}%; transform:translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${a.angle}deg);" onpointerdown="llArrowHeadPointerDown(event, ${i})" onclick="event.stopPropagation()" aria-label="Drag to turn the arrow">➤</button>`;
+        }
+        return `
+        <button type="button" class="ll-annotate-dot" style="left:${(a.x * 100).toFixed(2)}%; top:${(a.y * 100).toFixed(2)}%;" onclick="llRemoveAnnotationMarker(event, ${i})" aria-label="Remove marker">${a.color === 'green' ? '🟢' : '🔴'}</button>`;
+      }).join('');
     }
 
     // Placement uses the wrap's own bounding box (the <img> sits at
@@ -14102,14 +14176,89 @@
       const x = (event.clientX - rect.left) / rect.width;
       const y = (event.clientY - rect.top) / rect.height;
       if (x < 0 || x > 1 || y < 0 || y > 1) return;
-      llCurrentAnnotations().push({ color: llAnnotateColor, x, y });
-      llRenderAnnotateDots();
+      if (llAnnotateMode === 'arrow') {
+        llCurrentAnnotations().push({ type: 'arrow', x, y, angle: 0 });
+      } else {
+        llCurrentAnnotations().push({ color: llAnnotateMode, x, y });
+      }
+      llRenderAnnotateMarkers();
     }
 
-    function llRemoveAnnotationDot(event, index) {
-      event.stopPropagation(); // don't also register as a new-dot tap underneath it
+    function llRemoveAnnotationMarker(event, index) {
+      event.stopPropagation(); // don't also register as a new-marker tap underneath it
+      // A drag that just finished on this same tail button also fires a
+      // click right after pointerup - without this check, every drag-to-
+      // reposition would immediately delete the arrow it just moved.
+      if (llArrowDragMoved) { llArrowDragMoved = false; return; }
       llCurrentAnnotations().splice(index, 1);
-      llRenderAnnotateDots();
+      llRenderAnnotateMarkers();
+    }
+
+    // Arrow dragging: the tail handle repositions the whole arrow (its
+    // x/y anchor), the head handle only rotates it around that anchor
+    // (its angle) - two separate gestures matching the two things asked
+    // for, "pulled" and "turned". Both funnel through the same
+    // document-level pointermove/pointerup pair (only one drag can be
+    // happening at a time) rather than per-element listeners, so a full
+    // re-render mid-drag (llRenderAnnotateMarkers rebuilds every marker's
+    // DOM node) never orphans a listener the way element-scoped pointer
+    // capture would.
+    function llArrowTailPointerDown(event, index) {
+      event.stopPropagation();
+      event.preventDefault();
+      llArrowDragIndex = index;
+      llArrowDragMode = 'tail';
+      llArrowDragMoved = false;
+      document.addEventListener('pointermove', llArrowPointerMove);
+      document.addEventListener('pointerup', llArrowPointerUp);
+    }
+
+    function llArrowHeadPointerDown(event, index) {
+      event.stopPropagation();
+      event.preventDefault();
+      const ann = llCurrentAnnotations()[index];
+      const rect = document.getElementById('ll-annotate-imgwrap').getBoundingClientRect();
+      llArrowDragIndex = index;
+      llArrowDragMode = 'head';
+      llArrowDragMoved = false;
+      // The head's rotation is measured from the tail's fixed screen
+      // position, not the head's own - the tail doesn't move during a
+      // head-drag, so this only needs computing once, up front.
+      llArrowDragAnchorClientX = rect.left + ann.x * rect.width;
+      llArrowDragAnchorClientY = rect.top + ann.y * rect.height;
+      document.addEventListener('pointermove', llArrowPointerMove);
+      document.addEventListener('pointerup', llArrowPointerUp);
+    }
+
+    function llArrowPointerMove(event) {
+      if (llArrowDragIndex == null) return;
+      llArrowDragMoved = true;
+      const ann = llCurrentAnnotations()[llArrowDragIndex];
+      if (!ann) return;
+      if (llArrowDragMode === 'tail') {
+        const rect = document.getElementById('ll-annotate-imgwrap').getBoundingClientRect();
+        const x = (event.clientX - rect.left) / rect.width;
+        const y = (event.clientY - rect.top) / rect.height;
+        ann.x = Math.min(1, Math.max(0, x));
+        ann.y = Math.min(1, Math.max(0, y));
+      } else {
+        ann.angle = Math.atan2(event.clientY - llArrowDragAnchorClientY, event.clientX - llArrowDragAnchorClientX) * 180 / Math.PI;
+      }
+      llRenderAnnotateMarkers();
+    }
+
+    function llArrowPointerUp() {
+      document.removeEventListener('pointermove', llArrowPointerMove);
+      document.removeEventListener('pointerup', llArrowPointerUp);
+      llArrowDragIndex = null;
+      llArrowDragMode = null;
+      // Left set (not cleared here) so the tail's own click handler -
+      // fired right after this, if the drag ended on the tail button -
+      // can see it and skip deleting the arrow it was just dragging. The
+      // timeout is only a safety net for the rare case nothing ever
+      // reads it (drag ended somewhere with no click at all), so it
+      // doesn't stay stuck true and silently block a later, unrelated tap.
+      setTimeout(() => { llArrowDragMoved = false; }, 0);
     }
 
     function llSubmitEntry() {
