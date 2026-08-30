@@ -12910,3 +12910,95 @@ cranes get their own subsections as they're built.
   storage.rules content itself was already committed unchanged in
   a8ec5be/2e118dc, this was purely provisioning + publishing what
   already existed in the repo.
+
+130. Found and fixed a real bug in the Lift Plan Library's photo delete
+     rule - firestore.get() from Storage rules doesn't work across
+     mismatched Firestore/Storage locations
+
+  Person said "test" after 129 shipped. Tried the obvious thing first -
+  a real Playwright browser session against the live production site,
+  signed in as a throwaway account, driving the actual contribution
+  form UI. Blocked at the very first page load: net::ERR_CONNECTION_
+  RESET through this environment's own agent proxy, and it wasn't
+  specific to this site - Chromium's own background requests to
+  www.google.com/accounts.google.com failed identically. Tried the
+  reasonable fixes (domcontentloaded instead of networkidle, an
+  explicit proxy launch option, disabling QUIC/HTTP2) - same failure
+  every time, confirming it's this environment's Chromium-through-proxy
+  path itself, not anything about the app. Per this environment's own
+  guidance (never disable TLS verification, report rather than route
+  around unsupported proxy paths) - didn't chase it further, switched
+  approach instead of burning more time trying to force a browser to
+  work.
+
+  Fell back to the same throwaway-account-plus-service-account approach
+  as section 79/128, but going one level lower: instead of driving the
+  UI, called the real Firestore/Storage REST APIs directly with the
+  throwaway account's own Firebase ID token - genuinely exercises the
+  live rules a real signed-in user would hit, just skips the DOM. Built
+  it as a proper test suite, not just a happy path: unauthenticated
+  create rejected, spoofed loggedByUid on an entry rejected, real
+  category create, real entry create, real photo upload to the actual
+  bucket, round-trip read, a DIFFERENT signed-in user blocked from
+  deleting someone else's photo - all passed. The one that didn't: the
+  ACTUAL OWNER also couldn't delete their own photo. Retried after a
+  pause with a fresh token in case it was a cross-service read
+  propagation delay - still 403, so not a timing fluke.
+
+  Rather than guess why, used the Firebase Rules API's own :test
+  simulation endpoint (POST projects/{project}:test) to run the exact
+  delete expression server-side and see the real error instead of just
+  a bare 403 from the runtime. It said plainly: "Function not found
+  error: Name: [firestore.get]". Checked why - firestore.get()/exists()
+  cross-service calls from Storage rules require the Storage bucket and
+  the Firestore database to be in the SAME location. This project's
+  Firestore is australia-southeast2 (set back when it was first
+  created), the bucket from section 129 is us-west1 (chosen specifically
+  for Cloud Storage's Always Free tier, per the person's explicit "lets
+  go with where it is free"). Different locations, so the function
+  isn't even available to the rules engine - every delete would have
+  silently failed for every single Lift Plan Library photo, including
+  for its own uploader, the whole time.
+
+  Told the person the finding plainly rather than just quietly fixing
+  it, since it reopens a decision they'd already made (the bucket
+  location) - offered two real options: drop the cross-service
+  firestore.get() dependency (keep us-west1/the free tier, small code +
+  rules change) or recreate the bucket in australia-southeast2 to match
+  Firestore (keep the original design, lose the free tier, still cheap
+  to redo since the bucket had zero real data in it). Person: "go with
+  option 1".
+
+  Fix: storage.rules' create rule now requires
+  request.resource.metadata.loggedByUid == request.auth.uid (so nobody
+  can stamp someone else's uid on their own upload), and delete checks
+  resource.metadata.loggedByUid == request.auth.uid instead of
+  firestore.get() - a second source of truth for ownership instead of
+  one, but one that can't be broken by an unrelated region choice on
+  either service ever again. index.html's __liftLibraryUploadPhoto now
+  passes { customMetadata: { loggedByUid: auth.currentUser.uid } } as
+  uploadBytes' third argument to actually stamp it at upload time.
+  Published the updated storage.rules the same way as 128/129 (Rules
+  API, byte-verified against the repo after) - hit the same release-
+  PATCH quirk as 129 (rulesetName rejected as an unknown field on a
+  bare PATCH body), same fix: wrap the body as {release: {...}}.
+
+  Re-ran the same test suite end to end against the fixed rule,
+  including finally reproducing the app's REAL upload mechanism
+  properly (the JS SDK's uploadBytes doesn't do a simple media POST
+  when metadata is attached - it uses the resumable upload protocol,
+  an init POST carrying the metadata JSON followed by a PUT with the
+  bytes; a plain multipart/related POST to the v0 endpoint gets a flat
+  400 "Invalid HTTP method/URL pair" instead of actually testing
+  anything, so getting this wrong would have been a false-negative risk
+  the other way - a test that looks like it's checking metadata
+  enforcement but never actually attaches any). All six checks passed
+  this time, including the one that mattered: the actual owner can
+  delete their own uploaded photo now (204). A different signed-in user
+  still correctly can't. Deleted all throwaway accounts and test
+  objects afterward via the admin service account, deleted the key and
+  scratchpad scripts again same as every prior use.
+
+  CACHE_VERSION v281 -> v282, app-version v7.24 -> v7.25 - unlike 128/
+  129, this one touches real app-shell JS (the upload function itself),
+  not just rules content.

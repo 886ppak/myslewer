@@ -1243,3 +1243,28 @@ a working record, not app content.
   Lift Plan Library Phase 1 is now fully live end-to-end (Firestore
   rules, Storage rules, bucket all real) - photo upload in the
   contribution form should work in production.
+- "test" - tried a real Playwright browser session against production
+  first; blocked by a proxy-level connection reset in this environment
+  that turned out to be general (even Chromium's own Google requests
+  failed the same way), not anything about the app. Fell back to
+  driving the live Firestore/Storage REST APIs directly with a
+  throwaway account's real Firebase ID token - same rules a signed-in
+  user's browser would hit, just without the DOM. Found a real bug:
+  the owner of a photo couldn't delete their own upload. Root cause
+  (confirmed via the Firebase Rules API's own :test simulator, not
+  just a bare 403): firestore.get() cross-service calls from Storage
+  rules require the Storage bucket and Firestore database to be in the
+  same location - this project's Firestore is australia-southeast2,
+  the bucket from the entry above is us-west1 (picked for the free
+  tier). Told the person plainly rather than quietly patching it, since
+  it reopens the location decision - offered dropping the
+  firestore.get() dependency (keep us-west1) or recreating the bucket
+  in australia-southeast2 (lose the free tier). "go with option 1".
+  **Status: fixed and re-verified.** storage.rules now stamps/checks
+  ownership via the photo's own Storage customMetadata instead of a
+  cross-service Firestore lookup; index.html's upload function sets it
+  at upload time. Republished the rules, re-ran the full test suite
+  against the fix - all 6 checks pass now including the one that
+  mattered (owner can delete their own photo). CACHE_VERSION -> v282,
+  app-version -> v7.25 (real app-shell JS changed this time, not just
+  rules). See methodology.txt 130.

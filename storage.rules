@@ -16,20 +16,34 @@ service firebase.storage {
     // round trip needed. Read is open to any signed-in user, same bar as
     // the Firestore side. Upload just needs to be a real image under a
     // sane size (15MB - generous for a phone photo, not generous enough
-    // for someone to use this as general file storage). Delete checks
-    // back against the OWNING FIRESTORE DOC's loggedByUid (cross-service
-    // rules lookup) rather than duplicating an ownership field here -
-    // one source of truth for "who logged this entry", same person who
-    // can delete its photos. No update - a wrong photo means delete and
-    // re-upload, not overwrite in place.
+    // for someone to use this as general file storage).
+    //
+    // Ownership for delete was originally checked by looking back at the
+    // OWNING FIRESTORE DOC's loggedByUid via firestore.get() - one
+    // source of truth, no duplicated field. Dropped that after live
+    // testing (methodology.txt 130) found firestore.get()/exists() from
+    // Storage rules require the Storage bucket and the Firestore
+    // database to be in the SAME location - this project's Firestore is
+    // australia-southeast2, the bucket is us-west1 (picked for Cloud
+    // Storage's Always Free tier), so the function isn't even available
+    // and every delete silently failed, including for the actual owner.
+    // Stamping loggedByUid directly into the object's own customMetadata
+    // at upload time (see index.html's __liftLibraryUploadPhoto) avoids
+    // the cross-service call entirely - a second source of truth, but
+    // one that can't be tripped up by an unrelated region choice on
+    // either side ever again. create requires the metadata match the
+    // uploader so nobody can stamp someone else's uid on their own
+    // photo. No update - a wrong photo means delete and re-upload, not
+    // overwrite in place.
     match /liftLibrary/{entryId}/{fileName} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
                      && request.resource.size < 15 * 1024 * 1024
-                     && request.resource.contentType.matches('image/.*');
+                     && request.resource.contentType.matches('image/.*')
+                     && request.resource.metadata.loggedByUid == request.auth.uid;
       allow update: if false;
       allow delete: if request.auth != null
-                     && firestore.get(/databases/(default)/documents/liftLibraryEntries/$(entryId)).data.loggedByUid == request.auth.uid;
+                     && resource.metadata.loggedByUid == request.auth.uid;
     }
 
     // Deny everything else outright - same explicit-fallback discipline
