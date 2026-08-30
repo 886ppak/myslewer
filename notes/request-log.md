@@ -1639,3 +1639,23 @@ a working record, not app content.
   it (#r-model, #ll-crane) since the fleet doesn't have one. Verified
   both with Playwright. CACHE_VERSION -> v297, app-version -> v8.9.
   See methodology.txt 149.
+- "so I uploaded a test video on lift libary for liebherr digger over
+  15mins ago and it still says Notes: timelapse Video Processing -
+  check back shortly"
+  Real, confirmed bug (not a slow-migration false alarm): checked live
+  Cloud Logging with a fresh service account key and found
+  migrateLiftLibraryVideoToNextcloud's retry loop bailed out
+  immediately via `!snap.exists` because for a brand new entry the
+  Firestore doc doesn't exist at all until AFTER every file (video,
+  PDFs, photos) finishes uploading - the video's own trigger fires
+  first, while the doc still doesn't exist yet, not just missing its
+  video field. Storage only fires that event once, so the video was
+  stuck permanently, not just running late. Fixed both the video and
+  PDF migration functions to retry "doesn't exist yet" the same way as
+  "field not written yet," widened the retry window (~24s -> ~45s),
+  and deployed both live (PDF's actual first deploy - it had been
+  committed but undeployed since the PDF feature itself). Recovered
+  the person's actual stuck video by re-triggering its Storage
+  finalize event (a copy-to-self via the Storage API) rather than
+  making them re-upload - confirmed it landed on Nextcloud and the
+  Storage original was cleaned up. See methodology.txt 150.

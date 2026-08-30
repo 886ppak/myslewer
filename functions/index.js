@@ -325,27 +325,38 @@ exports.migrateLiftLibraryVideoToNextcloud = onObjectFinalized(
     const backupBase = NEXTCLOUD_BACKUP_PATH.value();
 
     const docRef = db.collection('liftLibraryEntries').doc(entryId);
-    // index.html's own submit only writes the Firestore doc AFTER the
-    // video upload's own uploadBytes() promise resolves (photo
-    // compositing and the rest of the entry's fields still happen in
-    // between) - this trigger fires from the SAME upload finishing, so
-    // it can genuinely win that race and see no `video` field yet, not
-    // just an already-migrated or already-removed one. A few short
-    // retries covers that realistic gap without having to restructure
-    // the client into writing the entry doc in two passes; if `video`
-    // still doesn't reference this exact path after that, this really
-    // is stale (already migrated by an earlier run of this same
-    // trigger, superseded by a re-upload, or the entry write itself
-    // failed and the video is genuinely orphaned) and it correctly
-    // does nothing rather than guessing.
+    // index.html's own submit only writes the Firestore doc ONCE, at
+    // the very end, after video/PDFs/photos have ALL finished
+    // uploading to Storage - for a brand new entry (not an edit) the
+    // doc doesn't exist AT ALL until that final write, not just
+    // missing its `video` field. The video's own upload is the FIRST
+    // thing submitted, so its trigger routinely fires while the doc
+    // still doesn't exist yet - confirmed live (methodology.txt 150):
+    // a real submission's trigger ran and exited in ~1.2s, 3 SECONDS
+    // before the entry's own createTime, because the original version
+    // of this loop bailed out on `!snap.exists` immediately instead of
+    // retrying, leaving the video stuck at {pending:true} forever with
+    // no further trigger ever coming (Storage fires an object-finalized
+    // event exactly once). Now retries "doesn't exist yet" exactly
+    // like "exists but video field not written yet" - both mean "the
+    // client isn't done submitting" - and only gives up once attempts
+    // run out. 10 attempts, 5s apart (~45s total) covers a slower
+    // submission with several photos/PDFs on the same entry still
+    // uploading behind this video; if `video` still doesn't reference
+    // this exact path after that, this really is stale (already
+    // migrated by an earlier run of this same trigger, superseded by a
+    // re-upload, or the entry write itself failed and the video is
+    // genuinely orphaned) and it correctly does nothing rather than
+    // guessing.
     let entry = null;
-    for (let attempt = 0; attempt < 6; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       const snap = await docRef.get();
-      if (!snap.exists) return; // entry deleted between upload and this trigger firing
-      entry = snap.data();
-      if (entry.video && entry.video.path === filePath) break;
-      entry = null;
-      if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 4000));
+      if (snap.exists) {
+        entry = snap.data();
+        if (entry.video && entry.video.path === filePath) break;
+        entry = null;
+      }
+      if (attempt < 9) await new Promise((resolve) => setTimeout(resolve, 5000));
     }
     if (!entry) return;
 
@@ -429,20 +440,23 @@ exports.migrateLiftLibraryPdfsToNextcloud = onObjectFinalized(
 
     const docRef = db.collection('liftLibraryEntries').doc(entryId);
     // Same race as migrateLiftLibraryVideoToNextcloud's own comment
-    // explains - the client's Firestore write (adding this PDF's
-    // pending stub to the `pdfs` array) can genuinely still be in
-    // flight when this trigger fires, so retry rather than bail on
-    // the first miss.
+    // explains, including the part that function's original version
+    // got wrong: for a brand new entry the doc doesn't exist AT ALL
+    // until the client's one final write (after every file has
+    // uploaded), not just missing this PDF's stub in `pdfs` - so
+    // `!snap.exists` has to retry too, not bail immediately. 10
+    // attempts, 5s apart (~45s total), matching that fix.
     let pdfIndex = -1;
     let pdfs = null;
-    for (let attempt = 0; attempt < 6; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       const snap = await docRef.get();
-      if (!snap.exists) return; // entry deleted between upload and this trigger firing
-      const entry = snap.data();
-      pdfs = Array.isArray(entry.pdfs) ? entry.pdfs : [];
-      pdfIndex = pdfs.findIndex((p) => p && p.path === filePath);
-      if (pdfIndex !== -1) break;
-      if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 4000));
+      if (snap.exists) {
+        const entry = snap.data();
+        pdfs = Array.isArray(entry.pdfs) ? entry.pdfs : [];
+        pdfIndex = pdfs.findIndex((p) => p && p.path === filePath);
+        if (pdfIndex !== -1) break;
+      }
+      if (attempt < 9) await new Promise((resolve) => setTimeout(resolve, 5000));
     }
     // Not found after retrying - either the entry write genuinely
     // failed (orphaned upload) or this PDF was already migrated/

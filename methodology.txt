@@ -14319,3 +14319,66 @@ cranes get their own subsections as they're built.
   any more.
 
   CACHE_VERSION v296 -> v297, app-version v8.8 -> v8.9.
+
+
+150. Fixed Lift Library video/PDF migration never firing for a brand
+     new entry - real stuck video, diagnosed and recovered live
+
+  Person's report: "so I uploaded a test video on lift libary for
+  liebherr digger over 15mins ago and it still says... Processing -
+  check back shortly." Given a fresh service account key to
+  investigate (same temp-Owner pattern as 146/147).
+
+  Root cause: migrateLiftLibraryVideoToNextcloud's retry loop
+  (originally written in 145) assumed the only race it had to cover
+  was "the entry doc exists but its `video` field isn't written yet" -
+  its `if (!snap.exists) return;` bailed out immediately, with the
+  comment "entry deleted between upload and this trigger firing"
+  covering only the WRONG side of that race. The real shape, missed at
+  145: llSubmitEntry's client code (index.html) writes the Firestore
+  doc exactly ONCE, at the very end, via __liftLibraryCreateEntry -
+  after video, PDFs, and photos have ALL finished uploading to
+  Storage. Video uploads FIRST, so for a brand new entry (not an edit
+  of an existing one) its Storage trigger routinely fires while the
+  entry doc doesn't exist AT ALL yet, not just missing one field.
+  Confirmed directly against live Cloud Logging: the trigger for the
+  reported entry (zmmQPDsGyygc6ZD7tCRV, "Liebherr digger") ran at
+  19:16:41 and returned in 1.178s - 3 seconds BEFORE the entry's own
+  createTime (19:16:44) - meaning it hit `!snap.exists` on attempt 0
+  and gave up instantly. Cloud Storage only fires an object-finalized
+  event ONCE per object, so after that single premature miss nothing
+  would ever retry it again - the video was permanently stuck at
+  {pending:true}, not just slow.
+
+  Fixed both migrateLiftLibraryVideoToNextcloud and
+  migrateLiftLibraryPdfsToNextcloud identically: `!snap.exists` now
+  falls through to the same retry/backoff as "exists but field
+  missing" instead of returning immediately - both cases mean "the
+  client isn't done submitting yet." Also widened the window itself
+  (6 attempts/4s -> 10 attempts/5s, ~24s -> ~45s total) since a
+  submission with several photos/PDFs behind the video on a slow
+  connection can plausibly take longer than the original window before
+  that single final Firestore write lands. Well inside both functions'
+  existing timeouts (300s/180s).
+
+  Deployed both functions live with the person's fresh key (Owner
+  role, same temp-grant pattern as before - reminded them to revoke it
+  again once done). This was also PDF's actual first-ever deploy - its
+  code had been sitting committed-but-undeployed since 148 because the
+  previous key was deleted before that work could ship; this closes
+  that debt too.
+
+  Recovered the person's actual stuck video without waiting for a
+  fresh upload: Storage fires object-finalized on any write to an
+  object, including a copy-to-self, so a `rewriteTo` API call
+  targeting the SAME bucket/path re-finalized the existing video and
+  re-fired the (now-fixed) trigger without touching its bytes. Watched
+  it complete for real: Firestore's `video` field flipped to
+  {url: '.../download', nextcloud: true} within one poll (~3s), the
+  Storage original 404s now (confirmed cleaned up), and the new
+  Nextcloud share URL returns 200. Deleted the local copy of the
+  service account key afterward - please revoke the temporary Owner
+  grant on your end too.
+
+  No CACHE_VERSION/app-version bump - functions/index.js isn't part of
+  the app shell those track.
