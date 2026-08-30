@@ -34,7 +34,16 @@ exports.cleanupOrphanedLiftLibraryPhotos = onSchedule(
   {
     schedule: '0 3 1 * *',
     timeZone: 'UTC',
-    region: 'australia-southeast2',
+    // australia-southeast2 (this project's Firestore location) isn't
+    // one of Cloud Scheduler's supported regions - confirmed via
+    // cloudscheduler.googleapis.com's own locations list, not assumed -
+    // australia-southeast1 (Sydney) is the nearest one that is. The
+    // function itself doesn't need to be co-located with Firestore for
+    // this to work correctly (Admin SDK calls reach Firestore/Storage
+    // over their own APIs regardless of the calling function's region,
+    // unlike the cross-service Storage-rules firestore.get() problem
+    // from 130/133 which was a rules-engine-specific limitation).
+    region: 'australia-southeast1',
   },
   async () => {
     const db = getFirestore();

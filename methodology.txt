@@ -13222,3 +13222,64 @@ cranes get their own subsections as they're built.
 
   No CACHE_VERSION/app-version bump - functions/ and firebase.json are
   new, but nothing in the deployed PWA (index.html/sw.js) changed.
+
+134. Deployed 133's Cloud Function - first real deploy of anything in
+     this project beyond Firestore/Storage rules and static hosting
+
+  Person granted the exact roles named in 133 ("add permission
+  requested"). Verified via testIamPermissions before touching
+  anything, rather than assuming the console click actually landed
+  correctly - all clean. serviceusage.serviceUsageAdmin let this
+  session enable the 6 previously-disabled APIs itself
+  (cloudfunctions/run/cloudbuild/artifactregistry/eventarc/
+  cloudscheduler) rather than sending the person back to click 6
+  console links one at a time.
+
+  Installed firebase-tools into the scratchpad instead of hand-rolling
+  the actual Cloud Functions v2 deploy over raw REST (zip, upload URL,
+  function resource creation, Cloud Run IAM binding, Cloud Scheduler
+  job, Eventarc/Pub/Sub wiring) - that sequence is exactly what
+  firebase-tools exists to get right, and getting any one step subtly
+  wrong would be far harder to catch than a rules-file typo. Ran it
+  non-interactively via GOOGLE_APPLICATION_CREDENTIALS pointed at the
+  service account key (no interactive login available, or needed).
+
+  First attempt failed at the very last step: Cloud Scheduler doesn't
+  support australia-southeast2 (this project's Firestore region, and
+  what the function was originally written to deploy into) -
+  confirmed by actually calling Cloud Scheduler's own ListLocations
+  rather than guessing a fix. australia-southeast1 (Sydney) is the
+  nearest region Scheduler does support, so switched the function's
+  region there - noted directly in the function's own comment that
+  this doesn't reintroduce any version of 130's problem, since Admin
+  SDK calls reach Firestore/Storage over their own APIs regardless of
+  the calling function's region (unlike Storage rules' firestore.get(),
+  which was a rules-engine-specific cross-service limitation, not a
+  general one). Redeployed with --force to also let it set up an
+  Artifact Registry image-cleanup policy in the same pass rather than
+  a separate follow-up step.
+
+  The first (failed) attempt had still fully created the actual
+  function/Cloud Run service at australia-southeast2 before failing at
+  the Scheduler step - the redeploy's own cleanup pass then failed
+  trying to tear THAT down (same invalid-location error, this time for
+  the delete). Checked actual state directly rather than trust the CLI
+  output at face value (same "verify after, don't just trust a 200"
+  standard as every prior live-deploy entry): both regions really did
+  have an ACTIVE function. Deleted the stray australia-southeast2 one
+  via a direct Cloud Functions v2 API call, polled until it actually
+  returned 404, confirmed only australia-southeast1 remained.
+
+  Didn't wait a month to find out whether it actually works - manually
+  ran the Cloud Scheduler job once (`:run`), then queried Cloud
+  Logging directly for the function's own console.log output rather
+  than trusting the trigger call's 200 alone (that response only
+  echoes the job's static config, not the execution result). Real
+  confirmation: "Lift Library photo cleanup: scanned 0 file(s) under
+  liftLibrary/, deleted 0 orphaned photo(s)" - correct, since every
+  test photo from 130-133's own testing had already been cleaned up by
+  hand each time. Deleted the service account key and scratchpad
+  firebase-tools install afterward, same as every prior use.
+
+  No CACHE_VERSION/app-version bump - same reasoning as 133, nothing
+  in the deployed PWA changed, only functions/index.js's region.

@@ -1344,3 +1344,16 @@ a working record, not app content.
   monthly per the person's choice) still needs actual Nextcloud
   WebDAV/API credentials before it can be written at all - not
   started yet.
+- "add permission requested can you step me though the workflow on
+  nextcloud" - deployed the Cloud Function via firebase-tools
+  (non-interactive, service account credentials). Hit one real snag:
+  Cloud Scheduler doesn't support australia-southeast2 (confirmed via
+  its own ListLocations, not guessed) - moved the function to
+  australia-southeast1 (nearest supported region), redeployed, cleaned
+  up a stray leftover function the first failed attempt left behind at
+  the old region. Manually triggered it once and checked Cloud Logging
+  directly rather than trusting the trigger call alone - confirmed it
+  actually ran and logged its real result.
+  **Status: deployed and verified live.** See methodology.txt 134.
+  Walked the person through generating Nextcloud app-password/WebDAV
+  credentials for Stage 2 next.
