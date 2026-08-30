@@ -1711,7 +1711,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.3</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.4</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -13714,7 +13714,7 @@
       const photosHtml = photos.length
         ? `<div class="ll-photo-grid">${photos.map((p) => `
             <a href="${ceEscapeHtml(p.url)}" target="_blank" rel="noopener noreferrer" style="position:relative; display:block;">
-              <img src="${ceEscapeHtml(p.url)}" alt="Lift photo">
+              <img src="${ceEscapeHtml(p.url)}" alt="Lift photo"${llAnnotatedImgStyle(p.annotations)}>
               ${llAnnotationsOverlayHtml(p.annotations)}
             </a>`).join('')}</div>`
         : '';
@@ -14015,6 +14015,37 @@
       document.getElementById('ll-browse-wrap').style.display = '';
     }
 
+    // .ll-photo-grid's own default (object-fit:cover, forced square via
+    // aspect-ratio:1) is fine for an un-annotated photo - it crops to a
+    // nice square thumbnail and nobody's relying on any particular part
+    // of the image staying visible. But llAnnotateImageTap computes x/y
+    // against the ANNOTATOR's own view (#ll-annotate-imgwrap's img has
+    // no aspect-ratio or object-fit forcing at all - it just renders at
+    // its own natural proportions, scaled to fit) - so a marker's stored
+    // fraction is only ever correct against that same, unforced,
+    // full-image rendering.
+    //
+    // Tried object-fit:contain alone first and caught it wasn't actually
+    // enough before shipping it: swapping cover for contain stops the
+    // photo being CROPPED, but the box stays forced square
+    // (aspect-ratio:1), so contain just LETTERBOXES a non-square photo
+    // inside that square instead - measured a real 27px mismatch for an
+    // off-center marker on a landscape test image (correct against the
+    // letterboxed image content vs. naively against the full square box
+    // - only an exactly-centered marker happens to land right either
+    // way, which is exactly why a quick before/after check on a centered
+    // point alone would have missed this). The actual fix has to drop
+    // aspect-ratio's forcing entirely for an annotated photo, not just
+    // change how overflow is handled within it - with aspect-ratio:auto
+    // and no explicit height, the img sizes itself to its own natural
+    // proportions from its rendered width, the same as the annotator's
+    // own img, so there's no forced box shape left to crop or letterbox
+    // against and a marker's fraction always means the same physical
+    // point. Unannotated photos are untouched either way.
+    function llAnnotatedImgStyle(annotations) {
+      return annotations && annotations.length ? ' style="aspect-ratio:auto; object-fit:contain;"' : '';
+    }
+
     // Read-only marker overlay, reused by the form's own thumbnails AND
     // the entry detail view (llOpenEntry) - x/y are fractions [0,1] of
     // the image's box, so `inset:0` + percentage positioning lands each
@@ -14046,14 +14077,14 @@
     function llRenderPendingPhotos() {
       const existingHtml = llExistingPhotos.map((p, i) => `
         <div style="position:relative;">
-          <img src="${ceEscapeHtml(p.url)}" alt="Existing photo">
+          <img src="${ceEscapeHtml(p.url)}" alt="Existing photo"${llAnnotatedImgStyle(p.annotations)}>
           ${llAnnotationsOverlayHtml(p.annotations)}
           <button type="button" onclick="llRemoveExistingPhoto(${i})" aria-label="Remove photo" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&times;</button>
           <button type="button" onclick="llOpenPhotoAnnotator('existing', ${i})" aria-label="Mark up photo" title="Mark up" style="position:absolute; bottom:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&#128205;</button>
         </div>`).join('');
       const pendingHtml = llPendingPhotoUrls.map((url, i) => `
         <div style="position:relative;">
-          <img src="${url}" alt="Selected photo">
+          <img src="${url}" alt="Selected photo"${llAnnotatedImgStyle(llPendingPhotoAnnotations[i])}>
           ${llAnnotationsOverlayHtml(llPendingPhotoAnnotations[i])}
           <button type="button" onclick="llRemovePendingPhoto(${i})" aria-label="Remove photo" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&times;</button>
           <button type="button" onclick="llOpenPhotoAnnotator('pending', ${i})" aria-label="Mark up photo" title="Mark up" style="position:absolute; bottom:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&#128205;</button>

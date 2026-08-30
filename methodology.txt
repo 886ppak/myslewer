@@ -13721,3 +13721,78 @@ cranes get their own subsections as they're built.
   rather than trusting the numbers alone.
 
   CACHE_VERSION v290 -> v291, app-version v8.2 -> v8.3.
+
+142. Fix: annotated photo markers wrong in the thumbnail/detail view
+     (crop/letterbox mismatch, not a drag or storage bug)
+
+  Person's report: "when I click done and then I see it on the preview
+  thumbnail its a bigger arrow and not pointing at what I originally
+  put it to" - plus, separately, a screenshot of a raw uploaded photo
+  (opened directly via its firebasestorage.googleapis.com URL, outside
+  the app) that appeared to show the markers baked into the image
+  itself: "also the annotations do get pasted to the uploaded photo".
+
+  Checked the second claim first since it was the more alarming one if
+  true - read window.__liftLibraryUploadPhoto (index.html:1419)
+  directly: it calls uploadBytes(fileRef, file, metadata) on the raw
+  File object straight from the picker, no canvas, no pixel access,
+  anywhere. Annotations only ever exist as {color/type, x, y[, angle]}
+  JSON in the Firestore doc, rendered purely as a CSS overlay
+  (llAnnotationsOverlayHtml) on TOP of the untouched photo - there is
+  no code path that could draw a marker into the actual file bytes.
+  Concluded (and told the person) that screenshot was very likely a
+  capture/tab-transition artifact, not real file content - matches the
+  SAME kind of composite-screenshot glitch already seen once earlier
+  this session (two different clock times stacked in one image).
+
+  The FIRST report was real, though, and root-caused properly this
+  time (see 138/139/141 for the pattern this session's been in -
+  measure it, don't just re-read the code and assume). Two compounding
+  bugs, found in order:
+
+  Bug 1 - cropping: `.ll-photo-grid img` (shared by both the form's
+  own pending-photo thumbnails AND the entry detail view - same class,
+  same bug in both places) forces `aspect-ratio:1; object-fit:cover`,
+  cropping every photo to a square. But llAnnotateImageTap computes
+  x/y as fractions of the ANNOTATOR's own uncropped view
+  (#ll-annotate-imgwrap has no aspect-ratio/object-fit at all - full
+  image, no cropping). Rendering those same fractions back through a
+  cover-cropped square silently reinterprets them against a smaller,
+  centered VISIBLE WINDOW into the photo - for a landscape 1999x1030
+  test image in a square box, only the middle ~51% of the width
+  survives the crop. Confirmed with a real measurement before
+  touching anything: placed a marker at x=0.05 (5% from the true left
+  edge, well outside that ~51% visible band, so it should have been
+  cropped away and invisible) and found it rendering INSIDE the
+  visible thumbnail instead, at a position with no relation to where
+  that fraction actually falls in the real photo.
+
+  Fix attempt 1 (object-fit:contain instead of cover, only on photos
+  that actually carry an annotation - left every unannotated photo's
+  existing cropped-square look untouched). Re-measured before calling
+  it done, same discipline as 141 - and caught it was still wrong:
+  contain stops the crop, but the BOX stays forced square, so a
+  non-square photo now gets LETTERBOXED inside that square instead of
+  cropped. A marker's fraction needs to map against the letterboxed
+  IMAGE CONTENT's own sub-rectangle, not the full square box - measured
+  a real ~27px error for an off-center marker (only an exactly-centered
+  one happens to land right either way with plain contain-in-a-square,
+  which is exactly why a lazier before/after check using only a
+  centered test point would have missed this and shipped it broken).
+
+  Bug 2 (found via that same measurement) - real fix: drop
+  aspect-ratio's forcing entirely for an annotated photo instead of
+  just changing how overflow inside it is handled -
+  `aspect-ratio:auto; object-fit:contain` with no explicit height lets
+  the img size itself to its OWN natural proportions from its rendered
+  width, the same as the annotator's own img always has - no forced
+  box shape left to crop or letterbox against, so a marker's fraction
+  always means the same physical point regardless of which context
+  it's rendered in. Re-measured with an off-center marker on both
+  axes: landed within 0.6px of the mathematically correct spot (down
+  from a 27px miss), and confirmed the rendered box's own aspect ratio
+  now matches the photo's natural one. Also confirmed the unannotated
+  case is completely unaffected - no inline style added at all, same
+  cover-cropped square as always.
+
+  CACHE_VERSION v291 -> v292, app-version v8.3 -> v8.4.

@@ -1484,3 +1484,25 @@ a working record, not app content.
   re-measured after (exactly 40px at two different angles) and took a
   zoomed screenshot to see the line and head actually meet cleanly.
   CACHE_VERSION -> v291, app-version -> v8.3. See methodology.txt 141.
+- "when I click done and then I see it on the preview thumbnail its a
+  bigger arrow and not pointing at what I originally put it to ?" plus
+  a screenshot appearing to show markers baked into the raw uploaded
+  photo file: "also the annotations do get pasted to the uploaded
+  photo".
+  **Status: done.** The "baked into the file" claim checked out as a
+  screenshot/capture artifact, not real - confirmed by reading the
+  actual upload code (uploads the raw, untouched File object; no
+  canvas or pixel access anywhere in the annotation feature). The
+  thumbnail/direction complaint was real: `.ll-photo-grid img` forces
+  every photo into a cropped square, but a marker's stored position is
+  a fraction of the ANNOTATOR's own uncropped view - rendering it back
+  through the crop silently reinterprets the fraction against a
+  different, smaller visible window. First fix attempt (object-fit:
+  contain) wasn't actually enough on its own - measured it before
+  calling it done and caught a real ~27px error still there for
+  off-center markers, because the box stayed forced-square and just
+  letterboxed instead of cropped. Real fix drops the forced aspect
+  ratio entirely for an annotated photo, letting it size to its own
+  natural proportions like the annotator does - re-measured within
+  0.6px of correct. Unannotated photos are untouched.
+  CACHE_VERSION -> v292, app-version -> v8.4. See methodology.txt 142.
