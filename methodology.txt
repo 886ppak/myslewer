@@ -13504,3 +13504,30 @@ cranes get their own subsections as they're built.
   CACHE_VERSION v286 -> v287, app-version v7.29 -> v7.30 (the cap -
   next bump after this one rolls to v8.0, per this file's own
   version-numbering rule).
+
+138. Lift Plan Library's Counterweight Fitted dropdown: weight only,
+     no composition breakdown
+
+  Screenshot from the person, circled directly on the offending text:
+  the known-combo dropdown from 132 was showing the full "16.0 t —
+  Receptacle Plate 1 + Plate 2" style label (reused verbatim from the
+  CWT Combinations tab's own dropdown) - fine for a calculator picking
+  a specific physical stack, noise for a lift LOG where the number is
+  what matters. Dropped cwtDescribeCombo() from just this ONE call
+  site (index.html:~13789, llUpdateCraneConfig) - left the CWT
+  Combinations tab's own "Jump to Known Combination" dropdown
+  (index.html:~7609, same underlying data and functions) completely
+  untouched, since that one genuinely needs the composition breakdown
+  for its actual job. Also simplifies what gets stored/shown for any
+  future entry (counterweightCombo is stored as the option's own
+  displayed text, per 132's design) - "16.0 t" instead of the full
+  composition string, cleaner in the detail view too.
+
+  Verified locally (Playwright) before pushing - LTM 1250's dropdown
+  now lists a clean run of distinct weights (0.0 t through 88.0 t)
+  with no composition text, confirming both the fix and that dropping
+  the description didn't accidentally collapse or duplicate any real
+  combos.
+
+  CACHE_VERSION v287 -> v288, app-version v7.30 -> v8.0 (past the .30
+  cap, rolls to the next major per this file's own rule).

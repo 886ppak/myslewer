@@ -1430,3 +1430,12 @@ a working record, not app content.
   much smaller gap against a "bulk of data" concern that's really
   about photos. CACHE_VERSION -> v287, app-version -> v7.30 (the cap -
   next bump rolls to v8.0). See methodology.txt 137.
+- Screenshot, circled directly on the "— Receptacle Plate 1 + Plate 2"
+  part of the Counterweight Fitted dropdown: "ONLY needs to show the
+  weights."
+  **Status: done.** Dropped the composition text from just the Lift
+  Library's own dropdown, left the CWT Combinations tab's identical-
+  looking dropdown untouched (it still needs the breakdown for its
+  actual job). Verified locally that the result is a clean list of
+  distinct weights. CACHE_VERSION -> v288, app-version -> v8.0 (past
+  the .30 cap). See methodology.txt 138.
