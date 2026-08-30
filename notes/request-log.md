@@ -1326,4 +1326,21 @@ a working record, not app content.
   site) then against live rules with real throwaway accounts - a
   non-owner's edit attempt rejected, the owner's accepted.
   CACHE_VERSION -> v284, app-version -> v7.27. See methodology.txt 132.
-  **Cloud Function (orphan-photo sweep) + Stage 2: starting next.**
+- Cloud Function for the orphan-photo sweep: wrote
+  functions/index.js (cleanupOrphanedLiftLibraryPhotos, monthly,
+  Admin SDK - bypasses the region-mismatch cross-service problem
+  entirely rather than working around it) and firebase.json. Checked
+  what deploying it actually needs before attempting it: 6 of 7
+  required GCP APIs are still disabled, and the service account is
+  missing several IAM permissions (iam.serviceAccounts.actAs,
+  cloudbuild.builds.create, artifactregistry repo create/upload,
+  cloudscheduler.jobs.create, pubsub.topics.create,
+  serviceusage.services.enable) - a real step up from anything granted
+  so far (actual server-side code, not just data/rules). Committed the
+  function as inert source rather than requesting a pile of new roles
+  unprompted; named the person the exact roles/APIs needed.
+  **Status: written, not deployed - waiting on IAM grants.** See
+  methodology.txt 133. Stage 2 (Nextcloud backup, unconditional
+  monthly per the person's choice) still needs actual Nextcloud
+  WebDAV/API credentials before it can be written at all - not
+  started yet.

@@ -13165,3 +13165,60 @@ cranes get their own subsections as they're built.
   after, same as always.
 
   CACHE_VERSION v283 -> v284, app-version v7.26 -> v7.27.
+
+133. Wrote (not yet deployed) this project's first Cloud Function - a
+     monthly sweep for orphaned Lift Plan Library photos
+
+  Follow-up to 131's accepted gap (admin can't clean up someone else's
+  Storage photo when deleting/editing their entry). Asked how to handle
+  it properly rather than just building something: person's own
+  proposal was a monthly Cloud Function specifically "to save our 3
+  free cloud function per month" - checked the actual pricing rather
+  than let that stand uncorrected (WebSearch, firebase.google.com/
+  cloud.google.com): the real always-free tier is 2 million invocations/
+  month plus compute time, not a 3-function count, so quota was never
+  actually a constraint at this app's scale. Said so plainly, but kept
+  the monthly-sweep design anyway since it's a genuinely better fit on
+  its own merits - no synchronous callable needed on the client's
+  delete/edit path, no partial-cleanup risk if a live call failed
+  mid-flight, and an orphaned photo sitting around for up to a month is
+  harmless (nothing references it, nobody sees it).
+
+  functions/index.js: cleanupOrphanedLiftLibraryPhotos, an onSchedule
+  (firebase-functions v2) running monthly via the Admin SDK - which is
+  the actual point, not just the schedule: Admin SDK calls bypass
+  Firestore's AND Storage's security rules entirely (real admin access
+  via each service's own API), sidestepping the whole cross-service
+  firestore.get()-doesn't-work-across-regions problem from 130 rather
+  than needing a workaround for it. Logic: build the set of every photo
+  path actually referenced across every liftLibraryEntries doc's own
+  photos array, list everything actually sitting under liftLibrary/ in
+  Storage, delete whatever's in Storage but not in that reference set.
+  Deliberately catches BOTH ways a photo can go orphaned with the same
+  simple comparison, rather than separate bookkeeping per case - an
+  entire entry deleted, or an edit that just removed one photo from an
+  otherwise-still-live entry (132's llRemoveExistingPhoto).
+
+  Checked what deploying this would actually need before attempting
+  it, rather than hitting permission walls one at a time the way the
+  original `firebase deploy` attempt did back in 128 - neither gcloud
+  nor firebase-tools are installed in this environment, so deploy would
+  go through raw REST calls again, same approach as every rules publish
+  this whole project. testIamPermissions against a realistic permission
+  list turned up real, expected gaps (iam.serviceAccounts.actAs,
+  cloudbuild.builds.create, artifactregistry.repositories.create/
+  uploadArtifacts, cloudscheduler.jobs.create, pubsub.topics.create,
+  serviceusage.services.enable) and confirmed 6 of the 7 required APIs
+  are still DISABLED on the project (cloudfunctions, run, cloudbuild,
+  artifactregistry, eventarc, cloudscheduler - only pubsub was already
+  on). This is a materially bigger IAM ask than anything earlier this
+  session (actual server-side code execution, not just reading/writing
+  data or publishing declarative rules) - wrote the function source and
+  committed it (inert until actually deployed, same "the rules file
+  lived in the repo for weeks before it was ever live" precedent as
+  128) rather than requesting a pile of new roles unprompted. Named the
+  person the exact roles/APIs needed and let them decide, same
+  discipline as every other IAM ask this session.
+
+  No CACHE_VERSION/app-version bump - functions/ and firebase.json are
+  new, but nothing in the deployed PWA (index.html/sw.js) changed.
