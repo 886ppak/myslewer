@@ -13002,3 +13002,93 @@ cranes get their own subsections as they're built.
   CACHE_VERSION v281 -> v282, app-version v7.24 -> v7.25 - unlike 128/
   129, this one touches real app-shell JS (the upload function itself),
   not just rules content.
+
+131. Lift Plan Library: admin/owner delete, a Crane Configuration
+     section pulling from the app's OWN counterweight/boom/hook-block
+     data, and a Rigging Gear checklist
+
+  Three requests in one message: admin (or owner) able to delete a lift
+  log; a collapsible section reusing the app's existing crane specs
+  (counterweight fitted, boom length, hook block) instead of asking a
+  person to retype what the app already knows; a toggleable chain-sling/
+  shackle checklist that stays out of the way until opened.
+
+  Explored the codebase before designing anything, specifically because
+  the person said "pull that same kind of data from what we know the
+  crane could be fitted with" - there IS existing crane data
+  (COUNTERWEIGHT_DATA, HOOK_BOOM_LENGTHS, FLEET_BLOCK_SPEC), but the
+  three tables use three DIFFERENT key conventions for the same cranes
+  (bare model number vs full display label vs a boom-variant-suffixed
+  key), and none of them cover every crane the same way - confirmed by
+  reading each table's actual keys rather than trusting a first-pass
+  summary of them (COUNTERWEIGHT_DATA has no '1100' entry at all - the
+  LRT 1100 counterweight tab is still on the open task list - and its
+  '1650' entry isn't split by boom variant the way #ll-crane's own
+  dropdown and FLEET_BLOCK_SPEC are). Built one small lookup table
+  (LL_HOOK_BOOM_LABELS) to bridge #ll-crane's own values to
+  HOOK_BOOM_LENGTHS' label keys; COUNTERWEIGHT_DATA only needed a
+  regex strip of the '-t3'/'-t5' suffix; FLEET_BLOCK_SPEC needed no
+  bridge at all, its keys already match #ll-crane's exactly.
+
+  Held off inventing exact chain/shackle sizes myself, even though the
+  person gave a rough range ("26 mil chains down to eight mil", "fifty
+  five tonne down to two two point two tonne shackles") - close enough
+  to standard Grade 80/100 chain and rated-shackle WLL tables to guess
+  at, but this is going into a real lift record, not a decoration, so
+  asked instead of assuming. Person picked the standard Grade 80/100
+  run (8,10,13,16,19,22,26mm) and the standard rated-shackle range
+  (2.0 through 55t, 12 steps) over the coarser/custom alternatives
+  offered.
+
+  Reused two patterns already established elsewhere in the app rather
+  than inventing new ones: <details class="toggle-group"> (the exact
+  collapsible-with-swatches-in-the-summary shape the Slew Clearance
+  feature already uses) for both new "optional" sections, and plain
+  checkboxes for the multi-select lists (chains, shackles, counterweight
+  plates) rather than building custom toggle-chip JS - a small
+  ":has(input:checked)" CSS rule gives the checkbox labels the toggle-
+  chip LOOK the person described ("click it, toggle") without any new
+  interaction logic. Delete reused the ownership check already sitting
+  in firestore.rules' own liftLibraryEntries rule (loggedByUid ==
+  auth.uid || isAdmin()) - no rules change needed for the Firestore
+  side of delete at all, only the new UI button + a confirm() (Cab
+  Entry's own delete-your-own-reading pattern was the closest existing
+  template, but skips the confirm - added one here since an admin
+  removing someone ELSE's entry is a more consequential action than
+  deleting your own reading).
+
+  One real gap surfaced and accepted rather than silently ignored: when
+  an ADMIN deletes someone ELSE's entry, the best-effort photo cleanup
+  calls will get rejected by storage.rules (photo delete is tied to the
+  uploader's own uid in Storage metadata, per section 130's fix -
+  Storage has no isAdmin() check, and can't easily get one without
+  Firebase custom claims / a Cloud Function this project doesn't have).
+  Caught the .catch(() => {}) around each per-photo delete call
+  specifically so the admin can still delete the Firestore entry itself
+  even when photo cleanup fails - an orphaned Storage photo is inert
+  clutter, not a functional problem, so this was accepted rather than
+  built around.
+
+  Verified before publishing anything live: extracted the app's single
+  classic <script> block and ran `node --check` on it (syntax only);
+  then a local Playwright smoke test (serving index.html over a plain
+  local HTTP server, so none of the earlier session's proxy/Chromium
+  issues applied - that was specifically an HTTPS-through-the-agent-
+  proxy problem, not a Playwright-in-general problem) driving
+  llUpdateCraneConfig() directly across three real cranes (1250, both
+  1650 boom variants, and 1100's no-data fallback) and confirming the
+  right option counts/fallback text for each; a second pass exercised
+  llOpenEntry()'s new detail rows and the delete button's three
+  visibility cases (hidden for a stranger, shown for admin, shown for
+  owner) against a fake entry, plus confirmed the confirm()-cancelled
+  path leaves the entry untouched. Zero console errors in either pass.
+  Then published the updated firestore.rules live (same Rules API
+  workflow as 128-130), byte-verified against the repo file, and ran
+  one more live REST check with a real throwaway account: an entry
+  carrying all 5 new fields together was accepted, and an entry with an
+  unlisted field name was still rejected - confirming the hasOnly()
+  change didn't accidentally loosen anything else. Deleted the test
+  entry/category/account and the service account key afterward, same
+  as every prior use.
+
+  CACHE_VERSION v282 -> v283, app-version v7.25 -> v7.26.

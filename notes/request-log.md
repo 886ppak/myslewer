@@ -1268,3 +1268,33 @@ a working record, not app content.
   mattered (owner can delete their own photo). CACHE_VERSION -> v282,
   app-version -> v7.25 (real app-shell JS changed this time, not just
   rules). See methodology.txt 130.
+- Admin lift-log delete, a "Crane Configuration" section (counterweight
+  fitted / boom length / hook block, pulled from the app's own
+  counterweight/boom/hook-block data instead of retyping it), and a
+  Rigging Gear checklist (chain slings, shackles) that stays collapsed
+  until opened. Asked one clarifying question before building - the
+  exact chain/shackle size list, since it goes into a real lift record
+  rather than being decorative; person picked the standard Grade 80/100
+  chain run and standard rated-shackle WLL range over coarser/custom
+  alternatives.
+  **Status: done.** Delete reuses firestore.rules' existing owner-or-
+  admin check (no rules change needed there); Crane Configuration
+  bridges the three crane-data tables' different key conventions (none
+  share one scheme - confirmed by reading their actual keys rather than
+  trusting a first-pass summary); Rigging Gear and the counterweight
+  plate list are plain checkboxes styled as toggle chips via CSS
+  :has(), reusing the app's own existing <details class="toggle-group">
+  pattern rather than new custom JS. One accepted gap, not silently
+  papered over: an admin deleting someone ELSE's entry can't clean up
+  their Storage photos (delete is tied to the uploader's own uid per
+  the fix above, Storage has no isAdmin() check) - the Firestore entry
+  still deletes fine, the orphaned photo is inert. Verified locally
+  with Playwright before publishing anything (a plain local HTTP
+  server, not the production site - sidesteps the proxy issue from the
+  entry above entirely) - zero console errors across crane-config
+  population, detail-view rendering, and all three delete-button
+  visibility cases. Published the firestore.rules field-list update
+  live, byte-verified, and confirmed with a real throwaway account that
+  entries with the new fields are accepted while an unlisted field is
+  still rejected. CACHE_VERSION -> v283, app-version -> v7.26. See
+  methodology.txt 131.

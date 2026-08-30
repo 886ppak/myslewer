@@ -200,6 +200,10 @@
     .ll-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 12px; }
     .ll-photo-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); cursor: pointer; }
     .ll-notes-block { margin-top: 14px; font-size: 0.88rem; line-height: 1.5; white-space: pre-wrap; }
+    .ll-rig-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .ll-rig-chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 14px; font-size: 0.75rem; cursor: pointer; user-select: none; }
+    .ll-rig-chip input { width: auto; margin: 0; cursor: pointer; }
+    .ll-rig-chip:has(input:checked) { background: var(--accent-gold); color: #000; border-color: var(--accent-gold); }
 
     .nav-tabs { display: flex; justify-content: flex-start; background-color: #181a1d; border-bottom: 2px solid var(--border-color); overflow-x: auto; scrollbar-width: none; }
     /* Left-aligned by default - the base/fallback case, and the only
@@ -1391,6 +1395,10 @@
         return deleteObject(storageRef(storage, path));
       };
 
+      window.__liftLibraryDeleteEntry = function (entryId) {
+        return deleteDoc(doc(db, 'liftLibraryEntries', entryId));
+      };
+
       function loadProfile(user) {
         window.__profileEmail = user.email || '';
         window.__profileUid = user.uid;
@@ -1657,7 +1665,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.25</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.26</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -1886,7 +1894,10 @@
         </div>
 
         <div id="ll-detail-wrap" style="display:none;">
-          <button type="button" class="toolbar-btn" onclick="llCloseDetail()" style="margin-bottom:12px;">&larr; Back</button>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px;">
+            <button type="button" class="toolbar-btn" onclick="llCloseDetail()">&larr; Back</button>
+            <button type="button" class="toolbar-btn" id="ll-detail-delete-btn" style="display:none; color:var(--danger); border-color:var(--danger);" onclick="llDeleteEntry()">Delete</button>
+          </div>
           <div id="ll-detail-content"></div>
         </div>
 
@@ -1922,7 +1933,7 @@
           </div>
           <div class="form-group" style="margin-bottom:12px;">
             <label>Crane Used <span style="font-weight:400; text-transform:none;">(optional)</span></label>
-            <select id="ll-crane">
+            <select id="ll-crane" onchange="llUpdateCraneConfig()">
               <option value="">— Not specified —</option>
               <option value="1100">LRT 1100-2.1</option>
               <option value="1110">LTM 1110-5.1</option>
@@ -1935,6 +1946,55 @@
               <option value="1650-t5">LTM 1650-8.1 (T5 80m)</option>
             </select>
           </div>
+
+          <details class="toggle-group" style="margin-bottom:12px;">
+            <summary>Crane Configuration <span style="font-weight:400; text-transform:none;">(optional)</span></summary>
+            <div class="toggle-group-body">
+              <div class="form-group" style="text-align:left;">
+                <label>Counterweight Fitted</label>
+                <div id="ll-cwt-list" style="font-size:0.75rem; color:var(--text-muted);">Select a crane above to see its counterweight plates.</div>
+              </div>
+              <div class="form-group" style="text-align:left; margin-top:10px;">
+                <label>Boom Length</label>
+                <select id="ll-boom-select"><option value="">— Not specified —</option></select>
+              </div>
+              <div class="form-group" style="text-align:left; margin-top:10px;">
+                <label>Hook Block</label>
+                <select id="ll-hookblock-select"><option value="">— Not specified —</option></select>
+              </div>
+            </div>
+          </details>
+
+          <details class="toggle-group" style="margin-bottom:12px;">
+            <summary>Rigging Gear <span style="font-weight:400; text-transform:none;">(optional)</span></summary>
+            <div class="toggle-group-body">
+              <div style="font-size:0.72rem; font-weight:700; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase;">Chain Slings</div>
+              <div class="ll-rig-chips">
+                <label class="ll-rig-chip"><input type="checkbox" value="8" class="ll-rig-chain">8mm</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="10" class="ll-rig-chain">10mm</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="13" class="ll-rig-chain">13mm</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="16" class="ll-rig-chain">16mm</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="19" class="ll-rig-chain">19mm</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="22" class="ll-rig-chain">22mm</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="26" class="ll-rig-chain">26mm</label>
+              </div>
+              <div style="font-size:0.72rem; font-weight:700; color:var(--text-muted); margin:12px 0 6px; text-transform:uppercase;">Shackles (WLL)</div>
+              <div class="ll-rig-chips">
+                <label class="ll-rig-chip"><input type="checkbox" value="2" class="ll-rig-shackle">2.0t</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="3.25" class="ll-rig-shackle">3.25t</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="4.75" class="ll-rig-shackle">4.75t</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="6.5" class="ll-rig-shackle">6.5t</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="8.5" class="ll-rig-shackle">8.5t</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="9.5" class="ll-rig-shackle">9.5t</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="12" class="ll-rig-shackle">12t</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="13.5" class="ll-rig-shackle">13.5t</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="17" class="ll-rig-shackle">17t</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="25" class="ll-rig-shackle">25t</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="35" class="ll-rig-shackle">35t</label>
+                <label class="ll-rig-chip"><input type="checkbox" value="55" class="ll-rig-shackle">55t</label>
+              </div>
+            </div>
+          </details>
 
           <div class="form-group" style="margin-bottom:12px;">
             <label>Photos</label>
@@ -13438,19 +13498,32 @@
         </button>`).join('');
     }
 
+    let llCurrentDetailEntryId = null;
+
     function llOpenEntry(entryId) {
       const entry = llAllEntries.find((e) => e.id === entryId);
       if (!entry) { showToast('Entry not found.'); return; }
 
+      llCurrentDetailEntryId = entryId;
       document.getElementById('ll-browse-wrap').style.display = 'none';
       document.getElementById('ll-search-results').style.display = 'none';
       document.getElementById('ll-detail-wrap').style.display = '';
+
+      const deleteBtn = document.getElementById('ll-detail-delete-btn');
+      deleteBtn.style.display = (window.__isAdmin || entry.loggedByUid === window.__profileUid) ? '' : 'none';
 
       const rows = [];
       if (entry.asset) rows.push(['Asset', entry.asset]);
       if (entry.part) rows.push(['Part', entry.part]);
       if (entry.weightValue != null) rows.push(['Weight', `${entry.weightValue}${entry.weightUnit ? ' ' + entry.weightUnit : ''}`]);
       if (entry.craneModel) rows.push(['Crane', entry.craneModel]);
+      if (entry.boomLength != null) rows.push(['Boom length', `${entry.boomLength} m`]);
+      if (entry.hookBlock) rows.push(['Hook block', entry.hookBlock]);
+      if (Array.isArray(entry.counterweightPlates) && entry.counterweightPlates.length) rows.push(['Counterweight fitted', entry.counterweightPlates.join(', ')]);
+      const riggingParts = [];
+      if (Array.isArray(entry.riggingChains) && entry.riggingChains.length) riggingParts.push(`Chains: ${entry.riggingChains.map((c) => c + 'mm').join(', ')}`);
+      if (Array.isArray(entry.riggingShackles) && entry.riggingShackles.length) riggingParts.push(`Shackles: ${entry.riggingShackles.map((s) => s + 't').join(', ')}`);
+      if (riggingParts.length) rows.push(['Rigging gear', riggingParts.join(' • ')]);
       rows.push(['Logged by', entry.loggedByName || 'Unknown']);
 
       const photos = Array.isArray(entry.photos) ? entry.photos : [];
@@ -13469,6 +13542,46 @@
         ${notesHtml}
         ${photosHtml}
       `;
+    }
+
+    // Deletion is gated the same way the button's own visibility is
+    // (isAdmin or original logger, matching firestore.rules'
+    // liftLibraryEntries allow update/delete) - a real confirm() here
+    // since removing someone else's entry as admin is a genuinely
+    // consequential action, unlike Cab Entry's own delete-your-own-
+    // reading pattern which skips the dialog.
+    function llDeleteEntry() {
+      const entryId = llCurrentDetailEntryId;
+      const entry = llAllEntries.find((e) => e.id === entryId);
+      if (!entry) return;
+
+      const isOwner = entry.loggedByUid === window.__profileUid;
+      const promptText = isOwner
+        ? 'Delete this lift entry? This cannot be undone.'
+        : 'Delete this lift entry as admin? This cannot be undone.';
+      if (!window.confirm(promptText)) return;
+
+      const photos = Array.isArray(entry.photos) ? entry.photos : [];
+      // Best-effort photo cleanup - storage.rules ties delete permission
+      // to the uploader's own uid (see storage.rules' own comment on why
+      // it can't check isAdmin() there instead), so an admin deleting
+      // someone ELSE's entry will have these calls rejected. Accepted
+      // gap rather than something to fix by widening Storage
+      // permissions: an orphaned photo is inert clutter, not a
+      // functional problem, and the Firestore entry (the actual thing
+      // anyone browses) is gone either way.
+      Promise.all(photos.map((p) => window.__liftLibraryDeletePhoto(p.path).catch(() => {})))
+        .then(() => window.__liftLibraryDeleteEntry(entryId))
+        .then(() => {
+          llAllEntries = llAllEntries.filter((e) => e.id !== entryId);
+          showToast('Lift entry deleted.');
+          llCloseDetail();
+          llRenderBrowse();
+        })
+        .catch((err) => {
+          console.error('Could not delete lift entry', err);
+          showToast('Could not delete - try again.');
+        });
     }
 
     function llCloseDetail() {
@@ -13492,6 +13605,46 @@
     let llPendingPhotoUrls = [];
     let llCurrentFormEntryId = null;
 
+    // Maps #ll-crane's own option values to the OTHER two crane data
+    // tables' differing key conventions (see COUNTERWEIGHT_DATA/
+    // HOOK_BOOM_LENGTHS/FLEET_BLOCK_SPEC's own definitions - none of the
+    // three share one key scheme). FLEET_BLOCK_SPEC needs no map at all,
+    // its keys already match #ll-crane's values exactly (bare numbers,
+    // plus '1650-t3'/'1650-t5'). COUNTERWEIGHT_DATA has one '1650' entry
+    // covering both boom variants (and no '1100' entry at all - the LRT
+    // 1100 counterweight tab hasn't been built yet, see task list) - the
+    // regex strips the '-t3'/'-t5' suffix to get its bare-number key.
+    // HOOK_BOOM_LENGTHS is keyed by the full display label instead of a
+    // crane number, and also only has one "LTM 1650-8.1" entry for both
+    // boom variants (same real boom-length data either way).
+    const LL_HOOK_BOOM_LABELS = {
+      '1100': 'LRT 1100-2.1', '1110': 'LTM 1110-5.1', '1130': 'LTM 1130-5.1',
+      '1160': 'LTM 1160-5.2', '1220': 'LTR 1220', '1250': 'LTM 1250-5.1',
+      '1300': 'LTM 1300-6.2', '1650-t3': 'LTM 1650-8.1', '1650-t5': 'LTM 1650-8.1'
+    };
+
+    function llUpdateCraneConfig() {
+      const craneKey = document.getElementById('ll-crane').value;
+
+      const cwtData = COUNTERWEIGHT_DATA[craneKey.replace(/-t[35]$/, '')];
+      const cwtList = document.getElementById('ll-cwt-list');
+      cwtList.innerHTML = (cwtData && cwtData.components)
+        ? cwtData.components.map((c) => `
+            <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; cursor:pointer;">
+              <input type="checkbox" value="${ceEscapeHtml(c.name)}" class="ll-cwt-plate" style="width:auto; cursor:pointer;">
+              ${ceEscapeHtml(c.name)} (${c.weight}t)
+            </label>`).join('')
+        : (craneKey ? 'No counterweight data for this crane yet.' : 'Select a crane above to see its counterweight plates.');
+
+      const boomLengths = HOOK_BOOM_LENGTHS[LL_HOOK_BOOM_LABELS[craneKey]];
+      document.getElementById('ll-boom-select').innerHTML = '<option value="">— Not specified —</option>' +
+        (boomLengths ? boomLengths.map((len) => `<option value="${len}">${len} m</option>`).join('') : '');
+
+      const blockSpec = FLEET_BLOCK_SPEC[craneKey];
+      document.getElementById('ll-hookblock-select').innerHTML = '<option value="">— Not specified —</option>' +
+        ((blockSpec && blockSpec.blocks) ? blockSpec.blocks.map((b) => `<option value="${ceEscapeHtml(b.name)}">${ceEscapeHtml(b.name)}</option>`).join('') : '');
+    }
+
     function llOpenForm() {
       llCurrentFormEntryId = window.__liftLibraryNewEntryId();
       llPendingPhotoUrls.forEach((u) => URL.revokeObjectURL(u));
@@ -13504,6 +13657,8 @@
       document.getElementById('ll-form-weight').value = '';
       document.getElementById('ll-form-weight-unit').value = 't';
       document.getElementById('ll-crane').value = '';
+      llUpdateCraneConfig();
+      document.querySelectorAll('.ll-rig-chain:checked, .ll-rig-shackle:checked').forEach((el) => { el.checked = false; });
       document.getElementById('ll-form-link').value = '';
       document.getElementById('ll-form-notes').value = '';
       document.getElementById('ll-form-photo-input').value = '';
@@ -13599,6 +13754,16 @@
           if (part) data.part = part;
           if (weightRaw !== '') { data.weightValue = parseFloat(weightRaw); data.weightUnit = document.getElementById('ll-form-weight-unit').value; }
           if (craneSelect.value) data.craneModel = craneSelect.options[craneSelect.selectedIndex].textContent;
+          const cwtPlates = Array.from(document.querySelectorAll('.ll-cwt-plate:checked')).map((el) => el.value);
+          if (cwtPlates.length) data.counterweightPlates = cwtPlates;
+          const boomLenRaw = document.getElementById('ll-boom-select').value;
+          if (boomLenRaw !== '') data.boomLength = parseFloat(boomLenRaw);
+          const hookBlock = document.getElementById('ll-hookblock-select').value;
+          if (hookBlock) data.hookBlock = hookBlock;
+          const chains = Array.from(document.querySelectorAll('.ll-rig-chain:checked')).map((el) => parseFloat(el.value));
+          if (chains.length) data.riggingChains = chains;
+          const shackles = Array.from(document.querySelectorAll('.ll-rig-shackle:checked')).map((el) => parseFloat(el.value));
+          if (shackles.length) data.riggingShackles = shackles;
           if (link) data.externalLink = link;
           if (notes) data.notes = notes;
 
