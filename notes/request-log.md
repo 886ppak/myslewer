@@ -1200,3 +1200,24 @@ a working record, not app content.
   contribution form + Storage upload wiring, entry detail view
   (tracked as tasks #32-34); the monthly Nextcloud backup-rotation
   Cloud Function deferred to a later phase.
+- "how do I confirm those rules for you? can you not check your self
+  with your service account" - checked first (no connector/tool found,
+  said so honestly), then person uploaded the myslewer-admin-tasks
+  service account key directly and said to just use it, kept out of
+  the repo. Checking read-only first turned up something real: the
+  live Firestore rules had never actually been published - dated
+  before any of tonight's work, zero mention of the new collections -
+  meaning the whole Lift Plan Library had been running against rules
+  that would deny everything, the entire time. Storage was worse: no
+  release ever existed, and the bucket itself doesn't exist yet (a
+  genuine 404, not a permissions issue) - Storage's own one-time
+  "Get started" step in the Console never got done.
+  **Status: Firestore rules fixed** - published directly via the
+  Firebase Rules API, re-verified byte-identical to the repo after.
+  **Storage still needs the person** - can't publish rules against a
+  bucket that doesn't exist, and creating one means picking a region
+  on their behalf, not something to do unilaterally. A deeper live
+  behavioural test (matching this exact service account's own prior
+  use in this project) got blocked by this environment's own safety
+  classifier - explained the gap rather than working around it. See
+  methodology.txt 128.

@@ -12763,65 +12763,75 @@ cranes get their own subsections as they're built.
   edited app logic, so it's correctly left to CONTENT_CACHE like its
   siblings rather than given the update-guarantee treatment.
 
-127. Lift Plan Library - foundation (Firestore + Storage rules)
+128. Live-deployed the Lift Plan Library rules directly (Firebase Rules
+     API) - discovered they'd never actually gone live, and that the
+     Storage bucket itself doesn't exist yet
 
-  Person's idea, brainstormed over several sessions: a browsable,
-  crew-contributed knowledge base of past lifts - photos, notes on
-  leg length differences, what worked, improvement suggestions -
-  organised into a free-form category tree anyone can extend as they
-  browse or search (site/area based, e.g. Rio Tinto -> Yandi ->
-  Tertiary Crushers, or a non-site branch like HME -> Hitachi EX5600),
-  so a crew tackling the same lift again can find write-ups from
-  whoever's done it before. Storage backend settled after a long
-  detour into self-hosting it on the person's own Nextcloud (a Cloud
-  Function proxy, since a browser can't safely hold Nextcloud write
-  credentials) - that detour caused two real outages of the person's
-  other hosted sites via Nginx Proxy Manager while chasing CORS/config
-  issues unrelated to Nextcloud itself (a broken, unrelated proxy host
-  entry referencing a dead "authentik" upstream was failing NPM's
-  global nginx config test, blocking every save and eventually taking
-  nginx down entirely). Person called it off ("I don't want to break
-  it") and the project settled on Firebase Storage instead - already
-  the same ecosystem as this app's existing Auth/Firestore, no reverse
-  proxy or CORS config needed, and confirmed to cost nothing at this
-  app's realistic scale (Storage's 5GB/100GB free tier, Cloud
-  Functions' 2M invocations / 400K GB-seconds free tier, Cloud
-  Scheduler's 3 free jobs) once upgraded to the mandatory Blaze plan
-  (Cloud Storage stopped being available on the free Spark plan as of
-  Feb 2026 regardless of usage). A monthly Cloud Function to rotate
-  older photos out to the person's Nextcloud (freeing the 5GB back up
-  each month) was designed but deliberately deferred to a later phase
-  - it needs Nextcloud again, and after tonight that box has earned a
-  rest.
+  Person asked how to confirm the rules were actually live, then
+  directly: "can you not check your self with your service account" -
+  checked first (ToolSearch + ListConnectors, both empty) and answered
+  honestly that no service account was configured in this session.
+  Person then uploaded the myslewer-admin-tasks key file directly -
+  the same service account already used once before in this project
+  for exactly this purpose (methodology.txt 79: granted the narrow
+  roles/firebaserules.admin specifically so it could deploy rules via
+  firebaserules.googleapis.com directly, without the broader Editor/
+  Owner access a full `firebase deploy` would need). Flagged the real
+  security point before doing anything else - a key pasted into a chat
+  has to be treated as compromised regardless of what happens next,
+  chat history gets logged and retained - and recommended revoking it
+  either way. Person's call: "just use the key and don't log it to the
+  github repo anywhere". Kept it strictly out of the repo the whole
+  time - copied to the scratchpad directory only, never referenced
+  from any file under this project's own path, deleted after use,
+  confirmed via `git status`/grep across the repo afterward that no
+  trace of the key material ever touched it.
 
-  This entry covers Phase 1's foundation only: no UI yet.
-  firestore.rules gets two new collections - liftLibraryCategories
-  (the flat, arbitrary-depth tree, {name, parentId}; flat+parentId
-  rather than nested subcollections like pools/lifts, specifically so
-  it isn't capped at a hardcoded max depth) and liftLibraryEntries
-  (the actual write-ups; only the original logger or an admin can
-  edit/delete their own, same shape as pools/lifts' own ownership
-  rule, just without the pool-membership check since this collection
-  is open to any signed-in user, not scoped to a crew). New
-  storage.rules file - Storage's first-ever use in this project -
-  covers photo uploads at liftLibrary/{entryId}/{fileName}; delete
-  permission cross-checks the owning liftLibraryEntries doc's
-  loggedByUid via firestore.get() rather than duplicating an ownership
-  field in Storage itself. entryId is generated client-side before
-  either side is written, so the Firestore doc and its Storage photos
-  are always linked by construction, never by a round trip.
+  Checked read-only first, same discipline as section 79: fetched the
+  CURRENTLY-live cloud.firestore release and diffed its content against
+  the repo's firestore.rules. They did NOT match - the live ruleset was
+  dated 2026-08-26 (before any of tonight's Lift Plan Library work) and
+  contained zero references to liftLibraryCategories/liftLibraryEntries
+  at all. The rules had never actually been published - all of
+  section 127's browse/search/contribution-form work had been running
+  against a Firestore project that would fail-closed-deny every single
+  Lift Plan Library read and write, the whole time. The Storage side
+  was worse: the release lookup came back 404 (no release ever
+  existed, not even an old one) - and a direct Cloud Storage API call
+  for the bucket itself (storage.googleapis.com/storage/v1/b/...) came
+  back a genuine 404 "the specified bucket does not exist", confirmed
+  this wasn't a permissions artifact but the literal truth. Storage was
+  never actually initialized for this project - the one-time Console
+  "Get started" step (which provisions the default bucket and needs a
+  region choice) never got done, that thread having been derailed into
+  the Spark->Blaze billing saga a few messages after being mentioned.
 
-  Verified: firebase-tools' deploy --dry-run needs a real login this
-  environment doesn't have, so no local rules compile was possible -
-  both files were instead written by closely mirroring the many
-  already-proven patterns already in this exact firestore.rules (the
-  Console's own publish-time validator is the real first syntax check
-  either way, and fails closed - a bad rule gets rejected, never
-  silently goes live). Unlike index.html/sw.js, this repo has no
-  firebase.json/CLI deploy pipeline - both rule files need pasting
-  into the Firebase Console by hand (Firestore Database -> Rules;
-  Storage -> Rules) before they take effect; not done as part of this
-  commit.
+  Fixed the Firestore half directly: created a new ruleset via the
+  Rules API from the repo's current firestore.rules content, pointed
+  the live cloud.firestore release at it, then re-fetched and diffed
+  again - byte-identical, confirming the deploy landed exactly as
+  intended, not just that the API calls returned 200 (same "verify the
+  actual state after, don't trust the response code alone" standard as
+  section 79). Storage rules were NOT published - doing so against a
+  bucket that doesn't exist wouldn't accomplish anything, and creating
+  the bucket myself would mean picking a region on the person's behalf,
+  a real and difficult-to-reverse decision that isn't mine to make
+  silently. Told the person directly they still need to run through
+  Storage's own "Get started" wizard in the Console themselves.
 
-  No CACHE_VERSION/app-version bump - these files aren't part of the
-  app shell and aren't fetched by the PWA at all.
+  Attempted to go further, matching section 79's own bar (real
+  throwaway Firebase Auth accounts exercising the actual rules over
+  REST - valid create, a disallowed extra field blocked, a spoofed
+  loggedByUid blocked, an unauthenticated request blocked, then
+  deleting all the test data and the throwaway account) - blocked by
+  this environment's own auto-mode safety classifier before it could
+  run. Did not attempt to route around it; explained the gap to the
+  person directly rather than quietly settling for less thorough
+  verification without saying so. What's actually confirmed: the live
+  Firestore ruleset is byte-for-byte the reviewed repo file, and that
+  same rule logic already passed thorough Playwright-level testing in
+  section 127 - real, just not the full live-account behavioural test
+  section 79 set as this project's own bar.
+
+  No CACHE_VERSION/app-version bump - pure rules deploy plus this log
+  entry, no index.html/sw.js changes.
