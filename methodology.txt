@@ -12648,3 +12648,66 @@ cranes get their own subsections as they're built.
   visible text, plus zero page errors.
 
   CACHE_VERSION v279->v280, app version v7.22->v7.23.
+
+127. Lift Plan Library - foundation (Firestore + Storage rules)
+
+  Person's idea, brainstormed over several sessions: a browsable,
+  crew-contributed knowledge base of past lifts - photos, notes on
+  leg length differences, what worked, improvement suggestions -
+  organised into a free-form category tree anyone can extend as they
+  browse or search (site/area based, e.g. Rio Tinto -> Yandi ->
+  Tertiary Crushers, or a non-site branch like HME -> Hitachi EX5600),
+  so a crew tackling the same lift again can find write-ups from
+  whoever's done it before. Storage backend settled after a long
+  detour into self-hosting it on the person's own Nextcloud (a Cloud
+  Function proxy, since a browser can't safely hold Nextcloud write
+  credentials) - that detour caused two real outages of the person's
+  other hosted sites via Nginx Proxy Manager while chasing CORS/config
+  issues unrelated to Nextcloud itself (a broken, unrelated proxy host
+  entry referencing a dead "authentik" upstream was failing NPM's
+  global nginx config test, blocking every save and eventually taking
+  nginx down entirely). Person called it off ("I don't want to break
+  it") and the project settled on Firebase Storage instead - already
+  the same ecosystem as this app's existing Auth/Firestore, no reverse
+  proxy or CORS config needed, and confirmed to cost nothing at this
+  app's realistic scale (Storage's 5GB/100GB free tier, Cloud
+  Functions' 2M invocations / 400K GB-seconds free tier, Cloud
+  Scheduler's 3 free jobs) once upgraded to the mandatory Blaze plan
+  (Cloud Storage stopped being available on the free Spark plan as of
+  Feb 2026 regardless of usage). A monthly Cloud Function to rotate
+  older photos out to the person's Nextcloud (freeing the 5GB back up
+  each month) was designed but deliberately deferred to a later phase
+  - it needs Nextcloud again, and after tonight that box has earned a
+  rest.
+
+  This entry covers Phase 1's foundation only: no UI yet.
+  firestore.rules gets two new collections - liftLibraryCategories
+  (the flat, arbitrary-depth tree, {name, parentId}; flat+parentId
+  rather than nested subcollections like pools/lifts, specifically so
+  it isn't capped at a hardcoded max depth) and liftLibraryEntries
+  (the actual write-ups; only the original logger or an admin can
+  edit/delete their own, same shape as pools/lifts' own ownership
+  rule, just without the pool-membership check since this collection
+  is open to any signed-in user, not scoped to a crew). New
+  storage.rules file - Storage's first-ever use in this project -
+  covers photo uploads at liftLibrary/{entryId}/{fileName}; delete
+  permission cross-checks the owning liftLibraryEntries doc's
+  loggedByUid via firestore.get() rather than duplicating an ownership
+  field in Storage itself. entryId is generated client-side before
+  either side is written, so the Firestore doc and its Storage photos
+  are always linked by construction, never by a round trip.
+
+  Verified: firebase-tools' deploy --dry-run needs a real login this
+  environment doesn't have, so no local rules compile was possible -
+  both files were instead written by closely mirroring the many
+  already-proven patterns already in this exact firestore.rules (the
+  Console's own publish-time validator is the real first syntax check
+  either way, and fails closed - a bad rule gets rejected, never
+  silently goes live). Unlike index.html/sw.js, this repo has no
+  firebase.json/CLI deploy pipeline - both rule files need pasting
+  into the Firebase Console by hand (Firestore Database -> Rules;
+  Storage -> Rules) before they take effect; not done as part of this
+  commit.
+
+  No CACHE_VERSION/app-version bump - these files aren't part of the
+  app shell and aren't fetched by the PWA at all.

@@ -297,6 +297,70 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Lift Plan Library - a company-wide, browsable knowledge base (NOT
+    // pool-scoped like the shared lift log above): documented past lifts,
+    // organised into a free-form category tree anyone can extend as they
+    // go (e.g. Rio Tinto -> Yandi -> Tertiary Crushers, or a non-site
+    // branch like HME -> Hitachi EX5600), so someone tackling the same
+    // lift again can find write-ups from whoever's done it before.
+    // Deliberately open to any signed-in user, same "signed in is enough"
+    // bar as pools/directory above - built by the whole user base, not
+    // curated by an admin.
+
+    // The tree itself: a flat collection keyed by auto-id, each doc just
+    // {name, parentId}. Flat + parentId (rather than nested
+    // subcollections, like pools/lifts above) is what lets this go to any
+    // depth - a subcollection-per-level approach needs a fixed max
+    // nesting depth hardcoded into rules, which doesn't fit a tree meant
+    // to be extended indefinitely; a parentId query works at any depth
+    // without a rules change. Listable in full (unlike pools) since
+    // browsing/searching the whole tree is the point. Immutable once
+    // created for now - no rename/delete from the client yet, since a
+    // delete would need to also decide what happens to any children or
+    // entries under it; a typo just means creating a corrected node
+    // rather than fixing the old one in place.
+    match /liftLibraryCategories/{categoryId} {
+      allow get, list: if request.auth != null;
+      allow create: if request.auth != null
+                     && request.resource.data.keys().hasOnly(['name', 'parentId', 'createdBy', 'createdByName', 'createdAt'])
+                     && request.resource.data.name is string
+                     && request.resource.data.name.size() > 0
+                     && request.resource.data.name.size() <= 80
+                     && (request.resource.data.parentId == null
+                         || (request.resource.data.parentId is string
+                             && exists(/databases/$(database)/documents/liftLibraryCategories/$(request.resource.data.parentId))))
+                     && request.resource.data.createdBy == request.auth.uid
+                     && request.resource.data.createdAt is int;
+      allow update, delete: if false;
+    }
+
+    // The actual lift write-ups. entryId is generated CLIENT-SIDE before
+    // either the Storage photos or this doc are created (see index.html's
+    // lift library submit flow), specifically so the two stay linked by
+    // the same id without a round trip - Storage's own rules (see
+    // storage.rules) check this doc's loggedByUid via firestore.get() to
+    // decide who can delete an uploaded photo, so a doc and its photos
+    // are never orphaned from each other by construction. Only the
+    // original logger (or an admin) can edit/delete their own entry -
+    // same "you can only touch your own" shape as pools/lifts above, just
+    // without a pool-membership check since this isn't pool-scoped.
+    match /liftLibraryEntries/{entryId} {
+      allow get, list: if request.auth != null;
+      allow create: if request.auth != null
+                     && request.resource.data.keys().hasAll(['categoryId', 'title', 'loggedByUid', 'loggedByName', 'createdAt'])
+                     && request.resource.data.keys().hasOnly(['categoryId', 'title', 'asset', 'part', 'weightValue', 'weightUnit', 'craneModel', 'photos', 'notes', 'externalLink', 'loggedByUid', 'loggedByName', 'createdAt'])
+                     && request.resource.data.categoryId is string
+                     && exists(/databases/$(database)/documents/liftLibraryCategories/$(request.resource.data.categoryId))
+                     && request.resource.data.title is string
+                     && request.resource.data.title.size() > 0
+                     && request.resource.data.title.size() <= 120
+                     && (!('photos' in request.resource.data) || (request.resource.data.photos is list && request.resource.data.photos.size() <= 20))
+                     && request.resource.data.loggedByUid == request.auth.uid
+                     && request.resource.data.createdAt is int;
+      allow update, delete: if request.auth != null
+                              && (resource.data.loggedByUid == request.auth.uid || isAdmin());
+    }
+
     // Deny everything else outright - an explicit fallback rather than
     // relying on Firestore's own "no matching rule = denied" default, so
     // adding some unrelated collection later can't accidentally inherit

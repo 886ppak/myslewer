@@ -1145,3 +1145,29 @@ a working record, not app content.
   present. Paint-Mark Method entry now links straight to
   guides/paint-mark-method.html. Shipped to main (CACHE_VERSION
   v279->v280, app v7.22->v7.23). See methodology.txt 126.
+- "I think we may have to go down the [Firebase Storage] route... and
+  for larger files I can always host on my Nextcloud and give a view
+  only link" - brainstormed the Lift Plan Library across many turns
+  (photo + notes library of past lifts, browsable/searchable via a
+  free-form category tree anyone can extend, e.g. Rio Tinto -> Yandi
+  -> Tertiary Crushers or HME -> Hitachi EX5600). Explored self-hosting
+  photos on person's own Nextcloud first (a Cloud Function proxy for
+  secure uploads), which led to two real outages of their other
+  hosted sites via Nginx Proxy Manager (an unrelated broken proxy host
+  referencing a dead "authentik" upstream was failing NPM's global
+  config test) - person called it off: "I don't want to break it."
+  Settled on Firebase Storage instead, confirmed free at this app's
+  scale, upgraded to the required Blaze plan. "yup lets start building
+  the lift library."
+  **Status: Phase 1 foundation shipped, UI not built yet.**
+  firestore.rules gets liftLibraryCategories (flat tree, any depth)
+  and liftLibraryEntries (the write-ups, owner/admin-only edit); new
+  storage.rules covers photo uploads, cross-checking ownership against
+  the Firestore doc via firestore.get() rather than duplicating it.
+  Both need manual paste into the Firebase Console (no CLI deploy
+  pipeline in this repo) before they take effect - not done as part of
+  this commit. No CACHE_VERSION/app-version bump (not part of the app
+  shell). See methodology.txt 127. Next: category tree browse UI,
+  contribution form + Storage upload wiring, entry detail view
+  (tracked as tasks #32-34); the monthly Nextcloud backup-rotation
+  Cloud Function deferred to a later phase.
