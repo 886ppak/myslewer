@@ -14259,3 +14259,63 @@ cranes get their own subsections as they're built.
   available again.
 
   CACHE_VERSION v295 -> v296, app-version v8.7 -> v8.8.
+
+
+149. LTM 1650 Lift Library counterweight dropdown: fixed duplicate
+     weight entries; removed the T5 boom option (fleet doesn't own one)
+
+  Person's report, with a screenshot: "it has multiple of the same Cwt
+  configs eg 105 3x... vairo blaste of 6.4,7.4,8.4 which I think for
+  this model of crane actual need to be a option. and we can remove
+  the 1650 t5 ver as we don't own a t5 ver." Two separate fixes.
+
+  Root cause of the duplicates: cwtComboWeight() deliberately excludes
+  countsToward:false components from the total it returns - a
+  confirmed OEM rule (see its own comment, and LTM 1110's Winch 2*
+  before it) since a winch's own weight genuinely isn't part of the
+  crane's counterweight figure. But LTM 1650's w2/w3 (Winch 2, Winch
+  3) both carry that flag while still being enumerated as their own
+  combo entries at every plate-loadout level (base / +w2 / +w3 /
+  +w2+w3), and llUpdateCraneConfig's own dropdown builds label text
+  from that same weight-only number - so all four variants at a given
+  plate level rendered as literally identical text ("105.0 t" x4).
+  Not a VarioBase-radius issue as guessed in the report (COUNTERWEIGHT_
+  DATA has no radius-variant components for this crane at all) - w2/w3
+  really are just the two optional winches.
+
+  Fix: kept the weight-only simplification (still not the full plate
+  breakdown - this dropdown is for a lift LOG, not the CWT
+  Combinations calculator, per 13x's own design decision), but append
+  the name of any countsToward:false component the combo includes,
+  stripped of its trailing parenthetical detail ("Winch 2 (incl.
+  rope)" -> "Winch 2"). So the four variants at 105.0 t now read
+  "105.0 t", "105.0 t + Winch 2", "105.0 t + Winch 3", "105.0 t +
+  Winch 2 + Winch 3" - genuinely distinguishable, and the winch
+  presence stays a real, selectable option rather than being collapsed
+  away, matching the person's own "I think... actually need to be a
+  option." Generic fix, not 1650-specific - LTM 1110's Winch 2*/
+  Replacement Ballast slot would have hit the same issue and gets the
+  same benefit.
+
+  T5 removal: LTM 1650-8.1's boom-length split (1650-t3/1650-t5) only
+  shows up as two distinct <option>s in two places - Rope Retentioning
+  tab's #r-model and Lift Library's #ll-crane (every other crane
+  picker app-wide, and COUNTERWEIGHT_DATA itself, already treat the
+  1650 as one unsplit model since boom length doesn't affect
+  counterweight/hook/CAD data). Removed the "(T5 80m)" <option> from
+  both selects. Left the underlying '1650-t5' data objects (FLEET_
+  BLOCK_SPEC, load chart file map, etc.) in place rather than ripping
+  them out - unreachable now that no picker offers the key, but
+  removing them outright risked breaking something else keyed off the
+  same string for no benefit the person asked for; simplest safe
+  change was the picker option itself.
+
+  Verified both fixes with Playwright: loaded index.html, selected
+  LTM 1650-8.1 (T3) in #ll-crane, read every #ll-cwt-combo option's
+  text back out - full list came back genuinely unique (25.0 t / 25.0
+  t + Winch 2 / + Winch 3 / + Winch 2 + Winch 3 / 35.0 t / ... up
+  through 175.0 t, 68 options total, zero duplicate strings) - and
+  confirmed neither #ll-crane nor #r-model offers a "1650-t5" value
+  any more.
+
+  CACHE_VERSION v296 -> v297, app-version v8.8 -> v8.9.

@@ -1623,3 +1623,19 @@ a working record, not app content.
   (size/count rejection, multi-file submit shape, mixed pending/
   migrated removal, detail-view rendering for both states).
   CACHE_VERSION -> v296, app-version -> v8.8. See methodology.txt 148.
+- "noticed a bug with the lift libary for the 1650 it has multiple of
+  the same Cwt configs eg 105 3x I'm guess this is busy it has vairo
+  blaste of 6.4,7.4,8.4 which I think for this model of crane actual
+  need to be a option . and we can remove the 1650 t5 ver as we don't
+  own a t5 ver"
+  Confirmed root cause: the dropdown's weight-only label was built
+  from cwtComboWeight(), which correctly excludes the two optional
+  winches' own weight from the OEM total - but that meant combos
+  differing only by winch presence rendered as literally identical
+  text. Fixed by appending the winch's name to the label whenever one
+  is part of the combo, so those options stay distinguishable and
+  selectable rather than being deduplicated away. Also removed the
+  "LTM 1650-8.1 (T5 80m)" option from both crane pickers that offered
+  it (#r-model, #ll-crane) since the fleet doesn't have one. Verified
+  both with Playwright. CACHE_VERSION -> v297, app-version -> v8.9.
+  See methodology.txt 149.

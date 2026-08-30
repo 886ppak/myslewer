@@ -1744,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.8</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.9</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -1853,7 +1853,6 @@
               <option value="1250">LTM 1250-5.1</option>
               <option value="1300">LTM 1300-6.2</option>
               <option value="1650-t3">LTM 1650-8.1 (T3 54m)</option>
-              <option value="1650-t5">LTM 1650-8.1 (T5 80m)</option>
             </select>
           </div>
           <div class="form-group">
@@ -2032,7 +2031,6 @@
               <option value="1250">LTM 1250-5.1</option>
               <option value="1300">LTM 1300-6.2</option>
               <option value="1650-t3">LTM 1650-8.1 (T3 54m)</option>
-              <option value="1650-t5">LTM 1650-8.1 (T5 80m)</option>
             </select>
           </div>
 
@@ -13962,16 +13960,33 @@
       // components), which is meaningless to distinguish in a flat
       // checkbox list anyway.
       const cwtComboSelect = document.getElementById('ll-cwt-combo');
-      const cwtData = COUNTERWEIGHT_DATA[craneKey.replace(/-t[35]$/, '')];
+      const cwtModelKey = craneKey.replace(/-t[35]$/, '');
+      const cwtData = COUNTERWEIGHT_DATA[cwtModelKey];
       if (cwtData && cwtData.combos && cwtData.combos.length) {
+        const cwtMap = cwtComponentMap(cwtModelKey);
         buildSelect(cwtComboSelect, [{ items: null }, ...cwtData.combos.map((c, i) => ({ ...c, idx: i }))],
-          // Weight only, no composition breakdown - unlike the CWT
+          // Weight only, no full composition breakdown - unlike the CWT
           // Combinations tab's own "Jump to Known Combination" dropdown
           // (which this deliberately does NOT touch), this one is
           // picking a value for a lift LOG, not driving a calculator -
           // "16.0 t" is what someone logging or reading a past lift
           // actually wants here, not which specific plates make it up.
-          (c) => c.items === null ? '— Not specified —' : `${cwtComboWeight(craneKey.replace(/-t[35]$/, ''), c.items).toFixed(1)} t`,
+          // Exception: countsToward:false components (winches, e.g. LTM
+          // 1650's Winch 2/3) don't add to that weight figure at all, so
+          // combos that differ only by winch presence would otherwise
+          // render as literal duplicate text ("105.0 t" four times over)
+          // - reported as a bug, not something to just collapse away,
+          // since a winch fitted is a real, meaningful difference in what
+          // was actually rigged. Appending its name keeps every entry
+          // distinguishable without resurrecting the full plate breakdown.
+          (c) => {
+            if (c.items === null) return '— Not specified —';
+            const weight = `${cwtComboWeight(cwtModelKey, c.items).toFixed(1)} t`;
+            const extras = c.items
+              .filter(id => cwtMap[id].countsToward === false)
+              .map(id => cwtMap[id].name.replace(/\s*\([^)]*\)\s*$/, ''));
+            return extras.length ? `${weight} + ${extras.join(' + ')}` : weight;
+          },
           (c) => c.items === null ? '' : c.idx);
       } else {
         cwtComboSelect.innerHTML = `<option value="">${craneKey ? 'No counterweight data for this crane yet.' : '— Select a crane above —'}</option>`;
