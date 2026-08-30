@@ -1439,3 +1439,20 @@ a working record, not app content.
   actual job). Verified locally that the result is a clean list of
   distinct weights. CACHE_VERSION -> v288, app-version -> v8.0 (past
   the .30 cap). See methodology.txt 138.
+- "I asked if you had made the emoji dot green red dot thing for the
+  images or not." / "and have you built the image editor thing with
+  the green and red emji dots?" / "yes" - built the tap-to-place
+  🟢🔴 photo marker tool that had only been discussed earlier, not
+  built.
+  **Status: done.** Full-screen tap-anywhere annotator with a
+  green/red mode toggle; markers store as normalized [0,1] fractional
+  coordinates so they stay correctly placed at any render size, shared
+  between the form's pending-photo thumbnails and the read-only entry
+  detail view. Also caught and fixed a shallow-copy bug in the edit
+  form (entry.photos.slice() shared photo objects with the live entry,
+  so marking up a photo during an edit could leak into the live record
+  even on Back/cancel) found while building this, not reported.
+  Verified locally (Playwright): marker placement/color-switching/
+  removal, and confirmed the edit-form copy is now fully independent
+  of the live entry. CACHE_VERSION -> v289, app-version -> v8.1. See
+  methodology.txt 139.

@@ -208,6 +208,9 @@
     .ll-rig-chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 14px; font-size: 0.75rem; cursor: pointer; user-select: none; }
     .ll-rig-chip input { width: auto; margin: 0; cursor: pointer; }
     .ll-rig-chip:has(input:checked) { background: var(--accent-gold); color: #000; border-color: var(--accent-gold); }
+    #ll-annotate-imgwrap { position: relative; max-width: 100%; max-height: 65vh; line-height: 0; cursor: crosshair; }
+    #ll-annotate-imgwrap img { max-width: 100%; max-height: 65vh; display: block; border-radius: 6px; pointer-events: none; }
+    .ll-annotate-dot { position: absolute; transform: translate(-50%, -50%); background: none; border: none; padding: 4px; font-size: 1.6rem; line-height: 1; cursor: pointer; filter: drop-shadow(0 0 3px rgba(0,0,0,0.85)); }
 
     .nav-tabs { display: flex; justify-content: flex-start; background-color: #181a1d; border-bottom: 2px solid var(--border-color); overflow-x: auto; scrollbar-width: none; }
     /* Left-aligned by default - the base/fallback case, and the only
@@ -1687,7 +1690,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.0</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.1</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2049,6 +2052,24 @@
           <div id="ll-form-error" style="display:none; color:var(--danger); font-size:0.85rem; margin-bottom:10px;"></div>
           <button type="button" class="btn" id="ll-form-submit-btn" onclick="llSubmitEntry()">Submit Lift Entry</button>
         </div>
+      </div>
+
+      <!-- Photo markup overlay - tap the photo to drop a 🟢/🔴 marker
+           (see llOpenPhotoAnnotator's own comment for what these mean).
+           Fixed full-screen like #access-gate rather than living inside
+           the form/detail cards, since it needs to sit above either one
+           depending on where it was opened from. -->
+      <div id="ll-annotate-overlay" style="display:none; position:fixed; inset:0; z-index:99998; background:rgba(0,0,0,0.92); flex-direction:column; align-items:center; justify-content:center; padding:16px; gap:14px;">
+        <div id="ll-annotate-imgwrap" onclick="llAnnotateImageTap(event)">
+          <img id="ll-annotate-img" alt="Photo being marked up">
+          <div id="ll-annotate-dots"></div>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button type="button" class="mode-btn" id="ll-annotate-green-btn" onclick="llSetAnnotateColor('green')">🟢 Green</button>
+          <button type="button" class="mode-btn" id="ll-annotate-red-btn" onclick="llSetAnnotateColor('red')">🔴 Red</button>
+        </div>
+        <div style="font-size:0.75rem; color:var(--text-muted); text-align:center; max-width:320px;">Tap the photo to place a marker. Tap a marker to remove it.</div>
+        <button type="button" class="toolbar-btn" onclick="llCloseAnnotator()">Done</button>
       </div>
     </div>
 
@@ -13668,7 +13689,11 @@
 
       const photos = Array.isArray(entry.photos) ? entry.photos : [];
       const photosHtml = photos.length
-        ? `<div class="ll-photo-grid">${photos.map((p) => `<a href="${ceEscapeHtml(p.url)}" target="_blank" rel="noopener noreferrer"><img src="${ceEscapeHtml(p.url)}" alt="Lift photo"></a>`).join('')}</div>`
+        ? `<div class="ll-photo-grid">${photos.map((p) => `
+            <a href="${ceEscapeHtml(p.url)}" target="_blank" rel="noopener noreferrer" style="position:relative; display:block;">
+              <img src="${ceEscapeHtml(p.url)}" alt="Lift photo">
+              ${llDotsOverlayHtml(p.annotations)}
+            </a>`).join('')}</div>`
         : '';
       const notesHtml = entry.notes ? `<div class="ll-notes-block"><b>Notes:</b><br>${ceEscapeHtml(entry.notes)}</div>` : '';
       const linkHtml = entry.externalLink
@@ -13825,6 +13850,22 @@
     // Submit is actually pressed.
     let llExistingPhotos = [];
     let llRemovedExistingPhotoPaths = [];
+    // Parallel to llPendingPhotoFiles/llPendingPhotoUrls - each pending
+    // (not-yet-uploaded) photo's own array of {color, x, y} dot markers,
+    // same shape as a saved photo's own `annotations` field. Merged into
+    // the real photo record only at submit time, once each file's
+    // actually uploaded and has a path to attach them to.
+    let llPendingPhotoAnnotations = [];
+    // Tap-to-place 🟢/🔴 markers for denoting which end of a rigging
+    // log needs shortening (or similar) - x/y are fractions [0,1] of
+    // the image's own width/height, not pixels, so a marker lands in
+    // the same relative spot regardless of how large the image is
+    // rendered anywhere it's shown. 'pending' | 'existing' + an index
+    // into the matching array above identify which photo is currently
+    // open in the annotator.
+    let llAnnotatingKind = null;
+    let llAnnotatingIndex = null;
+    let llAnnotateColor = 'green';
 
     function llOpenForm() {
       llCurrentFormEntryId = window.__liftLibraryNewEntryId();
@@ -13834,6 +13875,7 @@
       llPendingPhotoUrls = [];
       llExistingPhotos = [];
       llRemovedExistingPhotoPaths = [];
+      llPendingPhotoAnnotations = [];
 
       document.getElementById('ll-form-title').value = '';
       document.getElementById('ll-form-asset').value = '';
@@ -13872,8 +13914,20 @@
       llPendingPhotoUrls.forEach((u) => URL.revokeObjectURL(u));
       llPendingPhotoFiles = [];
       llPendingPhotoUrls = [];
-      llExistingPhotos = Array.isArray(entry.photos) ? entry.photos.slice() : [];
+      // A real (deep enough) copy, not just .slice() - annotations get
+      // mutated in place while the annotator is open (see
+      // llCurrentAnnotations), and .slice() alone only copies the
+      // ARRAY, not the photo objects (or their own annotations arrays)
+      // inside it. Without this, marking up a photo during an edit
+      // would silently leak into the live entry even if the edit is
+      // then cancelled with Back instead of Submit - the exact
+      // "backing out costs nothing" guarantee llRemoveExistingPhoto's
+      // own comment already promises for removal.
+      llExistingPhotos = Array.isArray(entry.photos)
+        ? entry.photos.map((p) => Object.assign({}, p, p.annotations ? { annotations: p.annotations.map((a) => Object.assign({}, a)) } : {}))
+        : [];
       llRemovedExistingPhotoPaths = [];
+      llPendingPhotoAnnotations = [];
 
       document.getElementById('ll-form-title').value = entry.title || '';
       document.getElementById('ll-form-asset').value = entry.asset || '';
@@ -13922,16 +13976,33 @@
       document.getElementById('ll-browse-wrap').style.display = '';
     }
 
+    // Read-only dot overlay, reused by the form's own thumbnails AND
+    // the entry detail view (llOpenEntry) - x/y are fractions [0,1] of
+    // the image's box, so `inset:0` + percentage positioning lands the
+    // dot in the same relative spot at any render size. pointer-events:
+    // none so it never intercepts clicks meant for whatever it's
+    // sitting on top of (the remove/mark-up buttons, the detail view's
+    // own <a> link to the full photo).
+    function llDotsOverlayHtml(annotations) {
+      if (!annotations || !annotations.length) return '';
+      return `<div style="position:absolute; inset:0; pointer-events:none;">${annotations.map((a) => `
+        <span style="position:absolute; left:${(a.x * 100).toFixed(2)}%; top:${(a.y * 100).toFixed(2)}%; transform:translate(-50%,-50%); font-size:1.15rem; text-shadow:0 0 3px rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.85);">${a.color === 'green' ? '🟢' : '🔴'}</span>`).join('')}</div>`;
+    }
+
     function llRenderPendingPhotos() {
       const existingHtml = llExistingPhotos.map((p, i) => `
         <div style="position:relative;">
           <img src="${ceEscapeHtml(p.url)}" alt="Existing photo">
+          ${llDotsOverlayHtml(p.annotations)}
           <button type="button" onclick="llRemoveExistingPhoto(${i})" aria-label="Remove photo" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&times;</button>
+          <button type="button" onclick="llOpenPhotoAnnotator('existing', ${i})" aria-label="Mark up photo" title="Mark up" style="position:absolute; bottom:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&#128205;</button>
         </div>`).join('');
       const pendingHtml = llPendingPhotoUrls.map((url, i) => `
         <div style="position:relative;">
           <img src="${url}" alt="Selected photo">
+          ${llDotsOverlayHtml(llPendingPhotoAnnotations[i])}
           <button type="button" onclick="llRemovePendingPhoto(${i})" aria-label="Remove photo" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&times;</button>
+          <button type="button" onclick="llOpenPhotoAnnotator('pending', ${i})" aria-label="Mark up photo" title="Mark up" style="position:absolute; bottom:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&#128205;</button>
         </div>`).join('');
       document.getElementById('ll-form-photo-grid').innerHTML = existingHtml + pendingHtml;
     }
@@ -13945,6 +14016,7 @@
         if (llExistingPhotos.length + llPendingPhotoFiles.length >= MAX_PHOTOS || file.size > MAX_SIZE) { skipped++; return; }
         llPendingPhotoFiles.push(file);
         llPendingPhotoUrls.push(URL.createObjectURL(file));
+        llPendingPhotoAnnotations.push([]);
       });
       event.target.value = '';
       document.getElementById('ll-form-photo-status').textContent = skipped
@@ -13957,6 +14029,7 @@
       URL.revokeObjectURL(llPendingPhotoUrls[index]);
       llPendingPhotoFiles.splice(index, 1);
       llPendingPhotoUrls.splice(index, 1);
+      llPendingPhotoAnnotations.splice(index, 1);
       llRenderPendingPhotos();
     }
 
@@ -13967,6 +14040,76 @@
       // that actually still have one.
       if (removed && removed.path) llRemovedExistingPhotoPaths.push(removed.path);
       llRenderPendingPhotos();
+    }
+
+    // The photo-markup tool: tap a spot on a photo to drop a 🟢 or 🔴
+    // dot there - meant for exactly one thing (see the original
+    // brainstorm), denoting which end of a rigging log needs
+    // shortening ("shorten the red end") - nothing to do with the
+    // outrigger/C1-C4 toggles elsewhere in this app, purely a freeform
+    // marker on the picture itself. Works the same for a not-yet-
+    // uploaded pending photo or an already-saved existing one -
+    // llCurrentAnnotations() returns whichever array is live right now
+    // and every other function here just mutates that.
+    function llCurrentAnnotations() {
+      if (llAnnotatingKind === 'pending') {
+        if (!llPendingPhotoAnnotations[llAnnotatingIndex]) llPendingPhotoAnnotations[llAnnotatingIndex] = [];
+        return llPendingPhotoAnnotations[llAnnotatingIndex];
+      }
+      const photo = llExistingPhotos[llAnnotatingIndex];
+      if (!photo.annotations) photo.annotations = [];
+      return photo.annotations;
+    }
+
+    function llOpenPhotoAnnotator(kind, index) {
+      llAnnotatingKind = kind;
+      llAnnotatingIndex = index;
+      const url = kind === 'pending' ? llPendingPhotoUrls[index] : llExistingPhotos[index].url;
+      document.getElementById('ll-annotate-img').src = url;
+      llSetAnnotateColor('green');
+      llRenderAnnotateDots();
+      document.getElementById('ll-annotate-overlay').style.display = 'flex';
+    }
+
+    function llCloseAnnotator() {
+      document.getElementById('ll-annotate-overlay').style.display = 'none';
+      llAnnotatingKind = null;
+      llAnnotatingIndex = null;
+      llRenderPendingPhotos();
+    }
+
+    function llSetAnnotateColor(color) {
+      llAnnotateColor = color;
+      document.getElementById('ll-annotate-green-btn').classList.toggle('active', color === 'green');
+      document.getElementById('ll-annotate-red-btn').classList.toggle('active', color === 'red');
+    }
+
+    function llRenderAnnotateDots() {
+      const anns = llCurrentAnnotations();
+      document.getElementById('ll-annotate-dots').innerHTML = anns.map((a, i) => `
+        <button type="button" class="ll-annotate-dot" style="left:${(a.x * 100).toFixed(2)}%; top:${(a.y * 100).toFixed(2)}%;" onclick="llRemoveAnnotationDot(event, ${i})" aria-label="Remove marker">${a.color === 'green' ? '🟢' : '🔴'}</button>`).join('');
+    }
+
+    // Placement uses the wrap's own bounding box (the <img> sits at
+    // top:0/left:0 filling it exactly, see the CSS) rather than the
+    // image's natural pixel size, so x/y come out as simple [0,1]
+    // fractions of whatever's actually on screen - correct regardless
+    // of the photo's real resolution or how large this overlay renders
+    // on a given device.
+    function llAnnotateImageTap(event) {
+      const wrap = document.getElementById('ll-annotate-imgwrap');
+      const rect = wrap.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width;
+      const y = (event.clientY - rect.top) / rect.height;
+      if (x < 0 || x > 1 || y < 0 || y > 1) return;
+      llCurrentAnnotations().push({ color: llAnnotateColor, x, y });
+      llRenderAnnotateDots();
+    }
+
+    function llRemoveAnnotationDot(event, index) {
+      event.stopPropagation(); // don't also register as a new-dot tap underneath it
+      llCurrentAnnotations().splice(index, 1);
+      llRenderAnnotateDots();
     }
 
     function llSubmitEntry() {
@@ -14017,8 +14160,23 @@
       // catch instead.
       Promise.all(llRemovedExistingPhotoPaths.map((p) => window.__liftLibraryDeletePhoto(p).catch(() => {})))
         .then(() => Promise.all(llPendingPhotoFiles.map((file) => window.__liftLibraryUploadPhoto(entryId, file))))
+        .then((newPhotos) => newPhotos.map((p, i) => (
+          llPendingPhotoAnnotations[i] && llPendingPhotoAnnotations[i].length
+            ? Object.assign({ annotations: llPendingPhotoAnnotations[i] }, p)
+            : p
+        )))
         .then((newPhotos) => {
-          const data = { categoryId, title, photos: llExistingPhotos.concat(newPhotos) };
+          // Minimal, consistent shape regardless of edit history - a
+          // photo whose annotations were all removed during this edit
+          // shouldn't persist a stale/empty annotations: [] field.
+          const cleanPhoto = (p) => {
+            const clean = { url: p.url };
+            if (p.path) clean.path = p.path;
+            if (p.nextcloud) clean.nextcloud = true;
+            if (p.annotations && p.annotations.length) clean.annotations = p.annotations;
+            return clean;
+          };
+          const data = { categoryId, title, photos: llExistingPhotos.concat(newPhotos).map(cleanPhoto) };
           const asset = document.getElementById('ll-form-asset').value.trim();
           const part = document.getElementById('ll-form-part').value.trim();
           const link = document.getElementById('ll-form-link').value.trim();

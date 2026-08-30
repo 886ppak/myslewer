@@ -13531,3 +13531,72 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v287 -> v288, app-version v7.30 -> v8.0 (past the .30
   cap, rolls to the next major per this file's own rule).
+
+139. Lift Plan Library: tap-to-place green/red emoji photo markers
+
+  Person had asked, back when the Lift Plan Library was first being
+  designed, about a green/red dot annotation tool for photos - never
+  actually built it at the time. This session they circled back twice
+  ("did you make the emoji dot green red dot thing" / "have you built
+  the image editor thing") before confirming with a plain "yes" to go
+  build it now.
+
+  Kept it deliberately simple rather than building a real image
+  editor: a full-screen overlay (#ll-annotate-overlay) showing the
+  photo full-size, a green/red mode toggle, tap-anywhere-on-the-photo
+  to drop a marker in that color, tap an existing marker to remove it.
+  No drag-to-reposition, no undo stack, no per-marker labels - matches
+  the actual use case (point at a rigging point or hazard on a lift
+  photo) without over-building.
+
+  Markers store as normalized [0,1] fractional {color, x, y}
+  coordinates rather than pixel offsets, so they stay correctly
+  positioned regardless of what size the photo renders at later (form
+  thumbnail vs full detail view vs a future different screen width) -
+  same pattern as everything else in this app that has to survive
+  render-size changes. A new llDotsOverlayHtml() helper renders the
+  markers as absolutely-positioned emoji spans and is shared between
+  the pending-photo thumbnail grid (form) and the read-only photo view
+  (entry detail) rather than duplicated.
+
+  Wiring: llPendingPhotoAnnotations tracks per-pending-photo marker
+  arrays in parallel with llPendingPhotoFiles/llPendingPhotoUrls (kept
+  in sync on add/remove); existing photos on an entry being edited
+  carry their own annotations array directly on the photo object.
+  llSubmitEntry merges any newly-added photos' pending annotations
+  into their uploaded photo records and normalizes every photo object
+  through a cleanPhoto() step before writing to Firestore (only
+  include the annotations key at all when non-empty, matching the
+  existing sparse-field style for path/nextcloud).
+
+  Caught and fixed a real bug while wiring this up, not reported by
+  the person - found it myself reading llOpenEditForm before adding to
+  it: `entry.photos.slice()` is a shallow copy, so the photo objects
+  inside the array were still shared with the live llAllEntries entry.
+  Mutating photo.annotations in place while marking up an existing
+  photo during an edit session (push/splice on the array) would have
+  leaked straight into the live entry even if the edit was abandoned
+  via Back instead of Submit - breaking this app's established
+  "backing out of a form costs nothing" guarantee. Fixed with a proper
+  per-photo, per-annotation deep clone instead of the array-only copy.
+
+  Verified locally (Playwright) before pushing, two separate checks:
+  (1) the annotator itself - open overlay, default green mode active,
+  place a green marker then switch to red and place a red one (had to
+  fix the test's own coordinate math first: a 1x1 test PNG rendered at
+  ~1 CSS pixel, so the original fake clientX/clientY landed miles
+  outside the image and got silently rejected by the tap handler's own
+  bounds check - forced a real rendered size on the test image and
+  computed tap coordinates as fractions of its actual bounding rect
+  instead), confirm both markers land as correctly-shaped {color,x,y}
+  fractional entries, remove one via its own button and confirm the
+  array shrinks correctly, close the overlay and confirm the thumbnail
+  grid shows both the mark-up button and the remaining marker's dot
+  overlay; (2) the shallow-copy fix specifically - seeded a fake entry
+  with one already-annotated photo, opened it for edit, mutated the
+  in-form annotations array, and confirmed the live llAllEntries copy
+  was untouched (different array and object references) while the
+  in-form copy correctly reflected the mutation. Zero JS console
+  errors in either run.
+
+  CACHE_VERSION v288 -> v289, app-version v8.0 -> v8.1.
