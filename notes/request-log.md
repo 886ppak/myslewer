@@ -1357,3 +1357,29 @@ a working record, not app content.
   **Status: deployed and verified live.** See methodology.txt 134.
   Walked the person through generating Nextcloud app-password/WebDAV
   credentials for Stage 2 next.
+- Real Nextcloud credentials pasted directly into chat (domain,
+  username, app password, folder path). Verified the domain was
+  actually publicly reachable first (its "local." prefix looked
+  LAN-only, wasn't), then found the real target folder didn't match
+  what was typed - walked the actual WebDAV tree and found it
+  genuinely spelled "Lift-libary" (hyphen, no r), used that exact real
+  name rather than a "corrected" guess. Confirmed full read/write/
+  delete access with a real round trip before writing any function
+  code.
+  **Status: Stage 2 built, tested against the real server, and
+  deployed.** Backup function uploads via WebDAV, creates a Nextcloud
+  public read-only share (OCS API) - the same view-only-link idea the
+  contribution form's own External Link field already uses, just
+  automatic - re-points the Firestore doc at that link, and only then
+  deletes the Firebase Storage original, each step gated on the
+  previous one actually succeeding. App password stored in Secret
+  Manager, not hardcoded; domain/username/folder path went into a
+  local functions/.env instead of committed defaults after almost
+  committing them by mistake and catching it before staging anything.
+  Seeded one real throwaway entry+photo, ran it for real, verified
+  independently (not just the function's own success log) that the
+  Firestore doc updated correctly, the Storage original was actually
+  gone, and the Nextcloud copy downloaded byte-for-byte identical to
+  the original. All test data and the service account key cleaned up
+  after. CACHE_VERSION -> v285, app-version -> v7.28. See
+  methodology.txt 135.

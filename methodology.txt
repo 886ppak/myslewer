@@ -13283,3 +13283,85 @@ cranes get their own subsections as they're built.
 
   No CACHE_VERSION/app-version bump - same reasoning as 133, nothing
   in the deployed PWA changed, only functions/index.js's region.
+
+135. Stage 2: monthly Firebase Storage -> Nextcloud photo backup,
+     built, tested against the real Nextcloud instance, and deployed
+
+  Real credentials this time, not a throwaway - domain, username, and
+  an app password, pasted directly into chat. Checked the domain
+  actually resolves and is reachable from the public internet before
+  building anything on it (its "local." prefix looked like it might be
+  LAN-only) - it wasn't, genuinely public. Verified the exact target
+  folder path next rather than trusting the person's own typed-out
+  version of it: the literal path they gave (.../MyslewerBackups/
+  Liftlibary) didn't exist - walked the real WebDAV tree level by
+  level and found the actual folder is spelled Lift-libary (hyphen, no
+  r) - used that exact real spelling, not a "corrected" one, since
+  that's what genuinely exists on their server. Confirmed full
+  read/write/delete access with a real PUT/GET/DELETE round trip
+  before writing a single line of the actual backup function.
+
+  Design settled from here: upload to Nextcloud via WebDAV, create a
+  public read-only share via Nextcloud's OCS Share API (shareType=3,
+  permissions=1) - the same "view-only link" concept the contribution
+  form's own External Link field already asks a person to paste in by
+  hand, just generated automatically - then re-point the Firestore
+  doc's photo entry at that link and only THEN delete the Firebase
+  Storage original. That ordering is the one genuinely safety-critical
+  design decision here: each step only runs after the previous one is
+  confirmed to have actually succeeded, so a failure partway through
+  (Nextcloud unreachable, share creation fails, whatever) leaves the
+  original safely in Storage rather than losing the only copy of
+  someone's photo. Migrated photos drop their `path` field entirely
+  (no Storage object left to reference) instead of leaving a stale one
+  behind - required updating index.html's own llDeleteEntry and
+  llRemoveExistingPhoto to only call __liftLibraryDeletePhoto for
+  photos that still HAVE a path, so removing a Nextcloud-migrated photo
+  from the app just drops the in-app reference - it can't (and
+  shouldn't) reach back and delete the actual backup copy, since no
+  WebDAV credentials live in the client at all.
+
+  Verified pieces individually against the real server before wiring
+  them together in the deployed function - not assumed from Nextcloud's
+  general documentation: OCS share creation actually works with an app
+  password (not just the main login), the returned share URL needs
+  /download appended to serve raw file bytes rather than Nextcloud's
+  own HTML preview page (confirmed by actually following the redirect
+  chain, not assumed), and that MKCOL against an already-existing
+  folder correctly returns 405 rather than something that should be
+  treated as a real failure.
+
+  The Nextcloud app password went into Secret Manager (defineSecret),
+  not hardcoded and not a plain env var - already had every permission
+  needed for this without any new IAM ask (secretmanager.secrets.
+  create/get, versions.add/access all came back HAVE on the very first
+  check - apparently already covered by one of 134's broader role
+  grants), just needed the API itself enabled, which
+  serviceusage.serviceUsageAdmin let this session do directly. The
+  domain/username/backup-folder-path aren't secrets the same way the
+  password is, but they still identify a real self-hosted server and a
+  real person - almost committed them as defineString() defaults
+  directly in functions/index.js before catching it and moving them to
+  a local functions/.env instead (gitignored, same treatment as the
+  Firebase service account key all along) - a mistake caught and fixed
+  before ever running git add, not after.
+
+  Deployed alongside 134's cleanup function (same file, same non-
+  interactive firebase-tools/GOOGLE_APPLICATION_CREDENTIALS approach).
+  Then the real test that mattered: seeded one genuine throwaway
+  Firestore entry + Storage photo, manually ran the Cloud Scheduler
+  job once, and checked every claim independently rather than trusting
+  the function's own "migrated 1, 0 failures" log line alone - the
+  Firestore doc's photos field actually replaced with the Nextcloud
+  url+nextcloud:true (no path), the original Storage object actually
+  gone (404), and the file downloaded from the returned Nextcloud
+  /download URL byte-for-byte identical to the original test image.
+  Deleted all test data (Firestore doc, Nextcloud file, its share) and
+  the service account key/scratchpad firebase-tools install afterward,
+  same as every prior use.
+
+  CACHE_VERSION v284 -> v285, app-version v7.27 -> v7.28 - index.html
+  itself changed here (the __liftLibraryDeletePhoto guard), unlike
+  133/134 which only touched functions/ - same rule as always, bump on
+  any real app-shell change regardless of whether live data exists yet
+  to exercise the new path.
