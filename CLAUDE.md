@@ -1,36 +1,17 @@
 # Git workflow
 
 `main` is the primary branch (production, `886ppak.github.io/myslewer/`).
-Develop directly on `main`, commit, and push to `origin main` as the
-primary step.
+Develop directly on `main`, commit, and push to `origin main`.
 
-Then shadow the same change onto `beta-trial` so the beta channel stays
-current too:
-
-1. `git checkout beta-trial`
-2. `git cherry-pick <commit>` (resolve the routine `sw.js` CACHE_VERSION
-   conflict — keep beta-trial's own `myslewer-v51-betaN` scheme, bump N)
-3. `git push -u origin beta-trial` and `git push beta beta-trial`
-4. Sync into `myslewer-beta`'s own `main` (its GitHub Pages serves that
-   branch, not `beta-trial`):
-   ```
-   git fetch beta main
-   git branch beta-main-sync beta-trial && git checkout beta-main-sync
-   git merge beta/main --no-edit -m "Merge myslewer-beta main into beta-trial's tip"
-   git push beta beta-main-sync:main
-   git checkout beta-trial && git branch -D beta-main-sync
-   ```
-5. `git checkout main` to return to the resting branch.
-
-Note: `beta-trial` carries a few beta-only commits `main` intentionally
-never gets (5-day trial expiry gate, Welcome tab) — a straight merge would
-pull those into production, so always cherry-pick the specific commit(s),
-not merge the branch.
+Do NOT shadow changes onto `beta-trial` any more (retired as of the LTM
+1650 counterweight-dropdown fix — `beta-trial` had drifted far enough
+behind main, e.g. missing the entire Lift Library feature, that routine
+cherry-picking stopped making sense). Leave `beta-trial`/`myslewer-beta`
+alone unless explicitly asked to touch them again.
 
 Confirm each deploy actually landed by fetching `sw.js` from the live
 Pages URL and checking `CACHE_VERSION` before considering the work done
-(`886ppak.github.io/myslewer/sw.js` for main,
-`886ppak.github.io/myslewer-beta/sw.js` for beta).
+(`886ppak.github.io/myslewer/sw.js`).
 
 # App version number
 
