@@ -1145,6 +1145,35 @@ a working record, not app content.
   present. Paint-Mark Method entry now links straight to
   guides/paint-mark-method.html. Shipped to main (CACHE_VERSION
   v279->v280, app v7.22->v7.23). See methodology.txt 126.
+- "I'm wanting to make a lift plan library... someone can take a photo,
+  have some notes about the lift... give access to other people that
+  may undertake that same lift" - long brainstorm before any code: a
+  drill-down category tree ("select the mine site... crusher one...
+  all the known lifts"), search alongside it, any user can contribute
+  AND add new categories ("built by the user base"), a contribution
+  form (title/asset/part/weight/crane/photos/notes), and coloured
+  emoji (🟢🔴) tap-to-place markers for rigging-leg photos (deferred to
+  a later pass). Storage backend went through a long side-quest of its
+  own - self-hosted Nextcloud + CORS + a real production outage on an
+  unrelated Proxmox NPM host, a Firebase Storage free-tier pricing
+  deep dive, and a Spark->Blaze billing mix-up - before landing on
+  Firebase Storage. Then: "yup lets start building the lift library."
+  **Status: shipped (Phase 1).** liftLibraryCategories (flat,
+  parentId-linked, any depth) + liftLibraryEntries in firestore.rules;
+  new storage.rules (first-ever Storage use in this project) with
+  photo-delete permission checked against the owning Firestore doc's
+  loggedByUid; new tab with breadcrumb browse + search + a
+  contribution form with deferred (submit-time, not eager) photo
+  upload so backing out never orphans a file; entry detail view built
+  alongside the browse UI rather than as a separate pass. Verified via
+  real headless-browser runs (stubbing only the two Firestore
+  functions, not Firebase itself) - navigation, breadcrumb rebuild
+  from a deep search result, XSS-safe rendering, both form validations,
+  photo attach/remove, and a full submit all confirmed working, zero
+  console errors. Phase 2 (monthly Storage->Nextcloud backup rotation)
+  and the emoji photo-annotation feature deliberately deferred, not
+  forgotten. Shipped to main (CACHE_VERSION v280->v281, app
+  v7.23->v7.24). See methodology.txt 127.
 - "I think we may have to go down the [Firebase Storage] route... and
   for larger files I can always host on my Nextcloud and give a view
   only link" - brainstormed the Lift Plan Library across many turns

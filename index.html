@@ -178,6 +178,29 @@
     .admin-member-row:last-child { border-bottom: none; }
     .admin-member-row select { background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 4px 6px; font-size: 0.82rem; }
 
+    /* Lift Plan Library - the category tree's breadcrumb trail, and the
+       shared row style for both category ("folder") and lift entry rows
+       in a list, since browse results and search results reuse the same
+       row markup. */
+    .ll-breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 0.82rem; margin-bottom: 12px; }
+    .ll-breadcrumb button { background: none; border: none; color: var(--accent-cyan); cursor: pointer; font-size: 0.82rem; padding: 2px 0; font-family: inherit; }
+    .ll-breadcrumb button:hover { text-decoration: underline; }
+    .ll-breadcrumb button:disabled { color: var(--text-main); cursor: default; text-decoration: none; font-weight: 700; }
+    .ll-breadcrumb .ll-crumb-sep { color: var(--text-muted); }
+    .ll-node-list { display: flex; flex-direction: column; gap: 6px; }
+    .ll-node-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; text-align: left; font-family: inherit; font-size: 0.88rem; color: var(--text-main); width: 100%; }
+    .ll-node-row:hover { border-color: var(--accent-gold); }
+    .ll-node-icon { flex-shrink: 0; font-size: 1.1rem; }
+    .ll-node-label { flex: 1; min-width: 0; }
+    .ll-node-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+    .ll-detail-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; }
+    .ll-detail-row:last-child { border-bottom: none; }
+    .ll-detail-label { color: var(--text-muted); flex-shrink: 0; }
+    .ll-detail-value { text-align: right; }
+    .ll-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 12px; }
+    .ll-photo-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); cursor: pointer; }
+    .ll-notes-block { margin-top: 14px; font-size: 0.88rem; line-height: 1.5; white-space: pre-wrap; }
+
     .nav-tabs { display: flex; justify-content: flex-start; background-color: #181a1d; border-bottom: 2px solid var(--border-color); overflow-x: auto; scrollbar-width: none; }
     /* Left-aligned by default - the base/fallback case, and the only
        safe option whenever the tabs actually overflow their container
@@ -284,8 +307,9 @@
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
     .form-group { display: flex; flex-direction: column; gap: 6px; }
     label { font-size: 0.75rem; text-transform: uppercase; font-weight: 600; color: var(--text-muted); }
-    input, select { background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-main); padding: 10px 12px; font-size: 0.95rem; font-weight: 600; outline: none; width: 100%; }
-    input:focus, select:focus { border-color: var(--accent-gold); }
+    input, select, textarea { background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-main); padding: 10px 12px; font-size: 0.95rem; font-weight: 600; outline: none; width: 100%; }
+    textarea { font-family: inherit; font-weight: 400; resize: vertical; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent-gold); }
     input[readonly] { opacity: 0.85; cursor: not-allowed; }
     input:invalid { border-color: var(--danger); }
 
@@ -608,6 +632,9 @@
       initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, updateDoc,
       collection, getDocs, deleteDoc, query, where, addDoc, onSnapshot
     } from './vendor/firebase/firebase-firestore.js';
+    import {
+      getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject
+    } from './vendor/firebase/firebase-storage.js';
 
     // Real myslewer-ed06f project config. This object is NOT a secret -
     // Firebase's actual access control is enforced by the project's own
@@ -669,7 +696,7 @@
     // module body isn't a function, so a bare top-level return isn't
     // legal JS.
     function initGate() {
-      let app, auth, db;
+      let app, auth, db, storage;
       try {
         app = initializeApp(firebaseConfig);
         auth = getAuth(app);
@@ -683,6 +710,12 @@
         // guarantee as the rest of this app, just needs asking for here
         // rather than being the default.
         db = initializeFirestore(app, { localCache: persistentLocalCache() });
+        // No offline-cache equivalent needed here the way Firestore gets
+        // one above - Storage's own SDK has no local-cache concept, and
+        // the Lift Plan Library's photos are meant to always come from
+        // the network (or the browser's normal HTTP cache), same as any
+        // other image this app displays.
+        storage = getStorage(app);
       } catch (err) {
         console.error('Firebase init failed', err);
         statusEl.textContent = 'Sign-in is temporarily unavailable.';
@@ -789,6 +822,7 @@
         hook: '[data-tabkey="hook"]',
         chain: '[data-tabkey="chain"]',
         rope: '[data-tabkey="rope"]',
+        liftlibrary: '[data-tabkey="liftlibrary"]',
         cad_pads: '#cad-subtab-pads',
         cad_layout: '#cad-subtab-layout',
         loadchart_find: '#lc-subtab-find',
@@ -802,7 +836,7 @@
       // HTML rather than built by JS - worth remembering if a ninth one
       // ever gets added elsewhere, since it won't match the "-crane"
       // naming pattern the other seven happen to share.
-      const CRANE_SELECT_IDS = ['h-crane', 'cad-crane', 'sc-crane', 'reeve-crane', 'cwt-crane', 'de-crane', 'lc-crane', 'r-model'];
+      const CRANE_SELECT_IDS = ['h-crane', 'cad-crane', 'sc-crane', 'reeve-crane', 'cwt-crane', 'de-crane', 'lc-crane', 'r-model', 'll-crane'];
 
       // Removes any <option> whose value is a restricted crane key from
       // every select in CRANE_SELECT_IDS, keyed off a hidden.crane_XXXX
@@ -1266,6 +1300,90 @@
         return deleteDoc(doc(db, 'pools', poolId, 'lifts', liftId));
       };
 
+      // Lift Plan Library - see firestore.rules/storage.rules for the
+      // access model this leans on (any signed-in user can browse/
+      // contribute; only the original logger or an admin can edit/delete
+      // an entry). Categories are a flat collection keyed by parentId
+      // (null = root) rather than nested subcollections, specifically so
+      // the tree can go to any depth a user extends it to - see
+      // firestore.rules' own comment on liftLibraryCategories for why.
+      window.__liftLibraryGetCategories = function (parentId) {
+        return getDocs(query(collection(db, 'liftLibraryCategories'), where('parentId', '==', parentId)));
+      };
+
+      // Full category list, unfiltered - used for the search bar (so
+      // "crusher one" can match a node at any depth, not just the current
+      // level) and for resolving a breadcrumb trail's names from a chain
+      // of parentIds without one round trip per level.
+      window.__liftLibraryGetAllCategories = function () {
+        return getDocs(collection(db, 'liftLibraryCategories'));
+      };
+
+      window.__liftLibraryCreateCategory = function (name, parentId) {
+        return addDoc(collection(db, 'liftLibraryCategories'), {
+          name,
+          parentId,
+          createdBy: auth.currentUser.uid,
+          createdByName: window.__profileDisplayName || '',
+          createdAt: Date.now()
+        });
+      };
+
+      window.__liftLibraryGetEntries = function (categoryId) {
+        return getDocs(query(collection(db, 'liftLibraryEntries'), where('categoryId', '==', categoryId)));
+      };
+
+      // Full entry list, unfiltered - same reasoning as
+      // __liftLibraryGetAllCategories above, so the search bar can also
+      // match a lift's title regardless of which category it's filed
+      // under.
+      window.__liftLibraryGetAllEntries = function () {
+        return getDocs(collection(db, 'liftLibraryEntries'));
+      };
+
+      window.__liftLibraryGetEntry = function (entryId) {
+        return getDoc(doc(db, 'liftLibraryEntries', entryId));
+      };
+
+      // entryId is generated client-side, BEFORE the doc is created and
+      // before any of its photos are uploaded - see firestore.rules'
+      // liftLibraryEntries comment for why (it's what lets Storage's own
+      // rules find the right Firestore doc to check ownership against,
+      // via firestore.get(), with no round trip needed to link the two).
+      // doc(collection(...)) with no third argument mints a fresh id
+      // locally without writing anything - genuinely free, no network
+      // call.
+      window.__liftLibraryNewEntryId = function () {
+        return doc(collection(db, 'liftLibraryEntries')).id;
+      };
+
+      window.__liftLibraryCreateEntry = function (entryId, data) {
+        return setDoc(doc(db, 'liftLibraryEntries', entryId), Object.assign({
+          loggedByUid: auth.currentUser.uid,
+          loggedByName: window.__profileDisplayName || '',
+          createdAt: Date.now()
+        }, data));
+      };
+
+      // Storage path is liftLibrary/{entryId}/{safeFileName} - matches
+      // storage.rules exactly. The original File name is never trusted
+      // as-is (could contain characters that don't belong in a URL path,
+      // or just collide with another photo in the same entry) - a fresh
+      // name is generated from the current time plus a short random
+      // suffix, keeping only the original extension.
+      window.__liftLibraryUploadPhoto = function (entryId, file) {
+        const extMatch = /\.([a-zA-Z0-9]+)$/.exec(file.name || '');
+        const ext = extMatch ? extMatch[1].toLowerCase() : 'jpg';
+        const safeName = `photo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const path = `liftLibrary/${entryId}/${safeName}`;
+        const fileRef = storageRef(storage, path);
+        return uploadBytes(fileRef, file).then(() => getDownloadURL(fileRef)).then((url) => ({ url, path }));
+      };
+
+      window.__liftLibraryDeletePhoto = function (path) {
+        return deleteObject(storageRef(storage, path));
+      };
+
       function loadProfile(user) {
         window.__profileEmail = user.email || '';
         window.__profileUid = user.uid;
@@ -1532,7 +1650,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.23</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.24</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -1616,6 +1734,7 @@
     <button class="tab-btn" data-tabkey="hook" onclick="switchTab('hook-tab', event)">Minimum Hook Block Weights</button>
     <button class="tab-btn" data-tabkey="chain" onclick="switchTab('chain-tab', event)">Chain Shortening</button>
     <button class="tab-btn" data-tabkey="rope" onclick="switchTab('rope-tab', event)">Rope Retentioning</button>
+    <button class="tab-btn" data-tabkey="liftlibrary" onclick="switchTab('liftlibrary-tab', event)">Lift Plan Library</button>
     <button class="tab-btn" id="servicefill-tab-btn" data-tabkey="servicefill" onclick="switchTab('servicefill-tab', event)" style="display:none;">Service Fill</button>
     <button class="tab-btn" id="assembly-tab-btn" data-tabkey="assembly" onclick="switchTab('assembly-tab', event)" style="display:none;">Assembly Plans</button>
     <button class="tab-btn" id="cabentry-tab-btn" data-tabkey="cabentry" onclick="switchTab('cabentry-tab', event)" style="display:none;">Lift Logger</button>
@@ -1736,6 +1855,101 @@
       <div class="disclaimer">Reference tool only — cross-check reeving, pull rating, and ballast against the current Liebherr load chart and rigging plan for this lift before use on site.</div>
       <div style="text-align:center; margin-top:14px;">
         <a href="https://youtu.be/5dGcoAP9XA8" target="_blank" rel="noopener noreferrer" style="color:var(--accent-gold); font-size:0.85rem; text-decoration:none;">Reference Video: Rope Tensioning &amp; Spooling</a>
+      </div>
+    </div>
+
+    <!-- ================= TAB: LIFT PLAN LIBRARY ================= -->
+    <div id="liftlibrary-tab" class="tab-content">
+      <div class="card">
+        <div class="card-title">Lift Plan Library <span style="font-size:0.75rem; color:var(--text-muted); text-transform:none; font-weight:400;">(past lifts documented by the crew, for whoever tackles the same one next)</span></div>
+        <div class="form-group">
+          <label>Search</label>
+          <input type="text" id="ll-search" placeholder="e.g. Crusher One, EX5600..." oninput="llOnSearchInput()" autocomplete="off">
+        </div>
+        <div id="ll-search-results" class="ll-node-list" style="display:none;"></div>
+
+        <div id="ll-browse-wrap">
+          <div class="ll-breadcrumb" id="ll-breadcrumb"></div>
+          <div id="ll-node-list" class="ll-node-list"></div>
+          <div id="ll-empty-msg" class="profile-empty-msg" style="display:none;">Nothing here yet.</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+            <button type="button" class="toolbar-btn" onclick="llPromptAddCategory()">+ Add Category Here</button>
+            <button type="button" class="toolbar-btn" onclick="llOpenForm()">+ Log a Lift Here</button>
+          </div>
+        </div>
+
+        <div id="ll-detail-wrap" style="display:none;">
+          <button type="button" class="toolbar-btn" onclick="llCloseDetail()" style="margin-bottom:12px;">&larr; Back</button>
+          <div id="ll-detail-content"></div>
+        </div>
+
+        <div id="ll-form-wrap" style="display:none;">
+          <button type="button" class="toolbar-btn" onclick="llCloseForm()" style="margin-bottom:12px;">&larr; Back</button>
+          <div class="card-title" style="margin-bottom:2px;">Log a Lift</div>
+          <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:14px;" id="ll-form-location"></div>
+
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Title</label>
+            <input type="text" id="ll-form-title" placeholder="e.g. EX5600 Radiator Removal" autocomplete="off" maxlength="120">
+          </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Asset / Machine <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+            <input type="text" id="ll-form-asset" placeholder="e.g. Hitachi EX5600" autocomplete="off" maxlength="80">
+          </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Part / Component <span style="font-weight:400; text-transform:none;">(optional - for a sub-part lift)</span></label>
+            <input type="text" id="ll-form-part" placeholder="e.g. Radiator" autocomplete="off" maxlength="80">
+          </div>
+          <div class="grid" style="margin-bottom:12px;">
+            <div class="form-group">
+              <label>Load Weight <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+              <input type="number" id="ll-form-weight" step="0.01" min="0" placeholder="e.g. 3.2">
+            </div>
+            <div class="form-group">
+              <label>Unit</label>
+              <select id="ll-form-weight-unit">
+                <option value="t">t</option>
+                <option value="kg">kg</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Crane Used <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+            <select id="ll-crane">
+              <option value="">— Not specified —</option>
+              <option value="1100">LRT 1100-2.1</option>
+              <option value="1110">LTM 1110-5.1</option>
+              <option value="1130">LTM 1130-5.1</option>
+              <option value="1160">LTM 1160-5.2</option>
+              <option value="1220">LTR 1220</option>
+              <option value="1250">LTM 1250-5.1</option>
+              <option value="1300">LTM 1300-6.2</option>
+              <option value="1650-t3">LTM 1650-8.1 (T3 54m)</option>
+              <option value="1650-t5">LTM 1650-8.1 (T5 80m)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Photos</label>
+            <input type="file" id="ll-form-photo-input" accept="image/*" multiple onchange="llOnPhotoFilesSelected(event)">
+            <div id="ll-form-photo-status" style="font-size:0.78rem; color:var(--text-muted); margin-top:6px;"></div>
+            <div id="ll-form-photo-grid" class="ll-photo-grid"></div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>External Link <span style="font-weight:400; text-transform:none;">(optional - a view-only link for large files)</span></label>
+            <input type="url" id="ll-form-link" placeholder="https://..." autocomplete="off">
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Make sure it's set to view-only before pasting it in.</div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:14px;">
+            <label>Notes <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+            <textarea id="ll-form-notes" rows="4" placeholder="What worked, what you'd do differently, any improvements..."></textarea>
+          </div>
+
+          <div id="ll-form-error" style="display:none; color:var(--danger); font-size:0.85rem; margin-bottom:10px;"></div>
+          <button type="button" class="btn" id="ll-form-submit-btn" onclick="llSubmitEntry()">Submit Lift Entry</button>
+        </div>
       </div>
     </div>
 
@@ -3624,6 +3838,7 @@
         if (document.getElementById('cad-subtab-layout').classList.contains('active')) initSlewClearanceTab();
       }
       if (tabId === 'reeve-tab') initReeveTab();
+      if (tabId === 'liftlibrary-tab') initLiftLibraryTab();
       if (tabId === 'servicefill-tab') initServiceFillTab();
       if (tabId === 'admin-tab') { adminRefreshUsers(); adminRefreshPools(); }
       if (tabId === 'cabentry-tab') ceBuildModeOptions();
@@ -13044,6 +13259,358 @@
     function initCabEntryTab(){
       ceLoadEntries();
       ceRender();
+    }
+
+    // Lift Plan Library - browse/search a free-form category tree. See
+    // firestore.rules' liftLibraryCategories/liftLibraryEntries comments
+    // for the access model and why it's flat+parentId rather than nested
+    // subcollections (lets the tree go to any depth someone extends it
+    // to). Both collections are fetched in FULL once per tab visit, not
+    // live-synced - same one-shot approach as most of this app - and
+    // double as the search index, so "crusher one" can match a node at
+    // any depth without a dedicated search service. A category added by
+    // someone else while you're already on this tab won't appear until
+    // the next visit; an acceptable trade against needing a live
+    // listener over what could become a fairly large tree.
+    let llAllCategories = [];
+    let llAllEntries = [];
+    let llLoaded = false;
+    let llCurrentParentId = null; // null = root
+    let llBreadcrumb = [{ id: null, name: 'Home' }];
+
+    function llCategoryChildren(parentId) {
+      return llAllCategories.filter((c) => c.parentId === parentId);
+    }
+    function llEntriesInCategory(categoryId) {
+      return llAllEntries.filter((e) => e.categoryId === categoryId);
+    }
+
+    function initLiftLibraryTab() {
+      if (llLoaded) { llRenderBrowse(); return; }
+      Promise.all([
+        window.__liftLibraryGetAllCategories(),
+        window.__liftLibraryGetAllEntries()
+      ]).then(([catSnap, entrySnap]) => {
+        llAllCategories = catSnap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+        llAllEntries = entrySnap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+        llLoaded = true;
+        llRenderBrowse();
+      }).catch((err) => {
+        console.error('Lift Plan Library load failed', err);
+        document.getElementById('ll-node-list').innerHTML =
+          '<div class="profile-empty-msg">Could not load the library - check your connection and reopen this tab.</div>';
+      });
+    }
+
+    // Walks the parentId chain from a category up to the root, returning
+    // [{id, name}] root-first - used both to rebuild the breadcrumb when
+    // jumping straight to a search result (which could be at any depth)
+    // and to show a result's location without needing to click into it
+    // first. guard caps it well past any realistic tree depth so a data
+    // bug (an accidental parentId cycle) can't hang the browser.
+    function llCategoryPath(categoryId) {
+      const path = [];
+      let cur = categoryId;
+      let guard = 0;
+      while (cur != null && guard < 50) {
+        const cat = llAllCategories.find((c) => c.id === cur);
+        if (!cat) break;
+        path.unshift({ id: cat.id, name: cat.name });
+        cur = cat.parentId;
+        guard++;
+      }
+      path.unshift({ id: null, name: 'Home' });
+      return path;
+    }
+    function llBreadcrumbPathLabel(categoryId) {
+      return categoryId == null ? 'Home' : llCategoryPath(categoryId).map((c) => c.name).join(' / ');
+    }
+
+    function llRenderBreadcrumb() {
+      document.getElementById('ll-breadcrumb').innerHTML = llBreadcrumb.map((crumb, i) => {
+        const isLast = i === llBreadcrumb.length - 1;
+        const sep = i > 0 ? '<span class="ll-crumb-sep">/</span>' : '';
+        return sep + `<button type="button" ${isLast ? 'disabled' : ''} onclick="llJumpToBreadcrumb(${i})">${ceEscapeHtml(crumb.name)}</button>`;
+      }).join('');
+    }
+
+    function llJumpToBreadcrumb(index) {
+      llBreadcrumb = llBreadcrumb.slice(0, index + 1);
+      llCurrentParentId = llBreadcrumb[llBreadcrumb.length - 1].id;
+      llRenderBrowse();
+    }
+
+    // categoryId is a Firestore auto-id (safe alphanumeric, never
+    // user-controlled text) so it's fine to embed directly into the
+    // onclick attribute below - the category's NAME never goes anywhere
+    // near an inline attribute, it's looked up from llAllCategories once
+    // inside these handlers instead, specifically to avoid needing to
+    // smuggle arbitrary user-entered text through an HTML attribute.
+    function llNavigateInto(categoryId) {
+      const cat = llAllCategories.find((c) => c.id === categoryId);
+      if (!cat) return;
+      llBreadcrumb.push({ id: categoryId, name: cat.name });
+      llCurrentParentId = categoryId;
+      llRenderBrowse();
+    }
+
+    function llJumpToCategory(categoryId) {
+      llBreadcrumb = llCategoryPath(categoryId);
+      llCurrentParentId = categoryId;
+      document.getElementById('ll-search').value = '';
+      llRenderBrowse();
+    }
+
+    function llRenderBrowse() {
+      document.getElementById('ll-search').value = '';
+      document.getElementById('ll-search-results').style.display = 'none';
+      document.getElementById('ll-browse-wrap').style.display = '';
+      document.getElementById('ll-detail-wrap').style.display = 'none';
+      llRenderBreadcrumb();
+
+      const subcats = llCategoryChildren(llCurrentParentId).sort((a, b) => a.name.localeCompare(b.name));
+      const entries = llEntriesInCategory(llCurrentParentId).sort((a, b) => a.title.localeCompare(b.title));
+
+      const rows = subcats.map((c) => `
+        <button type="button" class="ll-node-row" onclick="llNavigateInto('${c.id}')">
+          <span class="ll-node-icon">&#128193;</span>
+          <span class="ll-node-label">${ceEscapeHtml(c.name)}</span>
+        </button>`).join('') + entries.map((e) => `
+        <button type="button" class="ll-node-row" onclick="llOpenEntry('${e.id}')">
+          <span class="ll-node-icon">&#128203;</span>
+          <span class="ll-node-label">${ceEscapeHtml(e.title)}${e.craneModel ? `<div class="ll-node-sub">${ceEscapeHtml(e.craneModel)}</div>` : ''}</span>
+        </button>`).join('');
+
+      document.getElementById('ll-node-list').innerHTML = rows;
+      document.getElementById('ll-empty-msg').style.display = (subcats.length === 0 && entries.length === 0) ? '' : 'none';
+    }
+
+    function llPromptAddCategory() {
+      const name = window.prompt('New category name (e.g. a mine site, or a general group like "HME"):');
+      if (!name || !name.trim()) return;
+      const trimmed = name.trim().slice(0, 80);
+      window.__liftLibraryCreateCategory(trimmed, llCurrentParentId)
+        .then((docRef) => {
+          llAllCategories.push({ id: docRef.id, name: trimmed, parentId: llCurrentParentId });
+          llRenderBrowse();
+        })
+        .catch((err) => {
+          console.error('Could not create category', err);
+          showToast('Could not create category - try again.');
+        });
+    }
+
+    function llOnSearchInput() {
+      const qStr = document.getElementById('ll-search').value.trim().toLowerCase();
+      const resultsEl = document.getElementById('ll-search-results');
+      if (!qStr) {
+        resultsEl.style.display = 'none';
+        document.getElementById('ll-browse-wrap').style.display = '';
+        return;
+      }
+      document.getElementById('ll-browse-wrap').style.display = 'none';
+      document.getElementById('ll-detail-wrap').style.display = 'none';
+      resultsEl.style.display = '';
+
+      const matchedCats = llAllCategories.filter((c) => c.name.toLowerCase().includes(qStr));
+      const matchedEntries = llAllEntries.filter((e) => e.title.toLowerCase().includes(qStr));
+
+      if (!matchedCats.length && !matchedEntries.length) {
+        resultsEl.innerHTML = '<div class="profile-empty-msg">No matches.</div>';
+        return;
+      }
+
+      resultsEl.innerHTML = matchedCats.map((c) => `
+        <button type="button" class="ll-node-row" onclick="llJumpToCategory('${c.id}')">
+          <span class="ll-node-icon">&#128193;</span>
+          <span class="ll-node-label">${ceEscapeHtml(c.name)}<div class="ll-node-sub">${ceEscapeHtml(llBreadcrumbPathLabel(c.parentId))}</div></span>
+        </button>`).join('') + matchedEntries.map((e) => `
+        <button type="button" class="ll-node-row" onclick="llOpenEntry('${e.id}')">
+          <span class="ll-node-icon">&#128203;</span>
+          <span class="ll-node-label">${ceEscapeHtml(e.title)}<div class="ll-node-sub">${ceEscapeHtml(llBreadcrumbPathLabel(e.categoryId))}</div></span>
+        </button>`).join('');
+    }
+
+    function llOpenEntry(entryId) {
+      const entry = llAllEntries.find((e) => e.id === entryId);
+      if (!entry) { showToast('Entry not found.'); return; }
+
+      document.getElementById('ll-browse-wrap').style.display = 'none';
+      document.getElementById('ll-search-results').style.display = 'none';
+      document.getElementById('ll-detail-wrap').style.display = '';
+
+      const rows = [];
+      if (entry.asset) rows.push(['Asset', entry.asset]);
+      if (entry.part) rows.push(['Part', entry.part]);
+      if (entry.weightValue != null) rows.push(['Weight', `${entry.weightValue}${entry.weightUnit ? ' ' + entry.weightUnit : ''}`]);
+      if (entry.craneModel) rows.push(['Crane', entry.craneModel]);
+      rows.push(['Logged by', entry.loggedByName || 'Unknown']);
+
+      const photos = Array.isArray(entry.photos) ? entry.photos : [];
+      const photosHtml = photos.length
+        ? `<div class="ll-photo-grid">${photos.map((p) => `<a href="${ceEscapeHtml(p.url)}" target="_blank" rel="noopener noreferrer"><img src="${ceEscapeHtml(p.url)}" alt="Lift photo"></a>`).join('')}</div>`
+        : '';
+      const notesHtml = entry.notes ? `<div class="ll-notes-block"><b>Notes:</b><br>${ceEscapeHtml(entry.notes)}</div>` : '';
+      const linkHtml = entry.externalLink
+        ? `<div class="ll-detail-row"><span class="ll-detail-label">External link</span><span class="ll-detail-value"><a href="${ceEscapeHtml(entry.externalLink)}" target="_blank" rel="noopener noreferrer">Open</a></span></div>`
+        : '';
+
+      document.getElementById('ll-detail-content').innerHTML = `
+        <div class="card-title" style="margin-bottom:10px;">${ceEscapeHtml(entry.title)}</div>
+        ${rows.map(([label, val]) => `<div class="ll-detail-row"><span class="ll-detail-label">${ceEscapeHtml(label)}</span><span class="ll-detail-value">${ceEscapeHtml(String(val))}</span></div>`).join('')}
+        ${linkHtml}
+        ${notesHtml}
+        ${photosHtml}
+      `;
+    }
+
+    function llCloseDetail() {
+      document.getElementById('ll-detail-wrap').style.display = 'none';
+      document.getElementById('ll-browse-wrap').style.display = '';
+    }
+
+    // Log a Lift form. Deliberately does NOT upload a photo the moment
+    // it's picked - selected files just sit in memory (llPendingPhotoFiles)
+    // with local-only object-URL previews until Submit is actually
+    // pressed. Uploading eagerly would leave orphaned Storage files
+    // behind every time someone picks photos then backs out without
+    // submitting - storage.rules' delete permission checks the OWNING
+    // FIRESTORE DOC's loggedByUid, which doesn't exist yet at that point,
+    // so a client could never clean those orphans up itself. Deferring
+    // the actual upload to submit-time means backing out costs nothing;
+    // the only real risk window left is a photo upload succeeding but
+    // the Firestore write failing right after, which is rare and already
+    // logged to the console if it happens.
+    let llPendingPhotoFiles = [];
+    let llPendingPhotoUrls = [];
+    let llCurrentFormEntryId = null;
+
+    function llOpenForm() {
+      llCurrentFormEntryId = window.__liftLibraryNewEntryId();
+      llPendingPhotoUrls.forEach((u) => URL.revokeObjectURL(u));
+      llPendingPhotoFiles = [];
+      llPendingPhotoUrls = [];
+
+      document.getElementById('ll-form-title').value = '';
+      document.getElementById('ll-form-asset').value = '';
+      document.getElementById('ll-form-part').value = '';
+      document.getElementById('ll-form-weight').value = '';
+      document.getElementById('ll-form-weight-unit').value = 't';
+      document.getElementById('ll-crane').value = '';
+      document.getElementById('ll-form-link').value = '';
+      document.getElementById('ll-form-notes').value = '';
+      document.getElementById('ll-form-photo-input').value = '';
+      document.getElementById('ll-form-photo-grid').innerHTML = '';
+      document.getElementById('ll-form-photo-status').textContent = '';
+      document.getElementById('ll-form-error').style.display = 'none';
+      document.getElementById('ll-form-location').textContent = 'Filing under: ' + llBreadcrumbPathLabel(llCurrentParentId);
+      const btn = document.getElementById('ll-form-submit-btn');
+      btn.disabled = false;
+      btn.textContent = 'Submit Lift Entry';
+
+      document.getElementById('ll-browse-wrap').style.display = 'none';
+      document.getElementById('ll-search-results').style.display = 'none';
+      document.getElementById('ll-detail-wrap').style.display = 'none';
+      document.getElementById('ll-form-wrap').style.display = '';
+    }
+
+    function llCloseForm() {
+      llPendingPhotoUrls.forEach((u) => URL.revokeObjectURL(u));
+      llPendingPhotoFiles = [];
+      llPendingPhotoUrls = [];
+      document.getElementById('ll-form-wrap').style.display = 'none';
+      document.getElementById('ll-browse-wrap').style.display = '';
+    }
+
+    function llRenderPendingPhotos() {
+      document.getElementById('ll-form-photo-grid').innerHTML = llPendingPhotoUrls.map((url, i) => `
+        <div style="position:relative;">
+          <img src="${url}" alt="Selected photo">
+          <button type="button" onclick="llRemovePendingPhoto(${i})" aria-label="Remove photo" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&times;</button>
+        </div>`).join('');
+    }
+
+    function llOnPhotoFilesSelected(event) {
+      const files = Array.from(event.target.files || []);
+      const MAX_PHOTOS = 20;
+      const MAX_SIZE = 15 * 1024 * 1024; // matches storage.rules' own cap
+      let skipped = 0;
+      files.forEach((file) => {
+        if (llPendingPhotoFiles.length >= MAX_PHOTOS || file.size > MAX_SIZE) { skipped++; return; }
+        llPendingPhotoFiles.push(file);
+        llPendingPhotoUrls.push(URL.createObjectURL(file));
+      });
+      event.target.value = '';
+      document.getElementById('ll-form-photo-status').textContent = skipped
+        ? `${skipped} file(s) skipped (over 15MB, or more than ${MAX_PHOTOS} photos total).`
+        : '';
+      llRenderPendingPhotos();
+    }
+
+    function llRemovePendingPhoto(index) {
+      URL.revokeObjectURL(llPendingPhotoUrls[index]);
+      llPendingPhotoFiles.splice(index, 1);
+      llPendingPhotoUrls.splice(index, 1);
+      llRenderPendingPhotos();
+    }
+
+    function llSubmitEntry() {
+      const title = document.getElementById('ll-form-title').value.trim();
+      const errEl = document.getElementById('ll-form-error');
+      errEl.style.display = 'none';
+      if (!title) {
+        errEl.textContent = 'Title is required.';
+        errEl.style.display = '';
+        return;
+      }
+      // Root itself isn't a real category doc (it's represented purely as
+      // parentId: null) - there's no id there for an entry's categoryId
+      // to reference, so filing directly at Home is a genuine dead end,
+      // not just a soft nudge to pick somewhere more specific.
+      if (llCurrentParentId == null) {
+        errEl.textContent = 'Open or create a category first — a lift can’t be logged at the very top level.';
+        errEl.style.display = '';
+        return;
+      }
+
+      const btn = document.getElementById('ll-form-submit-btn');
+      btn.disabled = true;
+      btn.textContent = llPendingPhotoFiles.length ? 'Uploading photos...' : 'Submitting...';
+
+      const weightRaw = document.getElementById('ll-form-weight').value;
+      const craneSelect = document.getElementById('ll-crane');
+      const entryId = llCurrentFormEntryId;
+
+      Promise.all(llPendingPhotoFiles.map((file) => window.__liftLibraryUploadPhoto(entryId, file)))
+        .then((photos) => {
+          const data = { categoryId: llCurrentParentId, title, photos };
+          const asset = document.getElementById('ll-form-asset').value.trim();
+          const part = document.getElementById('ll-form-part').value.trim();
+          const link = document.getElementById('ll-form-link').value.trim();
+          const notes = document.getElementById('ll-form-notes').value.trim();
+          if (asset) data.asset = asset;
+          if (part) data.part = part;
+          if (weightRaw !== '') { data.weightValue = parseFloat(weightRaw); data.weightUnit = document.getElementById('ll-form-weight-unit').value; }
+          if (craneSelect.value) data.craneModel = craneSelect.options[craneSelect.selectedIndex].textContent;
+          if (link) data.externalLink = link;
+          if (notes) data.notes = notes;
+
+          btn.textContent = 'Saving...';
+          return window.__liftLibraryCreateEntry(entryId, data).then(() => data);
+        })
+        .then((data) => {
+          llAllEntries.push(Object.assign({ id: entryId, loggedByName: window.__profileDisplayName || '' }, data));
+          showToast('Lift logged.');
+          llCloseForm();
+          llRenderBrowse();
+        })
+        .catch((err) => {
+          console.error('Could not submit lift entry', err);
+          errEl.textContent = 'Could not save — check your connection and try again.';
+          errEl.style.display = '';
+          btn.disabled = false;
+          btn.textContent = 'Submit Lift Entry';
+        });
     }
 
     // Initialize Page Controls

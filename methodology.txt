@@ -12649,6 +12649,120 @@ cranes get their own subsections as they're built.
 
   CACHE_VERSION v279->v280, app version v7.22->v7.23.
 
+127. Lift Plan Library (Phase 1) - browsable knowledge base of past lifts
+
+  Person's idea, worked out over a long brainstorm before any code:
+  photos + notes from a completed lift (leg-length differences marked
+  with coloured emoji dots, what worked, what they'd do differently),
+  organised so someone tackling the SAME lift again can find it -
+  browsable by drilling into a free-form category tree ("select the
+  mine site... then a specific area, say crusher one... all the known
+  lifts you can go through, click on, and read"), searchable too
+  ("crush one then the crush one comes up"), with new categories addable
+  by any user at any level, not admin-curated - explicitly "built by the
+  user base... any entries could be added by a user and designating a
+  place as well can be made by a user". Storage backend went through its
+  own long side-quest (self-hosted Nextcloud + CORS + a real production
+  outage from a broken unrelated Proxmox NPM host - see person's own
+  account, not repeated here) before landing on Firebase Storage, since
+  it needed no new infrastructure and the free-tier numbers worked out
+  comfortably for the crew size described.
+
+  Data model: liftLibraryCategories is a FLAT collection keyed by
+  auto-id, each doc just {name, parentId} (parentId: null = root) -
+  deliberately not nested subcollections like pools/lifts, since
+  Firestore security rules can't cleanly express "any depth" for nested
+  subcollections (would need a hardcoded max-depth), while a flat
+  collection + parentId query works at any depth with zero rules
+  changes as the tree grows. liftLibraryEntries holds the actual
+  write-ups (title, asset, part, weight, crane, photos, notes, external
+  link), each tagged with a categoryId. Both collections are loaded in
+  FULL once per tab visit (not live-synced) and double as the client-
+  side search index - simplest thing that could work at the scale
+  described, no dedicated search service needed.
+
+  Storage path is liftLibrary/{entryId}/{fileName}, where entryId is
+  generated CLIENT-SIDE (doc(collection(...)).id, no network call)
+  before either the Firestore doc or its photos exist - this is what
+  lets storage.rules check photo-delete permission against the OWNING
+  FIRESTORE DOC's loggedByUid via firestore.get(), one source of truth
+  for "who logged this" rather than a duplicated ownership field. Photo
+  upload is deliberately DEFERRED to submit-time, not fired the moment a
+  file's picked - selected files just sit in memory with local object-
+  URL previews until Submit is pressed, specifically so backing out of
+  the form costs nothing (an eager-upload design would leave orphaned
+  Storage files behind every time someone picks photos then changes
+  their mind, and storage.rules' delete check can't authorize cleanup
+  for a photo whose Firestore doc was never created).
+
+  Firestore/Storage rules follow the exact conventions already
+  established for pools/lifts (request.auth != null as the access bar,
+  same as directory/pools elsewhere - "signed in is enough", no new
+  stricter model invented) but WITHOUT the pool-membership check, since
+  this is deliberately open to every signed-in user, not scoped to a
+  crew's own pool. storage.rules is a brand new file - first-ever use of
+  Storage in this project. Neither Firestore nor Storage rules could be
+  validated locally (firebase-tools needs a real login this environment
+  doesn't have) - both rely on the Firebase Console's own publish-time
+  syntax check as the real first test, same as every other manual-paste
+  deploy this project already relies on (no firebase.json/CLI pipeline
+  wired up here).
+
+  Built as three UI pieces sharing one card: a breadcrumb browser (list
+  a level's subcategories + lift entries via parentId/categoryId
+  queries), a search bar (substring match across the full loaded
+  category/entry cache, jumping straight to a match at any depth by
+  walking its parentId chain back to root), and a contribution form
+  (title/asset/part/weight/crane/photos/external-link/notes, crane
+  select reusing the app's existing model list and registered in
+  CRANE_SELECT_IDS like every other crane select in the app, so admin
+  crane-restriction sweeps cover it too). Entry detail view (photo
+  gallery, notes, metadata) landed in the same pass as the browse UI
+  rather than as a separate step, since a browsable library that can't
+  actually show an entry's contents isn't really browsable.
+
+  Verified: real headless-browser runs throughout, stubbing only the
+  two Firestore-backed data functions (not Firebase itself) so the
+  actual rendering/navigation/search/upload logic all runs for real.
+  Confirmed: multi-level drill-down navigation renders the right
+  children at each level; breadcrumb correctly rebuilds when jumping
+  straight to a deep search result; search matches both categories and
+  entries and shows each match's full path; detail view renders all
+  fields plus a multi-photo gallery; an XSS attempt in a title
+  (<script>alert(1)</script>) came back correctly HTML-escaped: the
+  form's empty-title validation and its "can't log at the root level"
+  validation both correctly block submission with no create call fired;
+  a real file attached via a real file input produces a live thumbnail
+  preview, removing it before submit correctly drops it with no upload
+  call ever made; a full submit correctly calls upload-then-create in
+  order, assembles the data object with optional fields only included
+  when actually filled in, and the new entry appears in the browse list
+  immediately afterward without needing a reload. Zero console/page
+  errors across every pass. Full interactive click-through wasn't
+  possible (sign-in gate blocks headless pointer clicks without real
+  credentials, same constraint noted repeatedly this session) - worked
+  around throughout by driving the same functions the UI's own onclick
+  handlers call, via direct JS evaluation instead of simulated clicks.
+
+  Not yet built (deliberately deferred, not forgotten): Phase 2's
+  monthly Firebase Storage -> Nextcloud backup-and-rotate Cloud
+  Function (keeps the free 5GB Storage tier from ever filling up long-
+  term), and the tap-to-place coloured-emoji photo annotation feature
+  for marking which rigging leg was shortened - both discussed at
+  length during the brainstorm but explicitly sequenced after Phase 1
+  proved out first.
+
+  CACHE_VERSION v280->v281, app version v7.23->v7.24. New file:
+  storage.rules (Firebase Console Storage -> Rules, manual paste, same
+  as firestore.rules). vendor/firebase/firebase-storage.js newly
+  vendored (matching SDK 10.14.1, same version as the other vendored
+  firebase-*.js files, import path rewritten to the local ./firebase-
+  app.js the same way the others already were) - left OUT of sw.js's
+  APP_SHELL deliberately, same as firebase-app.js/auth.js/firestore.js
+  already are: stable, unedited third-party SDK code, not actively-
+  edited app logic, so it's correctly left to CONTENT_CACHE like its
+  siblings rather than given the update-guarantee treatment.
+
 127. Lift Plan Library - foundation (Firestore + Storage rules)
 
   Person's idea, brainstormed over several sessions: a browsable,
