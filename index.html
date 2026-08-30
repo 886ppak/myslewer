@@ -219,7 +219,18 @@
        scroll while a finger drags it around. */
     .ll-annotate-arrow-tail { position: absolute; transform: translate(-50%, -50%); width: 16px; height: 16px; border-radius: 50%; background: var(--accent-gold); border: 2px solid rgba(0,0,0,0.65); padding: 0; cursor: grab; touch-action: none; }
     .ll-annotate-arrow-tail:active { cursor: grabbing; }
-    .ll-annotate-arrow-head { position: absolute; background: none; border: none; padding: 7px; margin: -7px; font-size: 1.25rem; line-height: 1; color: var(--accent-gold); cursor: grab; touch-action: none; filter: drop-shadow(0 0 3px rgba(0,0,0,0.85)); }
+    /* padding (not margin) grows the touch target around the glyph - a
+       negative margin here would look like it "cancels out" the padding
+       the way it would for a normal-flow sibling, but this element's
+       actual screen position comes from left/top% + a JS-computed
+       translate() (see llRenderAnnotateMarkers), and margin shifts an
+       absolutely-positioned element's box away from that computed point
+       instead of just resizing it - a -7px margin here was quietly
+       dragging the head ~7px off the true end of the line on every
+       render, worse the more the arrow was rotated. Confirmed the fix
+       with getBoundingClientRect() before shipping this, not just by
+       re-reading the CSS - see methodology.txt 141. */
+    .ll-annotate-arrow-head { position: absolute; background: none; border: none; padding: 7px; font-size: 1.25rem; line-height: 1; color: var(--accent-gold); cursor: grab; touch-action: none; filter: drop-shadow(0 0 3px rgba(0,0,0,0.85)); }
     .ll-annotate-arrow-head:active { cursor: grabbing; }
 
     .nav-tabs { display: flex; justify-content: flex-start; background-color: #181a1d; border-bottom: 2px solid var(--border-color); overflow-x: auto; scrollbar-width: none; }
@@ -1700,7 +1711,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.2</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.3</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>

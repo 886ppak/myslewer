@@ -13669,3 +13669,55 @@ cranes get their own subsections as they're built.
   dot) produce the expected HTML. Zero JS console errors.
 
   CACHE_VERSION v289 -> v290, app-version v8.1 -> v8.2.
+
+141. Fix: arrow marker's head handle drifting off the true end of the line
+
+  Person's report, with a screenshot of the annotator open: "the tail
+  and the arrow are always in sync is this something you can fix?" -
+  read that as "the tail and the [arrow] head never quite line up /
+  don't move together correctly", which is exactly what was happening,
+  though not for the reason it first looked like it might be (worried
+  briefly this was a real drag-vs-rotate logic bug, i.e. dragging one
+  handle wrongly moving the other - traced and ruled that out first:
+  llArrowPointerMove only ever touches ann.x/ann.y OR ann.angle
+  depending on which handle started the drag, never both).
+
+  Root cause was in 140's own CSS, not the drag math: the arrow head's
+  `.ll-annotate-arrow-head` had `padding: 7px; margin: -7px;` - a
+  reflex carried over from normal-flow layout, where a negative margin
+  next to matching padding cancels out and leaves a SIBLING's spacing
+  unaffected, just enlarging the touch target quietly. That reflex
+  doesn't hold for an absolutely-positioned element placed via
+  `left/top%` + a JS-computed `translate()` (see
+  llRenderAnnotateMarkers) - margin there shifts the rendered box away
+  from wherever that computed point actually is, it doesn't just grow
+  the box around a fixed center. The head button was landing ~7px up-
+  and-left of the true line endpoint on every single render, angle-
+  independent - so at angle 0 the arrow already looked ~7px shorter
+  than its real 40px length, and turning it rotated the VISIBLE line
+  correctly while the head glyph (and, worse, its actual drag hit-
+  target) drifted along its own fixed offset instead of following the
+  line's end - the two visibly falling out of alignment the more it
+  was turned, which is exactly the "always [out of] sync" the person
+  was seeing.
+
+  Didn't just re-read the CSS and assume the obvious fix (drop the
+  margin) was right - measured it for real first: opened the
+  annotator on an actual repo image (not a synthetic 1x1 test pixel,
+  so this matched what a real uploaded photo renders like), placed an
+  arrow, and read getBoundingClientRect() on both handles. Before the
+  fix: tail-to-head distance measured 33.7px at angle 0 (should be the
+  full 40px) with the head sitting off-axis (dy=-7.5 at an angle whose
+  line has zero vertical component) - both numbers matching a -7px
+  offset in each direction, confirming the margin was the actual
+  culprit rather than guessing. After dropping just the `margin: -7px`
+  (keeping `padding: 7px` for the same enlarged tap target - padding
+  alone doesn't have this problem, confirmed by the pre-existing tail
+  handle which has never had a margin and always measured exactly
+  correct), re-measured: exactly 40.0px at angle 0 and ~40.0px again
+  after rotating the head to a different angle, tail unmoved either
+  time. Also took a real screenshot of the fixed overlay (zoomed on
+  the marker) to see the line and head actually meeting cleanly,
+  rather than trusting the numbers alone.
+
+  CACHE_VERSION v290 -> v291, app-version v8.2 -> v8.3.

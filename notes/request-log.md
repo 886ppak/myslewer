@@ -1470,3 +1470,17 @@ a working record, not app content.
   vs-tap disambiguation that stops a just-finished drag from also
   deleting the arrow. CACHE_VERSION -> v290, app-version -> v8.2. See
   methodology.txt 140.
+- Screenshot of the annotator open, arrow visibly short/drifted: "the
+  tail and the arrow are always in sync is this something you can
+  fix?"
+  **Status: done, real bug found and fixed.** The arrow head handle's
+  CSS had a `margin: -7px` alongside its `padding: 7px` (a normal-flow
+  habit that doesn't hold for an absolutely-positioned, translate()-
+  placed element) - it was quietly shifting the head ~7px off the true
+  end of the line on every render, worse the more the arrow was
+  turned. Measured it with real getBoundingClientRect() readings
+  before and after (33.7px tail-to-head gap instead of the intended
+  40px, off-axis too) to confirm the cause before fixing, then
+  re-measured after (exactly 40px at two different angles) and took a
+  zoomed screenshot to see the line and head actually meet cleanly.
+  CACHE_VERSION -> v291, app-version -> v8.3. See methodology.txt 141.
