@@ -1607,3 +1607,19 @@ a working record, not app content.
   Registry cleanup policy the deploy asked for. Deleted my local copy
   of the service account key now that it's done - please revoke the
   temporary Owner grant on your end too. See methodology.txt 147.
+- "can we also add the ability to attach pdf to these lift libarys ,
+  as if I can get my hands on OEM lift designs or just drawings that
+  show COG I think they would be very useful for users and have those
+  go straight to the nextcloud storage too"
+  **Status: code done, not yet deployed** (same three-step deploy as
+  video needs to run again - the service account key was deleted
+  after the last deploy finished). Same immediate-migration pattern as
+  video, but as a LIST (up to 10 per entry) since a real lift plan
+  often has several reference documents, and without video's
+  "hide until migrated" gating since a PDF is small enough that
+  showing it immediately isn't the bandwidth trade-off video's own
+  gating exists to avoid. New migrateLiftLibraryPdfsToNextcloud Cloud
+  Function, 25MB cap. All client-side logic verified with Playwright
+  (size/count rejection, multi-file submit shape, mixed pending/
+  migrated removal, detail-view rendering for both states).
+  CACHE_VERSION -> v296, app-version -> v8.8. See methodology.txt 148.

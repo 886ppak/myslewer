@@ -14185,3 +14185,77 @@ cranes get their own subsections as they're built.
   Nothing code-side changed in this entry beyond functions/index.js's
   already-committed region fix (146) - this entry is the deploy/
   verification record, not a further code change.
+
+148. Lift Plan Library: attach PDFs (OEM lift designs, COG drawings),
+     migrated to Nextcloud immediately like video
+
+  Person's request, directly following 145/147's video work: "add the
+  ability to attach pdf to these lift libarys... have those go
+  straight to the nextcloud storage too." Same trigger-on-upload
+  pattern as video, deliberately reused now that it exists and works,
+  but shaped differently in two ways specifically because a PDF isn't
+  a video:
+
+  - A LIST, not a single slot. A real lift plan often comes with
+    several reference documents at once (an OEM capacity chart AND a
+    separate COG drawing, say), and unlike video a PDF's own bandwidth
+    cost is much closer to a photo's than to real phone video's - the
+    "one clip that matters" reasoning that justified video staying a
+    single field (145) doesn't apply here. pdfs mirrors photos'
+    shape/cap style (list, 10 max) rather than video's (one object).
+
+  - No withheld-until-migrated gating in the detail view. Video
+    deliberately hides its player while still pending (145's own
+    comment: the whole point of immediate migration is that ordinary
+    viewers never touch Storage egress, so a slightly-earlier preview
+    isn't worth trading that away for). A PDF is small enough that
+    this tradeoff doesn't apply - its link just always works,
+    pointing at wherever it currently lives (Storage while pending,
+    Nextcloud once migrated), same as a photo's link already does
+    regardless of its own migration state.
+
+  New migrateLiftLibraryPdfsToNextcloud Cloud Function - a SEPARATE
+  function from migrateLiftLibraryVideoToNextcloud rather than one
+  function branching on content type, even though the two share their
+  WebDAV upload logic almost entirely: a video overwrites a single
+  field outright, a PDF has to find-and-replace ONE element inside an
+  array without disturbing the entry's other pdfs/photos/video -
+  different enough update shape (modeled on how the existing monthly
+  backupLiftLibraryPhotosToNextcloud already does array-element
+  replacement) that keeping them as two small, focused functions
+  seemed clearer than one branchy one. Re-reads the array fresh
+  immediately before writing (not the copy from its own earlier retry
+  loop) specifically because two PDFs on the SAME entry can be
+  mid-migration at the same time - a stale array write would silently
+  undo whichever one finished first.
+
+  storage.rules gained an application/pdf branch (25MB cap - covers
+  even a multi-page scanned OEM chart) alongside the existing image/*
+  and video/* ones. firestore.rules' create hasOnly() list gained
+  'pdfs', validated as a list up to 10 like photos. Also fixed a
+  staleness left over from 146: storage.rules' own header comment
+  still said "paste into the Firebase Console by hand" after that
+  entry actually wired up a real `firebase deploy --only storage` CLI
+  path - corrected while already in the file for this change.
+
+  Verified all client-side logic with Playwright before considering
+  this done, same discipline as 145: an oversized PDF is rejected with
+  the right message; two PDFs selected together both preview correctly
+  and a full submit produces the right {url, path, pending:true, name}
+  shape for each with exactly two upload calls; removing one of two
+  existing PDFs during an edit (one still-pending, one already
+  migrated) correctly queues only the pending one's Storage path for
+  deletion and keeps the migrated one's Firestore record untouched;
+  and the detail view renders both a still-pending PDF's live Storage
+  link and an already-migrated one's Nextcloud link correctly, with no
+  processing-state gating on either (per the design decision above).
+
+  NOT YET DEPLOYED, same situation as 145 originally was: the service
+  account key from 146/147 was deleted after that deploy finished
+  (per its own methodology entry's own cleanup note), so this
+  session currently has no way to push storage.rules, firestore.rules,
+  or the new function live. Code is committed and ready; needs the
+  same three-step deploy 145/146/147 went through once credentials are
+  available again.
+
+  CACHE_VERSION v295 -> v296, app-version v8.7 -> v8.8.

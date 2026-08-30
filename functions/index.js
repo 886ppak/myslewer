@@ -377,3 +377,104 @@ exports.migrateLiftLibraryVideoToNextcloud = onObjectFinalized(
     }
   }
 );
+
+// PDFs (OEM lift designs, COG drawings) get the same "migrate on
+// upload, don't wait for the monthly sweep" treatment as video - a
+// deliberate choice even though a PDF's actual bandwidth cost is much
+// closer to a photo's than a video's (typically low single-digit MB,
+// not 10-50x a photo like real phone video is). Requested that way,
+// and it's a genuinely reasonable default regardless of the exact
+// cost shape: now that this trigger-on-upload pattern exists and
+// works, there's no real reason to make a reference document wait up
+// to a month in Storage when it could just be archived within
+// seconds instead - the earlier "monthly is simpler, and an orphaned
+// file sitting around is harmless" reasoning for photos (methodology
+// 133) was about batching being FINE, not about immediate being
+// worse.
+//
+// Kept as its OWN function rather than folded into
+// migrateLiftLibraryVideoToNextcloud above, even though the two share
+// most of their WebDAV logic - the two aren't just "same thing,
+// different content type": a video is a single field on the entry
+// (one clip that matters, see 145's own reasoning), a PDF is a LIST
+// like photos (a real lift plan often comes with several reference
+// documents - an OEM capacity chart, a separate COG drawing, etc.),
+// so this one has to find-and-replace ONE element inside an array
+// rather than overwrite a single field outright - different enough
+// update logic that branching one function on content type would
+// have made both harder to follow than two small, focused ones.
+exports.migrateLiftLibraryPdfsToNextcloud = onObjectFinalized(
+  {
+    // Same bucket-co-location requirement as the video function above
+    // - Eventarc Storage triggers have to sit in the bucket's own
+    // region (us-west1), not wherever the scheduled functions live.
+    region: 'us-west1',
+    secrets: [NEXTCLOUD_APP_PASSWORD],
+    memory: '256MiB',
+    timeoutSeconds: 180,
+  },
+  async (event) => {
+    const filePath = event.data.name;
+    const contentType = event.data.contentType || '';
+    if (!filePath.startsWith('liftLibrary/') || contentType !== 'application/pdf') return;
+
+    const parts = filePath.split('/');
+    const entryId = parts[1];
+    const fileName = parts[parts.length - 1];
+    if (!entryId || !fileName) return;
+
+    const db = getFirestore();
+    const bucket = getStorage().bucket();
+    const backupBase = NEXTCLOUD_BACKUP_PATH.value();
+
+    const docRef = db.collection('liftLibraryEntries').doc(entryId);
+    // Same race as migrateLiftLibraryVideoToNextcloud's own comment
+    // explains - the client's Firestore write (adding this PDF's
+    // pending stub to the `pdfs` array) can genuinely still be in
+    // flight when this trigger fires, so retry rather than bail on
+    // the first miss.
+    let pdfIndex = -1;
+    let pdfs = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const snap = await docRef.get();
+      if (!snap.exists) return; // entry deleted between upload and this trigger firing
+      const entry = snap.data();
+      pdfs = Array.isArray(entry.pdfs) ? entry.pdfs : [];
+      pdfIndex = pdfs.findIndex((p) => p && p.path === filePath);
+      if (pdfIndex !== -1) break;
+      if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 4000));
+    }
+    // Not found after retrying - either the entry write genuinely
+    // failed (orphaned upload) or this PDF was already migrated/
+    // removed by the time this attempt ran. Does nothing rather than
+    // guessing, same as the video function.
+    if (pdfIndex === -1) return;
+
+    try {
+      const [bytes] = await bucket.file(filePath).download();
+      const entryFolder = `${backupBase}/${entryId}`;
+      const davPath = `${entryFolder}/${fileName}`;
+
+      await ncEnsureFolder(entryFolder);
+      await ncUpload(davPath, bytes, contentType);
+      const shareUrl = await ncCreatePublicShareUrl(davPath);
+
+      // Re-read right before writing rather than reusing the `pdfs`
+      // array from the retry loop above - another PDF on the SAME
+      // entry could have finished migrating (or been added/removed)
+      // in the time this upload took, and a stale array would
+      // silently undo that concurrent change on write.
+      const freshSnap = await docRef.get();
+      if (!freshSnap.exists) { await bucket.file(filePath).delete().catch(() => {}); return; }
+      const freshPdfs = Array.isArray(freshSnap.data().pdfs) ? freshSnap.data().pdfs : [];
+      const freshIndex = freshPdfs.findIndex((p) => p && p.path === filePath);
+      if (freshIndex === -1) { await bucket.file(filePath).delete().catch(() => {}); return; }
+      freshPdfs[freshIndex] = { url: `${shareUrl}/download`, nextcloud: true, name: freshPdfs[freshIndex].name };
+      await docRef.update({ pdfs: freshPdfs });
+      await bucket.file(filePath).delete();
+      console.log(`Migrated PDF ${fileName} for entry ${entryId} to Nextcloud.`);
+    } catch (err) {
+      console.error(`Failed to migrate PDF ${filePath} (entry ${entryId}):`, err.message);
+    }
+  }
+);

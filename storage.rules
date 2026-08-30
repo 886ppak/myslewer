@@ -3,10 +3,10 @@ rules_version = '2';
 // MYSLEWER Cloud Storage rules. First-ever use of Storage in this project
 // (everything else runs on Firestore + static GitHub Pages hosting) - the
 // Lift Plan Library is what needs actual file uploads, so this file
-// starts life with exactly one purpose: its photos. Deploy the same way
-// as firestore.rules - there's no firebase.json/CLI deploy pipeline
-// wired up for this repo, so paste this into the Firebase Console's
-// Storage -> Rules tab by hand whenever it changes.
+// starts life with exactly one purpose: its photos. Deploy with
+// `firebase deploy --only storage` (firebase.json/.firebaserc wire this
+// up as of methodology.txt 146 - was manual copy-paste into the
+// Firebase Console's Storage -> Rules tab before that).
 service firebase.storage {
   match /b/{bucket}/o {
 
@@ -16,15 +16,19 @@ service firebase.storage {
     // round trip needed. Read is open to any signed-in user, same bar as
     // the Firestore side. Upload just needs to be a real image (15MB cap
     // - generous for a phone photo, not generous enough for someone to
-    // use this as general file storage) or a real video (150MB cap - a
+    // use this as general file storage), a real video (150MB cap - a
     // real phone video easily runs 20-100MB+; still bounded, not
-    // "whatever the phone recorded"). Video gets its own, much shorter
-    // life in this bucket than photos do - see functions/index.js's own
-    // migrateLiftLibraryVideoToNextcloud, which moves it to Nextcloud
+    // "whatever the phone recorded"), or a real PDF (25MB cap - covers
+    // even a multi-page scanned OEM lift chart or COG drawing). Video
+    // and PDFs both get a much shorter life in this bucket than photos
+    // do - see functions/index.js's own migrateLiftLibraryVideoToNextcloud/
+    // migrateLiftLibraryPdfsToNextcloud, which move them to Nextcloud
     // within seconds of this create succeeding rather than waiting for
-    // the monthly photo sweep, since every VIEW of a Storage-hosted
-    // video (not just eventual migration) is real egress cost at 10-50x
-    // a photo's size.
+    // the monthly photo sweep (video for real bandwidth reasons - every
+    // VIEW of a Storage-hosted video is egress cost at 10-50x a photo's
+    // size; PDFs mostly just because the pattern already existed and
+    // there's no reason to make a reference document wait a month once
+    // immediate migration is available).
     //
     // Ownership for delete was originally checked by looking back at the
     // OWNING FIRESTORE DOC's loggedByUid via firestore.get() - one
@@ -37,12 +41,13 @@ service firebase.storage {
     // and every delete silently failed, including for the actual owner.
     // Stamping loggedByUid directly into the object's own customMetadata
     // at upload time (see index.html's __liftLibraryUploadPhoto/
-    // __liftLibraryUploadVideo) avoids the cross-service call entirely -
-    // a second source of truth, but one that can't be tripped up by an
-    // unrelated region choice on either side ever again. create requires
-    // the metadata match the uploader so nobody can stamp someone else's
-    // uid on their own photo/video. No update - a wrong file means
-    // delete and re-upload, not overwrite in place.
+    // __liftLibraryUploadVideo/__liftLibraryUploadPdf) avoids the
+    // cross-service call entirely - a second source of truth, but one
+    // that can't be tripped up by an unrelated region choice on either
+    // side ever again. create requires the metadata match the uploader
+    // so nobody can stamp someone else's uid on their own file. No
+    // update - a wrong file means delete and re-upload, not overwrite in
+    // place.
     match /liftLibrary/{entryId}/{fileName} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
@@ -50,6 +55,7 @@ service firebase.storage {
                      && (
                           (request.resource.contentType.matches('image/.*') && request.resource.size < 15 * 1024 * 1024)
                           || (request.resource.contentType.matches('video/.*') && request.resource.size < 150 * 1024 * 1024)
+                          || (request.resource.contentType == 'application/pdf' && request.resource.size < 25 * 1024 * 1024)
                         );
       allow update: if false;
       allow delete: if request.auth != null

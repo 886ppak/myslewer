@@ -1450,6 +1450,19 @@
         return uploadBytes(fileRef, file, metadata).then(() => getDownloadURL(fileRef)).then((url) => ({ url, path }));
       };
 
+      // Same mechanics again - see __liftLibraryUploadVideo's own
+      // comment on why this isn't just one shared function. Reacted to
+      // by functions/index.js's migrateLiftLibraryPdfsToNextcloud.
+      window.__liftLibraryUploadPdf = function (entryId, file) {
+        const extMatch = /\.([a-zA-Z0-9]+)$/.exec(file.name || '');
+        const ext = extMatch ? extMatch[1].toLowerCase() : 'pdf';
+        const safeName = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const path = `liftLibrary/${entryId}/${safeName}`;
+        const fileRef = storageRef(storage, path);
+        const metadata = { customMetadata: { loggedByUid: auth.currentUser.uid } };
+        return uploadBytes(fileRef, file, metadata).then(() => getDownloadURL(fileRef)).then((url) => ({ url, path }));
+      };
+
       window.__liftLibraryDeleteEntry = function (entryId) {
         return deleteDoc(doc(db, 'liftLibraryEntries', entryId));
       };
@@ -1731,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.7</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.8</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2087,6 +2100,13 @@
             <input type="file" id="ll-form-video-input" accept="video/*" onchange="llOnVideoFileSelected(event)">
             <div id="ll-form-video-status" style="font-size:0.78rem; color:var(--text-muted); margin-top:6px;"></div>
             <div id="ll-form-video-preview"></div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Reference Documents <span style="font-weight:400; text-transform:none;">(optional - OEM lift designs, COG drawings, etc., max 25MB each)</span></label>
+            <input type="file" id="ll-form-pdf-input" accept="application/pdf" multiple onchange="llOnPdfFilesSelected(event)">
+            <div id="ll-form-pdf-status" style="font-size:0.78rem; color:var(--text-muted); margin-top:6px;"></div>
+            <div id="ll-form-pdf-list" style="display:flex; flex-direction:column; gap:6px; margin-top:8px;"></div>
           </div>
 
           <div class="form-group" style="margin-bottom:12px;">
@@ -13783,6 +13803,20 @@
             : `<div class="ll-detail-row"><span class="ll-detail-label">Video</span><span class="ll-detail-value">Processing — check back shortly</span></div>`)
         : '';
 
+      // Reference documents - a PDF is small enough (and useful enough
+      // to see right away) that, unlike video, there's no reason to
+      // withhold the link while it's still migrating: it's just pointed
+      // at wherever it currently lives (Storage while pending, Nextcloud
+      // once migrated), same as how a photo's own link always just
+      // works regardless of migration state.
+      const pdfs = Array.isArray(entry.pdfs) ? entry.pdfs : [];
+      const pdfsHtml = pdfs.length
+        ? `<div style="margin-top:14px; display:flex; flex-direction:column; gap:6px;">
+            <div class="ll-detail-label" style="margin-bottom:2px;">Reference documents</div>
+            ${pdfs.map((p) => `<a href="${ceEscapeHtml(p.url)}" target="_blank" rel="noopener noreferrer" style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px; color:var(--accent-cyan); font-size:0.85rem;"><span style="font-size:1.1rem;">📄</span>${ceEscapeHtml(p.name || 'Document')}</a>`).join('')}
+          </div>`
+        : '';
+
       document.getElementById('ll-detail-content').innerHTML = `
         <div class="card-title" style="margin-bottom:10px;">${ceEscapeHtml(entry.title)}</div>
         ${rows.map(([label, val]) => `<div class="ll-detail-row"><span class="ll-detail-label">${ceEscapeHtml(label)}</span><span class="ll-detail-value">${ceEscapeHtml(String(val))}</span></div>`).join('')}
@@ -13790,6 +13824,7 @@
         ${notesHtml}
         ${photosHtml}
         ${videoHtml}
+        ${pdfsHtml}
       `;
     }
 
@@ -13836,6 +13871,9 @@
       // Storage original already deleted by
       // migrateLiftLibraryVideoToNextcloud itself).
       if (entry.video && entry.video.path) photoPaths.push(entry.video.path);
+      // And again for any still-pending reference documents.
+      const pdfsToClean = Array.isArray(entry.pdfs) ? entry.pdfs : [];
+      pdfsToClean.forEach((p) => { if (p && p.path) photoPaths.push(p.path); });
       Promise.all(photoPaths.map((path) => window.__liftLibraryDeletePhoto(path).catch(() => {})))
         .then(() => window.__liftLibraryDeleteEntry(entryId))
         .then(() => {
@@ -13880,6 +13918,16 @@
     // matters. Revisit if that turns out too restrictive in practice.
     let llPendingVideoFile = null;
     let llPendingVideoUrl = null;
+    // Reference documents (OEM lift designs, COG drawings) - a list like
+    // photos rather than one slot like video, since a real lift plan
+    // often comes with several (an OEM capacity chart AND a separate
+    // COG drawing, say) and a PDF's bandwidth cost is much closer to a
+    // photo's than to real video's. llPendingPdfUrls holds local blob:
+    // preview URLs (so the form's own "open it" link works before
+    // Submit, same idea as photo previews) parallel to the Files
+    // themselves.
+    let llPendingPdfFiles = [];
+    let llPendingPdfUrls = [];
 
     // Maps #ll-crane's own option values to the OTHER two crane data
     // tables' differing key conventions (see COUNTERWEIGHT_DATA/
@@ -13966,6 +14014,12 @@
     // removing a migrated photo) for deletion at actual submit time.
     let llExistingVideo = null;
     let llRemovedExistingVideoPath = null;
+    // Same "existing + removed-queue" shape again for PDFs, but as
+    // arrays like llExistingPhotos/llRemovedExistingPhotoPaths - see
+    // llPendingPdfFiles' own comment on why PDFs are a list, not a
+    // single slot like video.
+    let llExistingPdfs = [];
+    let llRemovedExistingPdfPaths = [];
     // Parallel to llPendingPhotoFiles/llPendingPhotoUrls - each pending
     // (not-yet-uploaded) photo's own array of {color, x, y} dot markers,
     // same shape as a saved photo's own `annotations` field. Merged into
@@ -14013,6 +14067,11 @@
       llPendingVideoUrl = null;
       llExistingVideo = null;
       llRemovedExistingVideoPath = null;
+      llPendingPdfUrls.forEach((u) => URL.revokeObjectURL(u));
+      llPendingPdfFiles = [];
+      llPendingPdfUrls = [];
+      llExistingPdfs = [];
+      llRemovedExistingPdfPaths = [];
 
       document.getElementById('ll-form-title').value = '';
       document.getElementById('ll-form-asset').value = '';
@@ -14030,6 +14089,9 @@
       document.getElementById('ll-form-video-input').value = '';
       document.getElementById('ll-form-video-status').textContent = '';
       llRenderPendingVideo();
+      document.getElementById('ll-form-pdf-input').value = '';
+      document.getElementById('ll-form-pdf-status').textContent = '';
+      llRenderPendingPdfs();
       document.getElementById('ll-form-error').style.display = 'none';
       document.getElementById('ll-form-location').textContent = 'Filing under: ' + llBreadcrumbPathLabel(llCurrentParentId);
       const btn = document.getElementById('ll-form-submit-btn');
@@ -14073,6 +14135,11 @@
       llPendingVideoUrl = null;
       llExistingVideo = entry.video ? Object.assign({}, entry.video) : null;
       llRemovedExistingVideoPath = null;
+      llPendingPdfUrls.forEach((u) => URL.revokeObjectURL(u));
+      llPendingPdfFiles = [];
+      llPendingPdfUrls = [];
+      llExistingPdfs = Array.isArray(entry.pdfs) ? entry.pdfs.map((p) => Object.assign({}, p)) : [];
+      llRemovedExistingPdfPaths = [];
 
       document.getElementById('ll-form-title').value = entry.title || '';
       document.getElementById('ll-form-asset').value = entry.asset || '';
@@ -14104,6 +14171,9 @@
       document.getElementById('ll-form-video-input').value = '';
       document.getElementById('ll-form-video-status').textContent = '';
       llRenderPendingVideo();
+      document.getElementById('ll-form-pdf-input').value = '';
+      document.getElementById('ll-form-pdf-status').textContent = '';
+      llRenderPendingPdfs();
       document.getElementById('ll-form-error').style.display = 'none';
       document.getElementById('ll-form-location').textContent = 'Filing under: ' + llBreadcrumbPathLabel(entry.categoryId);
       const btn = document.getElementById('ll-form-submit-btn');
@@ -14123,6 +14193,9 @@
       if (llPendingVideoUrl) URL.revokeObjectURL(llPendingVideoUrl);
       llPendingVideoFile = null;
       llPendingVideoUrl = null;
+      llPendingPdfUrls.forEach((u) => URL.revokeObjectURL(u));
+      llPendingPdfFiles = [];
+      llPendingPdfUrls = [];
       document.getElementById('ll-form-wrap').style.display = 'none';
       document.getElementById('ll-browse-wrap').style.display = '';
     }
@@ -14405,6 +14478,62 @@
       llRenderPendingVideo();
     }
 
+    // Reference documents (OEM lift designs, COG drawings) - a plain
+    // list of rows (icon, filename, open link, remove button), not a
+    // photo-style grid, since there's nothing to usefully show as a
+    // thumbnail for a PDF here. `name` is stored alongside url/path so
+    // the detail view and this list can show a real filename rather
+    // than a bare link - see migrateLiftLibraryPdfsToNextcloud's own
+    // handling of that field.
+    function llRenderPendingPdfs() {
+      const existingHtml = llExistingPdfs.map((p, i) => `
+        <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px;">
+          <span style="font-size:1.1rem;">📄</span>
+          <a href="${ceEscapeHtml(p.url)}" target="_blank" rel="noopener noreferrer" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--accent-cyan); font-size:0.85rem;">${ceEscapeHtml(p.name || 'Document')}</a>
+          <button type="button" onclick="llRemoveExistingPdf(${i})" aria-label="Remove document" style="background:none; border:none; color:var(--text-muted); font-size:1rem; cursor:pointer; padding:2px 6px; flex-shrink:0;">&times;</button>
+        </div>`).join('');
+      const pendingHtml = llPendingPdfFiles.map((file, i) => `
+        <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px;">
+          <span style="font-size:1.1rem;">📄</span>
+          <a href="${llPendingPdfUrls[i]}" target="_blank" rel="noopener noreferrer" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--accent-cyan); font-size:0.85rem;">${ceEscapeHtml(file.name)}</a>
+          <button type="button" onclick="llRemovePendingPdf(${i})" aria-label="Remove document" style="background:none; border:none; color:var(--text-muted); font-size:1rem; cursor:pointer; padding:2px 6px; flex-shrink:0;">&times;</button>
+        </div>`).join('');
+      document.getElementById('ll-form-pdf-list').innerHTML = existingHtml + pendingHtml;
+    }
+
+    function llOnPdfFilesSelected(event) {
+      const files = Array.from(event.target.files || []);
+      const MAX_PDFS = 10;
+      const MAX_SIZE = 25 * 1024 * 1024; // matches storage.rules' own cap
+      let skipped = 0;
+      files.forEach((file) => {
+        if (llExistingPdfs.length + llPendingPdfFiles.length >= MAX_PDFS || file.size > MAX_SIZE) { skipped++; return; }
+        llPendingPdfFiles.push(file);
+        llPendingPdfUrls.push(URL.createObjectURL(file));
+      });
+      event.target.value = '';
+      document.getElementById('ll-form-pdf-status').textContent = skipped
+        ? `${skipped} file(s) skipped (over 25MB, or more than ${MAX_PDFS} documents total).`
+        : '';
+      llRenderPendingPdfs();
+    }
+
+    function llRemovePendingPdf(index) {
+      URL.revokeObjectURL(llPendingPdfUrls[index]);
+      llPendingPdfFiles.splice(index, 1);
+      llPendingPdfUrls.splice(index, 1);
+      llRenderPendingPdfs();
+    }
+
+    function llRemoveExistingPdf(index) {
+      const removed = llExistingPdfs.splice(index, 1)[0];
+      // Same accepted gap as llRemoveExistingPhoto/llRemoveExistingVideo
+      // - a migrated document's Nextcloud copy can't be reached from the
+      // client, only a still-pending one's Storage path can be queued.
+      if (removed && removed.path) llRemovedExistingPdfPaths.push(removed.path);
+      llRenderPendingPdfs();
+    }
+
     // The photo-markup tool: tap a spot on a photo to drop a 🟢 or 🔴
     // dot there - meant for exactly one thing (see the original
     // brainstorm), denoting which end of a rigging log needs
@@ -14620,14 +14749,14 @@
       const craneSelect = document.getElementById('ll-crane');
       const entryId = isEditing ? llEditingEntryId : llCurrentFormEntryId;
 
-      // Photo (and video, if one was removed this edit) removals queued
-      // during editing only actually happen now - best-effort (an admin
-      // editing someone ELSE's entry can't delete THEIR file from
+      // Photo (and video/PDF, if any were removed this edit) removals
+      // queued during editing only actually happen now - best-effort (an
+      // admin editing someone ELSE's entry can't delete THEIR file from
       // Storage, same accepted gap as llDeleteEntry's own comment
       // explains) - the removal still sticks in the Firestore doc either
       // way, just the Storage object itself may be left orphaned for the
       // monthly cleanup sweep to catch instead.
-      const removedPaths = llRemovedExistingPhotoPaths.slice();
+      const removedPaths = llRemovedExistingPhotoPaths.concat(llRemovedExistingPdfPaths);
       if (llRemovedExistingVideoPath) removedPaths.push(llRemovedExistingVideoPath);
       Promise.all(removedPaths.map((p) => window.__liftLibraryDeletePhoto(p).catch(() => {})))
         // Video first, and awaited on its own - it's the one thing here
@@ -14640,19 +14769,25 @@
             : Promise.resolve(llExistingVideo)
         ))
         .then((video) => {
+          if (llPendingPdfFiles.length) btn.textContent = 'Uploading documents...';
+          return Promise.all(llPendingPdfFiles.map((file) => window.__liftLibraryUploadPdf(entryId, file).then(({ url, path }) => ({ url, path, pending: true, name: file.name }))))
+            .then((newPdfs) => ({ video, pdfs: llExistingPdfs.concat(newPdfs) }));
+        })
+        .then(({ video, pdfs }) => {
           if (llPendingPhotoFiles.length) btn.textContent = 'Uploading photos...';
           return Promise.all(llPendingPhotoFiles.map((file) => window.__liftLibraryUploadPhoto(entryId, file)))
-            .then((newPhotos) => ({ video, newPhotos }));
+            .then((newPhotos) => ({ video, pdfs, newPhotos }));
         })
-        .then(({ video, newPhotos }) => ({
+        .then(({ video, pdfs, newPhotos }) => ({
           video,
+          pdfs,
           newPhotos: newPhotos.map((p, i) => (
             llPendingPhotoAnnotations[i] && llPendingPhotoAnnotations[i].length
               ? Object.assign({ annotations: llPendingPhotoAnnotations[i] }, p)
               : p
           ))
         }))
-        .then(({ video, newPhotos }) => {
+        .then(({ video, pdfs, newPhotos }) => {
           // Bake annotations into a real, standalone image (see
           // llCompositePhoto's own comment) for every photo that has
           // any right now - existing photos included, since annotations
@@ -14691,9 +14826,9 @@
                 return p;
               });
             });
-          })).then((allPhotos) => ({ video, allPhotos }));
+          })).then((allPhotos) => ({ video, pdfs, allPhotos }));
         })
-        .then(({ video, allPhotos }) => {
+        .then(({ video, pdfs, allPhotos }) => {
           // Minimal, consistent shape regardless of edit history - a
           // photo whose annotations were all removed during this edit
           // shouldn't persist a stale/empty annotations: [] field.
@@ -14707,6 +14842,20 @@
             return clean;
           };
           const data = { categoryId, title, photos: allPhotos.map(cleanPhoto) };
+          // A list like photos, not one slot like video - see
+          // llPendingPdfFiles' own comment on why. `name` carries the
+          // original filename through so the detail view and this
+          // form's own list can show something more useful than a bare
+          // link, on both a fresh upload and a migrated one.
+          if (pdfs && pdfs.length) {
+            data.pdfs = pdfs.map((p) => {
+              const clean = { url: p.url, name: p.name };
+              if (p.path) clean.path = p.path;
+              if (p.pending) clean.pending = true;
+              if (p.nextcloud) clean.nextcloud = true;
+              return clean;
+            });
+          }
           // One object, not a list - see llPendingVideoFile's own
           // comment. A fresh upload lands as {url, path, pending:true};
           // migrateLiftLibraryVideoToNextcloud rewires it to
