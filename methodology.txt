@@ -13092,3 +13092,76 @@ cranes get their own subsections as they're built.
   as every prior use.
 
   CACHE_VERSION v282 -> v283, app-version v7.25 -> v7.26.
+
+132. Lift Plan Library: entry Edit (owner or admin), and swapped
+     Counterweight Fitted from individual plate checkboxes to the CWT
+     Combinations tab's own known-combo list
+
+  Mid-message, while section 131's admin-delete/Crane-Configuration/
+  Rigging-Gear work was still fresh in testing, the person pointed
+  straight at a real problem in a live screenshot of the checkbox list:
+  "COUNTERWEIGHT PLATE 3 (10T)" appeared three times in a row, visually
+  indistinguishable, and asked to list known combos instead "like the
+  driving with equipment tab list them eg for the 250t crane 46t CWT".
+  The Driving w/ Eq tab itself turned out not to hold the right data
+  (its own weight list is road-driving axle weights, not counterweight
+  combos) - the CWT Combinations tab does, and already had exactly the
+  right shape for this: COUNTERWEIGHT_DATA[key].combos, an array of
+  {items: [componentId,...]}, with cwtComboWeight()/cwtDescribeCombo()
+  already turning that into the "16.0 t — Receptacle Plate 1 + Plate 2"
+  style label the person was pointing at. Reused all three functions
+  directly rather than re-deriving the same math - one <select>
+  (#ll-cwt-combo) replacing the checkbox list entirely, built with the
+  same buildSelect() helper and the exact same label format the CWT
+  tab's own "Jump to Known Combination" dropdown uses. Storage field
+  renamed counterweightPlates (array) -> counterweightCombo (single
+  frozen descriptive string, same "log record of what actually
+  happened" reasoning as craneModel's own existing storage - not a
+  live-linked combo index that could silently reinterpret itself if
+  COUNTERWEIGHT_DATA's combo list is ever reordered later). No real
+  production entries existed yet with the old field (the screenshot
+  itself was the person's own "test"/"test" data), so this was a
+  straight rename, not a migration.
+
+  Edit button: same owner-or-admin visibility as Delete, next to it in
+  the detail view header. Reused llOpenForm's existing form rather than
+  building a second one - added llOpenEditForm(entryId) which pre-fills
+  every field from the existing entry (including matching craneModel's
+  and counterweightCombo's frozen text back to the right <option>, and
+  re-checking the right rigging-gear/hook-block/boom-length values) and
+  llSubmitEntry() now branches on a new llEditingEntryId flag rather
+  than being a second near-duplicate function. Existing photos get
+  their own remove-with-undo-until-submit treatment
+  (llExistingPhotos/llRemovedExistingPhotoPaths), matching the exact
+  same "backing out costs nothing" deferred-effect design new photo
+  uploads already had - removing an existing photo during an edit only
+  actually calls Storage delete if Submit is actually pressed.
+  window.__liftLibraryUpdateEntry does a full setDoc (not a partial
+  update) with loggedByUid/loggedByName/createdAt explicitly copied
+  across from the original entry untouched, so an edit can never
+  accidentally reassign authorship or the original timestamp - no
+  firestore.rules change needed for this at all, its existing
+  liftLibraryEntries update rule (owner-or-isAdmin, no field
+  validation) already covered it.
+
+  Verified the same way as 131: `node --check` on the extracted script,
+  then two local Playwright passes (no production site, no proxy
+  involved) - one confirming the known-combo dropdown's actual option
+  list/labels for a real crane (1300) and the correct "no data yet"
+  fallback for one without combos (1100, still missing its own
+  COUNTERWEIGHT_DATA entry per the still-open task list item), a second
+  stubbing out the three Firebase-backed functions to exercise
+  llSubmitEntry's edit branch specifically - confirmed the removed
+  photo's path reached __liftLibraryDeletePhoto, the update payload
+  preserved the original loggedByUid/loggedByName/createdAt untouched,
+  and the local llAllEntries list + toast + return-to-detail-view all
+  updated correctly. Zero console errors across both passes. Published
+  the renamed field to the live firestore.rules (same Rules API
+  workflow, byte-verified), then a live throwaway-account REST check:
+  create with counterweightCombo succeeds, a non-owner's update attempt
+  is rejected, the actual owner's update attempt succeeds - confirming
+  the Edit feature's real write path against the live rules, not just
+  the local UI logic. Cleaned up test data/accounts/service-account key
+  after, same as always.
+
+  CACHE_VERSION v283 -> v284, app-version v7.26 -> v7.27.

@@ -1399,6 +1399,17 @@
         return deleteDoc(doc(db, 'liftLibraryEntries', entryId));
       };
 
+      // Full overwrite, not a partial update - the caller (llSubmitEntry's
+      // edit path) always builds the complete data object, including
+      // copying loggedByUid/loggedByName/createdAt across from the
+      // original entry untouched. A field the person cleared during
+      // editing (e.g. removed the notes) is simply absent from data, and
+      // setDoc without merge:true drops it from the doc automatically -
+      // no separate deleteField() bookkeeping needed for that case.
+      window.__liftLibraryUpdateEntry = function (entryId, data) {
+        return setDoc(doc(db, 'liftLibraryEntries', entryId), data);
+      };
+
       function loadProfile(user) {
         window.__profileEmail = user.email || '';
         window.__profileUid = user.uid;
@@ -1665,7 +1676,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v7.26</span></h1>
+    <h1>MYSLEWER <span class="app-version">v7.27</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -1896,7 +1907,10 @@
         <div id="ll-detail-wrap" style="display:none;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px;">
             <button type="button" class="toolbar-btn" onclick="llCloseDetail()">&larr; Back</button>
-            <button type="button" class="toolbar-btn" id="ll-detail-delete-btn" style="display:none; color:var(--danger); border-color:var(--danger);" onclick="llDeleteEntry()">Delete</button>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="toolbar-btn" id="ll-detail-edit-btn" style="display:none;" onclick="llOpenEditForm(llCurrentDetailEntryId)">Edit</button>
+              <button type="button" class="toolbar-btn" id="ll-detail-delete-btn" style="display:none; color:var(--danger); border-color:var(--danger);" onclick="llDeleteEntry()">Delete</button>
+            </div>
           </div>
           <div id="ll-detail-content"></div>
         </div>
@@ -1952,7 +1966,7 @@
             <div class="toggle-group-body">
               <div class="form-group" style="text-align:left;">
                 <label>Counterweight Fitted</label>
-                <div id="ll-cwt-list" style="font-size:0.75rem; color:var(--text-muted);">Select a crane above to see its counterweight plates.</div>
+                <select id="ll-cwt-combo"><option value="">— Select a crane above —</option></select>
               </div>
               <div class="form-group" style="text-align:left; margin-top:10px;">
                 <label>Boom Length</label>
@@ -13509,8 +13523,9 @@
       document.getElementById('ll-search-results').style.display = 'none';
       document.getElementById('ll-detail-wrap').style.display = '';
 
-      const deleteBtn = document.getElementById('ll-detail-delete-btn');
-      deleteBtn.style.display = (window.__isAdmin || entry.loggedByUid === window.__profileUid) ? '' : 'none';
+      const canEditOrDelete = window.__isAdmin || entry.loggedByUid === window.__profileUid;
+      document.getElementById('ll-detail-edit-btn').style.display = canEditOrDelete ? '' : 'none';
+      document.getElementById('ll-detail-delete-btn').style.display = canEditOrDelete ? '' : 'none';
 
       const rows = [];
       if (entry.asset) rows.push(['Asset', entry.asset]);
@@ -13519,7 +13534,7 @@
       if (entry.craneModel) rows.push(['Crane', entry.craneModel]);
       if (entry.boomLength != null) rows.push(['Boom length', `${entry.boomLength} m`]);
       if (entry.hookBlock) rows.push(['Hook block', entry.hookBlock]);
-      if (Array.isArray(entry.counterweightPlates) && entry.counterweightPlates.length) rows.push(['Counterweight fitted', entry.counterweightPlates.join(', ')]);
+      if (entry.counterweightCombo) rows.push(['Counterweight fitted', entry.counterweightCombo]);
       const riggingParts = [];
       if (Array.isArray(entry.riggingChains) && entry.riggingChains.length) riggingParts.push(`Chains: ${entry.riggingChains.map((c) => c + 'mm').join(', ')}`);
       if (Array.isArray(entry.riggingShackles) && entry.riggingShackles.length) riggingParts.push(`Shackles: ${entry.riggingShackles.map((s) => s + 't').join(', ')}`);
@@ -13626,15 +13641,26 @@
     function llUpdateCraneConfig() {
       const craneKey = document.getElementById('ll-crane').value;
 
+      // Known combos, not individual plates - same list the CWT
+      // Combinations tab itself offers via its own "Jump to Known
+      // Combination" dropdown (populateCwtComboSelect/cwtComboWeight/
+      // cwtDescribeCombo), reused as-is rather than exposing every
+      // individual plate as its own checkbox. A real OEM-valid
+      // combination is what actually gets fitted on site - individual
+      // plate checkboxes let someone pick a combination that was never
+      // valid to begin with, and some cranes have multiple identically-
+      // named plates (e.g. three separate "Counterweight Plate 3"
+      // components), which is meaningless to distinguish in a flat
+      // checkbox list anyway.
+      const cwtComboSelect = document.getElementById('ll-cwt-combo');
       const cwtData = COUNTERWEIGHT_DATA[craneKey.replace(/-t[35]$/, '')];
-      const cwtList = document.getElementById('ll-cwt-list');
-      cwtList.innerHTML = (cwtData && cwtData.components)
-        ? cwtData.components.map((c) => `
-            <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; cursor:pointer;">
-              <input type="checkbox" value="${ceEscapeHtml(c.name)}" class="ll-cwt-plate" style="width:auto; cursor:pointer;">
-              ${ceEscapeHtml(c.name)} (${c.weight}t)
-            </label>`).join('')
-        : (craneKey ? 'No counterweight data for this crane yet.' : 'Select a crane above to see its counterweight plates.');
+      if (cwtData && cwtData.combos && cwtData.combos.length) {
+        buildSelect(cwtComboSelect, [{ items: null }, ...cwtData.combos.map((c, i) => ({ ...c, idx: i }))],
+          (c) => c.items === null ? '— Not specified —' : `${cwtComboWeight(craneKey.replace(/-t[35]$/, ''), c.items).toFixed(1)} t — ${cwtDescribeCombo(craneKey.replace(/-t[35]$/, ''), c.items)}`,
+          (c) => c.items === null ? '' : c.idx);
+      } else {
+        cwtComboSelect.innerHTML = `<option value="">${craneKey ? 'No counterweight data for this crane yet.' : '— Select a crane above —'}</option>`;
+      }
 
       const boomLengths = HOOK_BOOM_LENGTHS[LL_HOOK_BOOM_LABELS[craneKey]];
       document.getElementById('ll-boom-select').innerHTML = '<option value="">— Not specified —</option>' +
@@ -13645,11 +13671,33 @@
         ((blockSpec && blockSpec.blocks) ? blockSpec.blocks.map((b) => `<option value="${ceEscapeHtml(b.name)}">${ceEscapeHtml(b.name)}</option>`).join('') : '');
     }
 
+    // null = creating a brand new entry (llCurrentFormEntryId is the
+    // fresh id). Set to an existing entry's id by llOpenEditForm - the
+    // rest of the form (llSubmitEntry especially) branches on this
+    // rather than needing two near-duplicate functions.
+    let llEditingEntryId = null;
+    // Photos already saved on the entry being edited (copied from
+    // entry.photos when edit opens), separate from llPendingPhotoFiles/
+    // llPendingPhotoUrls (new, not-yet-uploaded files) - lets the photo
+    // grid show both together and tell them apart (existing ones get
+    // ceEscapeHtml'd real Storage URLs, pending ones get local blob:
+    // preview URLs). Removing an existing one here only takes it out of
+    // this in-memory list and queues its path in
+    // llRemovedExistingPhotoPaths - same "backing out costs nothing"
+    // deferred-effect design as new uploads (see llOnPhotoFilesSelected's
+    // own comment above) - the actual Storage delete only happens if
+    // Submit is actually pressed.
+    let llExistingPhotos = [];
+    let llRemovedExistingPhotoPaths = [];
+
     function llOpenForm() {
       llCurrentFormEntryId = window.__liftLibraryNewEntryId();
+      llEditingEntryId = null;
       llPendingPhotoUrls.forEach((u) => URL.revokeObjectURL(u));
       llPendingPhotoFiles = [];
       llPendingPhotoUrls = [];
+      llExistingPhotos = [];
+      llRemovedExistingPhotoPaths = [];
 
       document.getElementById('ll-form-title').value = '';
       document.getElementById('ll-form-asset').value = '';
@@ -13662,13 +13710,67 @@
       document.getElementById('ll-form-link').value = '';
       document.getElementById('ll-form-notes').value = '';
       document.getElementById('ll-form-photo-input').value = '';
-      document.getElementById('ll-form-photo-grid').innerHTML = '';
       document.getElementById('ll-form-photo-status').textContent = '';
+      llRenderPendingPhotos();
       document.getElementById('ll-form-error').style.display = 'none';
       document.getElementById('ll-form-location').textContent = 'Filing under: ' + llBreadcrumbPathLabel(llCurrentParentId);
       const btn = document.getElementById('ll-form-submit-btn');
       btn.disabled = false;
       btn.textContent = 'Submit Lift Entry';
+
+      document.getElementById('ll-browse-wrap').style.display = 'none';
+      document.getElementById('ll-search-results').style.display = 'none';
+      document.getElementById('ll-detail-wrap').style.display = 'none';
+      document.getElementById('ll-form-wrap').style.display = '';
+    }
+
+    // Same form, pre-filled from an existing entry - visibility of the
+    // Edit button that calls this already matches firestore.rules' own
+    // owner-or-admin check (see llOpenEntry), so no separate permission
+    // check needed here.
+    function llOpenEditForm(entryId) {
+      const entry = llAllEntries.find((e) => e.id === entryId);
+      if (!entry) { showToast('Entry not found.'); return; }
+
+      llEditingEntryId = entryId;
+      llPendingPhotoUrls.forEach((u) => URL.revokeObjectURL(u));
+      llPendingPhotoFiles = [];
+      llPendingPhotoUrls = [];
+      llExistingPhotos = Array.isArray(entry.photos) ? entry.photos.slice() : [];
+      llRemovedExistingPhotoPaths = [];
+
+      document.getElementById('ll-form-title').value = entry.title || '';
+      document.getElementById('ll-form-asset').value = entry.asset || '';
+      document.getElementById('ll-form-part').value = entry.part || '';
+      document.getElementById('ll-form-weight').value = entry.weightValue != null ? entry.weightValue : '';
+      document.getElementById('ll-form-weight-unit').value = entry.weightUnit || 't';
+
+      // craneModel is stored as frozen display text (see llSubmitEntry),
+      // not the <select>'s own value - match it back to the right
+      // option so llUpdateCraneConfig() populates the right crane's
+      // combo/boom/hook-block lists.
+      const craneSel = document.getElementById('ll-crane');
+      const matchedOpt = Array.from(craneSel.options).find((o) => o.textContent === entry.craneModel);
+      craneSel.value = matchedOpt ? matchedOpt.value : '';
+      llUpdateCraneConfig();
+      const cwtComboSelect = document.getElementById('ll-cwt-combo');
+      const matchedCombo = Array.from(cwtComboSelect.options).find((o) => o.textContent === entry.counterweightCombo);
+      cwtComboSelect.value = matchedCombo ? matchedCombo.value : '';
+      document.getElementById('ll-boom-select').value = entry.boomLength != null ? String(entry.boomLength) : '';
+      document.getElementById('ll-hookblock-select').value = entry.hookBlock || '';
+      document.querySelectorAll('.ll-rig-chain').forEach((el) => { el.checked = Array.isArray(entry.riggingChains) && entry.riggingChains.includes(parseFloat(el.value)); });
+      document.querySelectorAll('.ll-rig-shackle').forEach((el) => { el.checked = Array.isArray(entry.riggingShackles) && entry.riggingShackles.includes(parseFloat(el.value)); });
+
+      document.getElementById('ll-form-link').value = entry.externalLink || '';
+      document.getElementById('ll-form-notes').value = entry.notes || '';
+      document.getElementById('ll-form-photo-input').value = '';
+      document.getElementById('ll-form-photo-status').textContent = '';
+      llRenderPendingPhotos();
+      document.getElementById('ll-form-error').style.display = 'none';
+      document.getElementById('ll-form-location').textContent = 'Filing under: ' + llBreadcrumbPathLabel(entry.categoryId);
+      const btn = document.getElementById('ll-form-submit-btn');
+      btn.disabled = false;
+      btn.textContent = 'Save Changes';
 
       document.getElementById('ll-browse-wrap').style.display = 'none';
       document.getElementById('ll-search-results').style.display = 'none';
@@ -13685,11 +13787,17 @@
     }
 
     function llRenderPendingPhotos() {
-      document.getElementById('ll-form-photo-grid').innerHTML = llPendingPhotoUrls.map((url, i) => `
+      const existingHtml = llExistingPhotos.map((p, i) => `
+        <div style="position:relative;">
+          <img src="${ceEscapeHtml(p.url)}" alt="Existing photo">
+          <button type="button" onclick="llRemoveExistingPhoto(${i})" aria-label="Remove photo" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&times;</button>
+        </div>`).join('');
+      const pendingHtml = llPendingPhotoUrls.map((url, i) => `
         <div style="position:relative;">
           <img src="${url}" alt="Selected photo">
           <button type="button" onclick="llRemovePendingPhoto(${i})" aria-label="Remove photo" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); color:#fff; border:none; cursor:pointer; font-size:0.8rem; line-height:1;">&times;</button>
         </div>`).join('');
+      document.getElementById('ll-form-photo-grid').innerHTML = existingHtml + pendingHtml;
     }
 
     function llOnPhotoFilesSelected(event) {
@@ -13698,7 +13806,7 @@
       const MAX_SIZE = 15 * 1024 * 1024; // matches storage.rules' own cap
       let skipped = 0;
       files.forEach((file) => {
-        if (llPendingPhotoFiles.length >= MAX_PHOTOS || file.size > MAX_SIZE) { skipped++; return; }
+        if (llExistingPhotos.length + llPendingPhotoFiles.length >= MAX_PHOTOS || file.size > MAX_SIZE) { skipped++; return; }
         llPendingPhotoFiles.push(file);
         llPendingPhotoUrls.push(URL.createObjectURL(file));
       });
@@ -13716,6 +13824,12 @@
       llRenderPendingPhotos();
     }
 
+    function llRemoveExistingPhoto(index) {
+      const removed = llExistingPhotos.splice(index, 1)[0];
+      if (removed) llRemovedExistingPhotoPaths.push(removed.path);
+      llRenderPendingPhotos();
+    }
+
     function llSubmitEntry() {
       const title = document.getElementById('ll-form-title').value.trim();
       const errEl = document.getElementById('ll-form-error');
@@ -13725,14 +13839,26 @@
         errEl.style.display = '';
         return;
       }
-      // Root itself isn't a real category doc (it's represented purely as
-      // parentId: null) - there's no id there for an entry's categoryId
-      // to reference, so filing directly at Home is a genuine dead end,
-      // not just a soft nudge to pick somewhere more specific.
-      if (llCurrentParentId == null) {
-        errEl.textContent = 'Open or create a category first — a lift can’t be logged at the very top level.';
-        errEl.style.display = '';
-        return;
+
+      const isEditing = llEditingEntryId != null;
+      let categoryId;
+      if (isEditing) {
+        // Editing keeps the entry filed where it already was - not
+        // wherever llCurrentParentId happens to be pointing right now
+        // (Edit can be reached from search results, from any category).
+        categoryId = llAllEntries.find((e) => e.id === llEditingEntryId).categoryId;
+      } else {
+        // Root itself isn't a real category doc (it's represented purely
+        // as parentId: null) - there's no id there for an entry's
+        // categoryId to reference, so filing directly at Home is a
+        // genuine dead end, not just a soft nudge to pick somewhere more
+        // specific.
+        if (llCurrentParentId == null) {
+          errEl.textContent = 'Open or create a category first — a lift can’t be logged at the very top level.';
+          errEl.style.display = '';
+          return;
+        }
+        categoryId = llCurrentParentId;
       }
 
       const btn = document.getElementById('ll-form-submit-btn');
@@ -13741,11 +13867,19 @@
 
       const weightRaw = document.getElementById('ll-form-weight').value;
       const craneSelect = document.getElementById('ll-crane');
-      const entryId = llCurrentFormEntryId;
+      const entryId = isEditing ? llEditingEntryId : llCurrentFormEntryId;
 
-      Promise.all(llPendingPhotoFiles.map((file) => window.__liftLibraryUploadPhoto(entryId, file)))
-        .then((photos) => {
-          const data = { categoryId: llCurrentParentId, title, photos };
+      // Photo removals queued during editing only actually happen now -
+      // best-effort (an admin editing someone ELSE's entry can't delete
+      // THEIR photo from Storage, same accepted gap as llDeleteEntry's
+      // own comment explains) - the removal still sticks in the
+      // Firestore doc's photos list either way, just the Storage object
+      // itself may be left orphaned for the monthly cleanup sweep to
+      // catch instead.
+      Promise.all(llRemovedExistingPhotoPaths.map((p) => window.__liftLibraryDeletePhoto(p).catch(() => {})))
+        .then(() => Promise.all(llPendingPhotoFiles.map((file) => window.__liftLibraryUploadPhoto(entryId, file))))
+        .then((newPhotos) => {
+          const data = { categoryId, title, photos: llExistingPhotos.concat(newPhotos) };
           const asset = document.getElementById('ll-form-asset').value.trim();
           const part = document.getElementById('ll-form-part').value.trim();
           const link = document.getElementById('ll-form-link').value.trim();
@@ -13754,8 +13888,13 @@
           if (part) data.part = part;
           if (weightRaw !== '') { data.weightValue = parseFloat(weightRaw); data.weightUnit = document.getElementById('ll-form-weight-unit').value; }
           if (craneSelect.value) data.craneModel = craneSelect.options[craneSelect.selectedIndex].textContent;
-          const cwtPlates = Array.from(document.querySelectorAll('.ll-cwt-plate:checked')).map((el) => el.value);
-          if (cwtPlates.length) data.counterweightPlates = cwtPlates;
+          // Stored as frozen descriptive text (same as craneModel above),
+          // not a live-linked combo index - this is a historical log
+          // record of what was actually fitted, not something that
+          // should silently reinterpret itself if COUNTERWEIGHT_DATA's
+          // combo list is ever reordered or edited later.
+          const cwtComboSelect = document.getElementById('ll-cwt-combo');
+          if (cwtComboSelect.value !== '') data.counterweightCombo = cwtComboSelect.options[cwtComboSelect.selectedIndex].textContent;
           const boomLenRaw = document.getElementById('ll-boom-select').value;
           if (boomLenRaw !== '') data.boomLength = parseFloat(boomLenRaw);
           const hookBlock = document.getElementById('ll-hookblock-select').value;
@@ -13768,20 +13907,35 @@
           if (notes) data.notes = notes;
 
           btn.textContent = 'Saving...';
+          if (isEditing) {
+            const original = llAllEntries.find((e) => e.id === llEditingEntryId);
+            data.loggedByUid = original.loggedByUid;
+            data.loggedByName = original.loggedByName;
+            data.createdAt = original.createdAt;
+            return window.__liftLibraryUpdateEntry(entryId, data).then(() => data);
+          }
           return window.__liftLibraryCreateEntry(entryId, data).then(() => data);
         })
         .then((data) => {
-          llAllEntries.push(Object.assign({ id: entryId, loggedByName: window.__profileDisplayName || '' }, data));
-          showToast('Lift logged.');
-          llCloseForm();
-          llRenderBrowse();
+          if (isEditing) {
+            const idx = llAllEntries.findIndex((e) => e.id === entryId);
+            if (idx !== -1) llAllEntries[idx] = Object.assign({ id: entryId }, data);
+            showToast('Lift entry updated.');
+            llCloseForm();
+            llOpenEntry(entryId);
+          } else {
+            llAllEntries.push(Object.assign({ id: entryId, loggedByName: window.__profileDisplayName || '' }, data));
+            showToast('Lift logged.');
+            llCloseForm();
+            llRenderBrowse();
+          }
         })
         .catch((err) => {
           console.error('Could not submit lift entry', err);
           errEl.textContent = 'Could not save — check your connection and try again.';
           errEl.style.display = '';
           btn.disabled = false;
-          btn.textContent = 'Submit Lift Entry';
+          btn.textContent = isEditing ? 'Save Changes' : 'Submit Lift Entry';
         });
     }
 

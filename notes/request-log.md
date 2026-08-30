@@ -1298,3 +1298,32 @@ a working record, not app content.
   entries with the new fields are accepted while an unlisted field is
   still rejected. CACHE_VERSION -> v283, app-version -> v7.26. See
   methodology.txt 131.
+- Mid-testing, from a live screenshot: "instead of giving the user the
+  option of section individual CWT slabs just list the know combos
+  like the driving with equipment tab list them eg for the 250t crane
+  46t CWT" - the screenshot itself showed why: three identically-named
+  "Counterweight Plate 3" checkboxes in a row, impossible to tell
+  apart. Also asked for an edit button (creator or admin) and to start
+  Stage 2. Asked two clarifying questions first: how to handle the
+  orphaned-photo cleanup fix (needs this project's first Cloud
+  Function - person chose to build it, as a monthly sweep rather than
+  a live per-delete call, reasoning it would "save" the Cloud
+  Functions free tier - corrected the actual free tier first, 2
+  million invocations/month, not a function-count limit, but a monthly
+  sweep is still a fine design on its own merits) and Stage 2's trigger
+  (unconditional monthly, chosen over quota-triggered).
+  **Status: Edit + known-combo swap done and live.** The "driving with
+  equipment" tab itself didn't have the right data (that's road-driving
+  axle weights) - the CWT Combinations tab did, its own
+  COUNTERWEIGHT_DATA[key].combos/cwtComboWeight()/cwtDescribeCombo()
+  reused directly for a single <select> instead of per-plate checkboxes
+  (counterweightPlates array field renamed to counterweightCombo, a
+  frozen descriptive string - no real production data existed yet to
+  migrate). Edit reuses the existing contribution form via a new
+  llOpenEditForm() pre-fill path rather than a second form; existing
+  photos get the same remove-with-undo-until-submit treatment new
+  uploads already had. Verified locally (Playwright, no production
+  site) then against live rules with real throwaway accounts - a
+  non-owner's edit attempt rejected, the owner's accepted.
+  CACHE_VERSION -> v284, app-version -> v7.27. See methodology.txt 132.
+  **Cloud Function (orphan-photo sweep) + Stage 2: starting next.**

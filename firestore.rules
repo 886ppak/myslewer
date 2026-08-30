@@ -351,7 +351,7 @@ service cloud.firestore {
       allow get, list: if request.auth != null;
       allow create: if request.auth != null
                      && request.resource.data.keys().hasAll(['categoryId', 'title', 'loggedByUid', 'loggedByName', 'createdAt'])
-                     && request.resource.data.keys().hasOnly(['categoryId', 'title', 'asset', 'part', 'weightValue', 'weightUnit', 'craneModel', 'counterweightPlates', 'boomLength', 'hookBlock', 'riggingChains', 'riggingShackles', 'photos', 'notes', 'externalLink', 'loggedByUid', 'loggedByName', 'createdAt'])
+                     && request.resource.data.keys().hasOnly(['categoryId', 'title', 'asset', 'part', 'weightValue', 'weightUnit', 'craneModel', 'counterweightCombo', 'boomLength', 'hookBlock', 'riggingChains', 'riggingShackles', 'photos', 'notes', 'externalLink', 'loggedByUid', 'loggedByName', 'createdAt'])
                      && request.resource.data.categoryId is string
                      && exists(/databases/$(database)/documents/liftLibraryCategories/$(request.resource.data.categoryId))
                      && request.resource.data.title is string
