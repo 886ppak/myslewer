@@ -13890,3 +13890,35 @@ cranes get their own subsections as they're built.
   one exists, and falls back to the live overlay when it doesn't.
 
   CACHE_VERSION v292 -> v293, app-version v8.4 -> v8.5.
+
+144. Rename tab: "Lift Plan Library" -> "Lift Library"
+
+  Person's request, simple text change - shortened the visible tab
+  label and the card's own heading (index.html:1798, 1925). Left every
+  internal code comment referencing the old "Lift Plan Library" name
+  untouched (index.html:181, 747, 1335, 13407, 13449, plus this file's
+  own history) - those are developer-facing documentation of a
+  feature's own history, not UI text, and renaming them buys nothing
+  while making future git-blame/history reading slightly harder to
+  follow.
+
+  Alongside this, reviewed three real lift-plan documents the person
+  had made externally (Word docs: EX8000 arm/boom/bucket) as material
+  for a possible future format discussion - not acted on yet, purely
+  informational. Notable structure worth remembering for that future
+  conversation: their documents key on NAMED, NUMBERED lift
+  configurations within a single component (e.g. "#1 Placement onto
+  stands" / "#2 Flat lift off truck" / "#3 Fully dressed"), each with
+  its OWN weight variant, its OWN rigging gear list (specific slings/
+  shackles/oblongs, not just chain-size + shackle-rating like this
+  app's current fixed checklist), and its own notes + photo - a richer
+  shape than a single entry's current one-weight/one-rigging-list
+  model. Also notable: their annotated photos already use the exact
+  same 🟢/🔴 red-end/green-end convention as this app's own dot
+  annotator (independently arrived at, good validation of that
+  choice), PLUS labelled callout boxes and dimension-style double-
+  headed arrows - more expressive than this app's current dot/single-
+  arrow marker set. Nothing implemented from this yet - flagged for
+  the person to decide if/when to pursue.
+
+  CACHE_VERSION v293 -> v294, app-version v8.5 -> v8.6.

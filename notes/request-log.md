@@ -1533,3 +1533,17 @@ a working record, not app content.
   composites get cleaned up correctly both when markers are removed
   and when they're replaced. CACHE_VERSION -> v293, app-version -> v8.5.
   See methodology.txt 143.
+- "can you change the tabs name from lift plan libary to just lift
+  libary also I have some examples of ones iv made externally if you
+  want to mull ideas for output format or a mix of both ?" (three real
+  lift-plan Word docs attached: EX8000 arm/boom/bucket)
+  **Status: rename done.** Tab label and card heading both changed to
+  "Lift Library"; internal code comments left as-is (historical, not
+  UI). Reviewed the three attached documents for format ideas - see
+  methodology.txt 144 for what stood out (named numbered lift
+  configurations per component, richer per-config rigging lists, and
+  their own annotated photos already using the same 🟢/🔴 convention
+  as this app's dot tool, plus labelled callouts/dimension arrows this
+  app doesn't have yet). Nothing built from that yet - open question
+  for the person on whether/how to pursue it.
+  CACHE_VERSION -> v294, app-version -> v8.6.
