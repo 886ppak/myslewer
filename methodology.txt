@@ -13434,3 +13434,73 @@ cranes get their own subsections as they're built.
   after.
 
   CACHE_VERSION v285 -> v286, app-version v7.28 -> v7.29.
+
+137. sw.js: made "Lift Plan Library photos never persist on-device"
+     an explicit rule instead of an accidental side effect
+
+  Person's concern: the library could grow into a genuine bulk of
+  photos nobody always needs sitting on a device, so it should stay
+  live-viewed, not cached. Went to fix sw.js's generic fetch handler
+  (cache-first into CONTENT_CACHE for anything not app-shell, which
+  never expires or clears itself - exactly the shape of thing that
+  would accumulate) - but tested the ACTUAL current behavior with a
+  real Service Worker before writing anything, rather than trusting a
+  read-the-code diagnosis, and the diagnosis was wrong: Lift Library's
+  <img> tags have never had a crossorigin attribute, which means the
+  browser makes a no-cors request for them regardless of what CORS
+  headers Firebase Storage/Nextcloud would otherwise send - and a
+  no-cors response is "opaque" to the page/SW (status forced to 0,
+  .ok forced to false), which the fetch handler's own `if (response &&
+  response.ok)` check already treats as not worth caching. These
+  photos were never actually landing in CONTENT_CACHE to begin with.
+
+  Confirmed this empirically rather than reasoning it out from spec
+  alone, since a wrong guess here would mean either shipping a no-op
+  "fix" or missing a real gap. Playwright can't do real cross-origin
+  HTTPS testing in this environment (the same Chromium-through-proxy
+  limitation from 130/131/132 - confirmed AGAIN here, hitting a
+  real external image via <img> failed identically) - sidestepped it
+  entirely rather than working around the proxy: two plain local HTTP
+  servers on different ports are still genuinely cross-origin to each
+  other by same-origin-policy rules, entirely over loopback, no proxy
+  involved. That setup showed cleanly: the pre-existing sw.js already
+  never cached the cross-origin image; same-origin content still
+  cached exactly as before (no regression).
+
+  Shipped the explicit version anyway, for two real reasons rather
+  than none: it's what this file's own persistentLocalCache comment
+  already SAID the intent was ("Storage's ... photos are meant to
+  always come from the network ... same as any other image") without
+  anything actually guaranteeing it nearby, and the opaque-response
+  accident is fragile - a crossorigin="anonymous" ever added to one of
+  these <img> tags for an unrelated reason (canvas access, richer
+  error info) would silently flip the response to non-opaque and start
+  caching these permanently, with nothing to catch it. Added a
+  same-origin check straight in the fetch handler (cross-origin →
+  always fetch(), never touch CONTENT_CACHE) plus a defensive one-time
+  purge in `activate` for any cross-origin entry that might already be
+  sitting in someone's CONTENT_CACHE (framed honestly as precautionary,
+  not as undoing real accumulated damage - testing found there wasn't
+  any). Verified the purge too, not just assumed it: seeded a fake
+  cross-origin entry directly via the Cache API, forced the new SW to
+  activate, confirmed it was gone while a seeded same-origin entry
+  survived.
+
+  Flagged the one adjacent thing this does NOT touch: Firestore's
+  persistentLocalCache (this app's OTHER offline mechanism, used for
+  the permissions doc, pools, directory, etc.) is an all-or-nothing
+  setting on the whole `db` instance - liftLibraryCategories/Entries'
+  small text documents still persist locally the same as everything
+  else read through it, since Firestore has no per-collection
+  persistence toggle and disabling it project-wide would break offline
+  access for those other, unrelated features. Judged this an
+  acceptable, much smaller gap against the person's own stated
+  concern - a "bulk of data" complaint is a photos problem (megabytes
+  each) far more than a category/entry-text problem (a full library's
+  worth of text records would still be a few MB at most even at real
+  scale), and said so rather than silently treating the smaller gap as
+  fully closed.
+
+  CACHE_VERSION v286 -> v287, app-version v7.29 -> v7.30 (the cap -
+  next bump after this one rolls to v8.0, per this file's own
+  version-numbering rule).

@@ -4,7 +4,7 @@
 // reeving diagrams (see CONTENT_CACHE below) — those persist across updates
 // so a crew doesn't lose offline access to plans they've already viewed just
 // because an app update shipped.
-const CACHE_VERSION = 'myslewer-v286';
+const CACHE_VERSION = 'myslewer-v287';
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 
 // Fetched-on-demand content (reeving diagrams, etc). Fixed name, never
@@ -169,6 +169,20 @@ self.addEventListener('activate', (event) => {
       // too big to justify precaching into APP_SHELL_CACHE for everyone -
       // see that constant's own comment above.
       await Promise.all(CONTENT_CACHE_INVALIDATE.map((url) => contentCache.delete(url)));
+      // Defensive cleanup to match the fetch handler's own explicit
+      // cross-origin-never-persists rule below (Lift Plan Library
+      // photos) - real testing found nothing cross-origin was actually
+      // reaching CONTENT_CACHE before that rule existed either (see
+      // that rule's own comment on why), so this is precautionary
+      // rather than undoing real accumulated damage. Cheap insurance
+      // either way, and genuinely a no-op on every device where nothing
+      // cross-origin ever got in.
+      const contentKeys = await contentCache.keys();
+      await Promise.all(
+        contentKeys
+          .filter((req) => new URL(req.url).origin !== self.location.origin)
+          .map((req) => contentCache.delete(req))
+      );
       await self.clients.claim();
     })()
   );
@@ -180,15 +194,46 @@ self.addEventListener('activate', (event) => {
 // updated diagram replaces the old one on the next activate, rather than
 // just hoping cache iteration order favours the fresh copy. Everything
 // else falls back to cache-first/network, caching into the persistent
-// CONTENT_CACHE the first time it's successfully fetched. Falls back to
-// the cached index.html for any navigation request that fails offline, so
-// deep links / reloads still open the app instead of a browser error page.
+// CONTENT_CACHE the first time it's successfully fetched - EXCEPT
+// cross-origin requests (see the branch below), which always go live.
+// Falls back to the cached index.html for any navigation request that
+// fails offline, so deep links / reloads still open the app instead of
+// a browser error page.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
     caches.open(APP_SHELL_CACHE).then((shellCache) => shellCache.match(event.request)).then((shellHit) => {
       if (shellHit) return shellHit;
+
+      // Cross-origin requests always go straight to the network, never
+      // through CONTENT_CACHE. In practice this is entirely Lift Plan
+      // Library photos (Firebase Storage, and Nextcloud once a photo's
+      // been backed up there) - nothing else in this app fetches
+      // cross-origin at runtime. This wasn't fixing a live bug found by
+      // testing real devices - a plain <img src> without a crossorigin
+      // attribute (which these have never had) makes a no-cors request,
+      // and the SW's own `if (response && response.ok)` check below
+      // already treats an opaque no-cors response as not-ok, so these
+      // photos were never actually landing in CONTENT_CACHE to begin
+      // with. Made it an explicit rule instead of an accidental side
+      // effect of that response.ok quirk, for two real reasons: it's
+      // what this file's own persistentLocalCache comment already
+      // SAID the intent was ("Storage's ... photos are meant to always
+      // come from the network ... same as any other image") without
+      // actually being guaranteed by anything nearby it, and relying on
+      // the opaque-response accident is fragile - anyone who ever added
+      // crossorigin="anonymous" to one of these <img> tags for an
+      // unrelated reason (canvas access, better error detail) would
+      // silently flip the response to non-opaque and start caching
+      // these permanently again, with nothing here to catch it. The
+      // browser's own ordinary HTTP cache still sits underneath this
+      // fetch() regardless (governed by whatever Cache-Control the
+      // photo's own host sends, same as any other image on the web) -
+      // this only concerns this app's OWN permanent, self-managed layer.
+      if (new URL(event.request.url).origin !== self.location.origin) {
+        return fetch(event.request).catch(() => undefined);
+      }
 
       return caches.match(event.request).then((cached) => {
         if (cached) return cached;

@@ -1404,3 +1404,29 @@ a working record, not app content.
   throwaway accounts - 8/8 checks passed, including confirming a
   non-admin genuinely can't do any of this. CACHE_VERSION -> v286,
   app-version -> v7.29. See methodology.txt 136.
+- "I don't think user need to cache any of the lift library stuff on
+  there devices only view it live as it will potentially have bulk of
+  data that isn't really always required" - went to fix sw.js's
+  generic cache-everything-forever fetch handler, but tested the real
+  Service Worker before writing anything: Lift Library's photo <img>
+  tags have never had a crossorigin attribute, so they're no-cors
+  requests, and the resulting opaque response already failed the
+  handler's own `response.ok` check - these photos were never actually
+  landing in the permanent on-device cache to begin with. Confirmed
+  this empirically (two local servers on different ports, genuinely
+  cross-origin without needing real internet - Playwright can't do
+  real cross-origin HTTPS in this environment, same limitation as
+  130-132) rather than trust a code-reading diagnosis either way.
+  **Status: done, but reframed honestly.** Made the behavior an
+  EXPLICIT rule anyway rather than leave it as an accidental side
+  effect of that opaque-response quirk (fragile - a crossorigin
+  attribute added later for any unrelated reason would silently start
+  caching these permanently, with nothing to catch it) - cross-origin
+  requests now always skip CONTENT_CACHE outright, plus a defensive
+  purge for any pre-existing entry. Flagged the one thing this doesn't
+  reach: Firestore's own local persistence (a separate, all-or-nothing
+  mechanism used for other offline features too) still keeps small
+  category/entry text records on-device - judged that an acceptable,
+  much smaller gap against a "bulk of data" concern that's really
+  about photos. CACHE_VERSION -> v287, app-version -> v7.30 (the cap -
+  next bump rolls to v8.0). See methodology.txt 137.
