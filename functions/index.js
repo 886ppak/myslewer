@@ -286,7 +286,18 @@ exports.backupLiftLibraryPhotosToNextcloud = onSchedule(
 // uploads - cheap to skip, no reason not to.
 exports.migrateLiftLibraryVideoToNextcloud = onObjectFinalized(
   {
-    region: 'australia-southeast1',
+    // A Storage EVENT trigger (unlike the two scheduled functions above,
+    // which just call the Firestore/Storage APIs directly and genuinely
+    // don't care where they run) has a real platform constraint the
+    // scheduled ones don't: Eventarc requires the function to sit in the
+    // SAME region as the bucket it's watching, confirmed the hard way -
+    // a first deploy attempt at australia-southeast1 (matching the other
+    // two, out of habit) failed outright with "A function in region
+    // australia-southeast1 cannot listen to a bucket in region
+    // us-west1." The bucket itself lives in us-west1 (picked for Cloud
+    // Storage's Always Free tier - see storage.rules' own history), so
+    // this function has to as well.
+    region: 'us-west1',
     secrets: [NEXTCLOUD_APP_PASSWORD],
     // Real phone video easily runs 50-150MB - well past the default
     // Cloud Functions memory/timeout for a function that has to hold

@@ -1575,3 +1575,21 @@ a working record, not app content.
   this project. Until then, video upload fails cleanly (existing error
   path) rather than working.
   CACHE_VERSION -> v295, app-version -> v8.7. See methodology.txt 145.
+- "do you need me to give you the service account again ?>" then
+  pasted the myslewer-admin-tasks service account key.
+  **Status: partially deployed, one manual step left.** Used it to
+  actually deploy 145's changes rather than stopping at code-complete:
+  firestore.rules and storage.rules are LIVE now (verified by reading
+  the deployed content back via the Firebase Rules API, not just
+  trusting the CLI's "success" message). Also wired up a real
+  firebase.json/.firebaserc so rules never need pasting into the
+  Console by hand again. The new video-migration Cloud Function hit
+  two genuine platform issues along the way: it needed to move to the
+  bucket's own region (us-west1, not australia-southeast1 like the
+  other two - fixed), then needs four one-time IAM role grants on
+  Google-managed service agents that the service account I was given
+  deliberately doesn't have permission to make itself (checked its
+  actual roles via the API before reporting this, not guessed). Handed
+  over the exact commands to run from an account with owner/IAM-admin
+  rights - once that's done, the same deploy command should succeed
+  immediately. See methodology.txt 146.

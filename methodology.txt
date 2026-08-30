@@ -14028,3 +14028,88 @@ cranes get their own subsections as they're built.
   still only accepts image/*.
 
   CACHE_VERSION v294 -> v295, app-version v8.6 -> v8.7.
+
+146. Deployed 145's rules changes live; wired up a real CLI deploy
+     pipeline for rules; hit and diagnosed a genuine platform blocker
+     on the function itself
+
+  Person handed over the service account key (myslewer-admin-tasks@
+  myslewer-ed06f) again after I'd flagged 145 as code-complete but not
+  deployed. Used it to actually finish the job rather than stopping at
+  "here's the code" - installed firebase-tools locally (npm registry
+  was reachable; gcloud SDK's own archive wasn't, so firebase-tools
+  alone is what did this), verified auth against the real project
+  first (`projects:list`) before touching anything live.
+
+  Along the way, noticed this repo had never actually had a CLI deploy
+  pipeline for rules at all - storage.rules' own header comment
+  explicitly documented "paste into the Firebase Console by hand"
+  as the only way. Rather than hand-roll a one-off deploy and leave
+  that gap in place, added real firebase.json `firestore`/`storage`
+  sections plus a `.firebaserc` project alias - a genuine, permanent
+  improvement now that working credentials actually exist, not just a
+  means to this one deploy.
+
+  Deployed firestore.rules and storage.rules successfully
+  (`firebase deploy --only firestore:rules` then `--only storage` -
+  `--only storage:rules` itself doesn't work without a configured
+  deploy TARGET, which this project doesn't have; bare `--only
+  storage` does). Didn't just trust the "Deploy complete" message -
+  fetched the live releases back via the Firebase Rules API directly
+  (same API this project's Storage-rules debugging already used back
+  in 130) and confirmed both had fresh updateTimes, then fetched the
+  actual deployed ruleset CONTENT for storage.rules and grepped it for
+  the new video/* and 150MB-cap strings specifically, rather than
+  assuming a successful deploy meant the RIGHT content landed. Also
+  independently confirmed via the Firebase Storage buckets API that
+  myslewer-ed06f.firebasestorage.app really is the project's only
+  bucket and matches index.html's own client config exactly - the
+  "picked for the free tier" us-west1 bucket from 128-131 turned out to
+  be the project's actual DEFAULT bucket (chosen at Storage setup
+  time), not a separate custom one, so there was no risk of a
+  --only storage deploy silently hitting the wrong bucket.
+
+  Cloud Function deploy hit two REAL platform issues, not tooling
+  bugs, each one actually diagnosed rather than guessed past:
+
+  1. "A function in region australia-southeast1 cannot listen to a
+     bucket in region us-west1." A Storage EVENT trigger (unlike the
+     two existing SCHEDULED functions, which call the Firestore/
+     Storage APIs directly and don't care about their own region at
+     all) genuinely has to sit in the same region as the bucket it
+     watches - Eventarc's own constraint, not this project's. Fixed by
+     moving just this one function's region to us-west1, leaving the
+     other two at australia-southeast1 (correct for THEM, since Cloud
+     Scheduler doesn't support australia-southeast2 - see 133 - and
+     they have no bucket-co-location requirement to override that).
+
+  2. After that fix, deployment got much further (all required APIs
+     enabled successfully) but then failed needing four IAM role
+     grants on Google-managed service agents (pubsub.publisher,
+     iam.serviceAccountTokenCreator, run.invoker,
+     eventarc.eventReceiver) - a one-time bootstrap any project's
+     FIRST Eventarc-triggered function needs. Checked whether the
+     service account I was given could grant these itself
+     (getIamPolicy, listed its own actual roles) before reporting this
+     as a blocker rather than just relaying firebase-tools' own error
+     text - confirmed it genuinely can't: myslewer-admin-tasks carries
+     a deliberately scoped set of admin roles (firebase.admin,
+     storage.admin, secretmanager.admin, etc.) but nothing resembling
+     IAM-policy-modification rights, which is a GOOD property of that
+     service account (least-privilege), not a mistake to route around.
+     Handed the person the exact four `gcloud projects add-iam-policy-
+     binding` commands firebase-tools itself generated (or the
+     equivalent Cloud Console IAM grants) to run from an account that
+     actually has owner/IAM-admin rights - a one-time step; once done,
+     the SAME deploy command should just succeed on retry.
+
+  Left in place, ready to resume: functions/node_modules installed
+  locally (gitignored, not committed), functions/.env already present
+  in this environment with the real Nextcloud values, the
+  NEXTCLOUD_APP_PASSWORD secret confirmed already existing in Secret
+  Manager (checked via the API, not assumed) - nothing else stands
+  between the IAM grants landing and the function actually going live.
+
+  Committed the firebase.json/.firebaserc pipeline addition and the
+  region fix - infra/tooling changes, no user-facing app behavior, so
+  no CACHE_VERSION/app-version bump for this entry.
