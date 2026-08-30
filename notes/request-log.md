@@ -1506,3 +1506,30 @@ a working record, not app content.
   natural proportions like the annotator does - re-measured within
   0.6px of correct. Unannotated photos are untouched.
   CACHE_VERSION -> v292, app-version -> v8.4. See methodology.txt 142.
+- "I want the annotations uploaded as part of the image is that
+  something we can do as it no point annotating the image then next
+  user looks at the photo and the anootation is only on the thumb
+  nail ?"
+  Asked first which trade-off they wanted (bake in permanently, one
+  file vs. keep the clean original AND a separate baked-in copy) -
+  **chose keeping both.**
+  **Status: done.** Every photo with annotations now also gets a
+  second, canvas-composited copy uploaded alongside the clean original
+  (photos[].annotatedUrl/annotatedPath) - the detail view's photo grid
+  and its "open full photo" link both use that composite once it
+  exists, so opening the raw photo (or downloading/sharing it) shows
+  the markup baked into the actual pixels, not just an in-app overlay.
+  The Mark Up tool itself still edits the clean original non-
+  destructively, exactly as before - nothing about removing/moving
+  markers later changed. One disclosed limitation: re-annotating an
+  ALREADY-uploaded photo in a later edit session can't currently
+  produce a baked-in copy (a cross-bucket CORS gap, not something
+  fixable from the client) - it keeps the live in-app overlay display
+  instead; a freshly marked-up photo submitted in the same session
+  always works. Verified for real against two genuinely separate local
+  origins: a fresh photo composites correctly (checked the actual
+  output image, not just that the code ran), an existing cross-origin
+  photo fails gracefully without breaking the save, and stale
+  composites get cleaned up correctly both when markers are removed
+  and when they're replaced. CACHE_VERSION -> v293, app-version -> v8.5.
+  See methodology.txt 143.

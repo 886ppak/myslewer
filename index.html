@@ -1711,7 +1711,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.4</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.5</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -13711,12 +13711,25 @@
       rows.push(['Logged by', entry.loggedByName || 'Unknown']);
 
       const photos = Array.isArray(entry.photos) ? entry.photos : [];
+      // A photo with a baked-in composite (annotatedUrl - see
+      // llCompositePhoto) shows THAT everywhere here, overlay skipped
+      // entirely - the markup is already part of its pixels, so opening
+      // it raw (this <a>'s own href) or seeing it in this grid shows the
+      // same marked-up photo either way. Falls back to the live DOM
+      // overlay on the clean original for a photo that has annotations
+      // but no composite yet (compositing failed - see llCompositePhoto's
+      // own comment on why that can currently happen for an
+      // already-saved photo).
       const photosHtml = photos.length
-        ? `<div class="ll-photo-grid">${photos.map((p) => `
-            <a href="${ceEscapeHtml(p.url)}" target="_blank" rel="noopener noreferrer" style="position:relative; display:block;">
-              <img src="${ceEscapeHtml(p.url)}" alt="Lift photo"${llAnnotatedImgStyle(p.annotations)}>
-              ${llAnnotationsOverlayHtml(p.annotations)}
-            </a>`).join('')}</div>`
+        ? `<div class="ll-photo-grid">${photos.map((p) => {
+            const displayUrl = p.annotatedUrl || p.url;
+            const showLiveOverlay = !p.annotatedUrl;
+            return `
+            <a href="${ceEscapeHtml(displayUrl)}" target="_blank" rel="noopener noreferrer" style="position:relative; display:block;">
+              <img src="${ceEscapeHtml(displayUrl)}" alt="Lift photo"${showLiveOverlay ? llAnnotatedImgStyle(p.annotations) : ''}>
+              ${showLiveOverlay ? llAnnotationsOverlayHtml(p.annotations) : ''}
+            </a>`;
+          }).join('')}</div>`
         : '';
       const notesHtml = entry.notes ? `<div class="ll-notes-block"><b>Notes:</b><br>${ceEscapeHtml(entry.notes)}</div>` : '';
       const linkHtml = entry.externalLink
@@ -13762,8 +13775,15 @@
       // have no `path` at all any more - nothing to delete from Storage,
       // and no WebDAV credentials live in the client to delete the
       // Nextcloud copy either, which is the point: the backup archive
-      // outlives a deletion in the app.
-      Promise.all(photos.filter((p) => p && p.path).map((p) => window.__liftLibraryDeletePhoto(p.path).catch(() => {})))
+      // outlives a deletion in the app. A baked-in composite
+      // (annotatedPath - see llCompositePhoto) is a separate Storage
+      // object of its own, cleaned up the same way.
+      const photoPaths = [];
+      photos.forEach((p) => {
+        if (p && p.path) photoPaths.push(p.path);
+        if (p && p.annotatedPath) photoPaths.push(p.annotatedPath);
+      });
+      Promise.all(photoPaths.map((path) => window.__liftLibraryDeletePhoto(path).catch(() => {})))
         .then(() => window.__liftLibraryDeleteEntry(entryId))
         .then(() => {
           llAllEntries = llAllEntries.filter((e) => e.id !== entryId);
@@ -14074,6 +14094,100 @@
       }).join('')}</div>`;
     }
 
+    // Bakes annotations into the actual image pixels via <canvas>, so
+    // the raw photo itself - opened directly, downloaded, shared
+    // outside the app - shows the markup, not just the in-app overlay
+    // (the overlay only ever exists in this page's own DOM). Called
+    // from llSubmitEntry for every photo carrying at least one
+    // annotation; the result is uploaded as a SEPARATE Storage object
+    // (see photo.annotatedUrl/annotatedPath) rather than replacing the
+    // clean original, so the Mark Up tool keeps working non-
+    // destructively on that same clean copy in every future edit -
+    // this always redraws fresh from the clean original + the CURRENT
+    // annotation list, never composites onto an already-baked copy.
+    //
+    // Marker sizes scale to the photo's own resolution (a scaleUnit
+    // fraction of its shorter side) rather than the DOM overlay's fixed
+    // CSS px sizes - a real camera photo can be 3000+ px wide, where a
+    // "40px" arrow would be nearly invisible.
+    //
+    // Resolves to null (never rejects - a failure here should never
+    // block the rest of the submit) on any failure. The one expected
+    // failure case: an EXISTING (already-uploaded) photo's image lives
+    // on firebasestorage.googleapis.com, a different origin from this
+    // app - canvas can only read pixel data back out of a cross-origin
+    // image if that origin sends CORS headers permitting it, and this
+    // bucket doesn't have that configured as of this writing, so
+    // re-annotating an already-saved photo currently can't produce a
+    // baked-in copy (it keeps the live DOM-overlay display instead -
+    // see llAnnotatedImgStyle). A freshly selected photo in THIS
+    // submission never hits this at all - its blob: object-URL is
+    // always same-origin, so it always composites successfully, which
+    // covers the actual common case (mark up a photo you're logging
+    // right now).
+    function llCompositePhoto(imgSrc, annotations) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        if (!imgSrc.startsWith('blob:')) img.crossOrigin = 'anonymous';
+        img.onerror = () => resolve(null);
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+
+            const unit = Math.min(canvas.width, canvas.height);
+            const dotSize = unit * 0.07;
+            const arrowLen = unit * 0.14;
+            const lineWidth = Math.max(2, unit * 0.006);
+
+            annotations.forEach((a) => {
+              const px = a.x * canvas.width;
+              const py = a.y * canvas.height;
+              ctx.save();
+              ctx.shadowColor = 'rgba(0,0,0,0.85)';
+              if (a.type === 'arrow') {
+                const rad = a.angle * Math.PI / 180;
+                const hx = px + Math.cos(rad) * arrowLen;
+                const hy = py + Math.sin(rad) * arrowLen;
+                ctx.strokeStyle = '#e5a900';
+                ctx.fillStyle = '#e5a900';
+                ctx.lineWidth = lineWidth;
+                ctx.lineCap = 'round';
+                ctx.shadowBlur = unit * 0.006;
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(hx, hy);
+                ctx.stroke();
+                const headLen = lineWidth * 4.5;
+                const headAngle = Math.PI / 7;
+                ctx.beginPath();
+                ctx.moveTo(hx, hy);
+                ctx.lineTo(hx - headLen * Math.cos(rad - headAngle), hy - headLen * Math.sin(rad - headAngle));
+                ctx.lineTo(hx - headLen * Math.cos(rad + headAngle), hy - headLen * Math.sin(rad + headAngle));
+                ctx.closePath();
+                ctx.fill();
+              } else {
+                ctx.font = `${dotSize}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.shadowBlur = unit * 0.008;
+                ctx.fillText(a.color === 'green' ? '🟢' : '🔴', px, py);
+              }
+              ctx.restore();
+            });
+
+            canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
+          } catch (e) {
+            resolve(null);
+          }
+        };
+        img.src = imgSrc;
+      });
+    }
+
     function llRenderPendingPhotos() {
       const existingHtml = llExistingPhotos.map((p, i) => `
         <div style="position:relative;">
@@ -14122,8 +14236,12 @@
       const removed = llExistingPhotos.splice(index, 1)[0];
       // Nextcloud-migrated photos have no `path` (see llDeleteEntry's
       // own comment on why) - only queue a Storage delete for photos
-      // that actually still have one.
+      // that actually still have one. A baked-in composite (see
+      // llCompositePhoto) is its own separate Storage object with its
+      // own path - queue that too, or removing an annotated photo would
+      // leave its composite behind as permanent orphaned clutter.
       if (removed && removed.path) llRemovedExistingPhotoPaths.push(removed.path);
+      if (removed && removed.annotatedPath) llRemovedExistingPhotoPaths.push(removed.annotatedPath);
       llRenderPendingPhotos();
     }
 
@@ -14357,6 +14475,47 @@
             : p
         )))
         .then((newPhotos) => {
+          // Bake annotations into a real, standalone image (see
+          // llCompositePhoto's own comment) for every photo that has
+          // any right now - existing photos included, since annotations
+          // may have just been added/moved/removed on one of them this
+          // edit. Always redraws fresh from the clean original + the
+          // CURRENT annotation list (never composites onto an existing
+          // composite), and drops any STALE composite from a previous
+          // save that no longer matches - either because it's being
+          // replaced by a fresh one, or because every marker on this
+          // photo was just removed and there's nothing left to bake in.
+          const allPhotos = llExistingPhotos.concat(newPhotos);
+          if (llPendingPhotoFiles.length || llExistingPhotos.some((p) => p.annotations && p.annotations.length)) {
+            btn.textContent = 'Adding markup to photos...';
+          }
+          return Promise.all(allPhotos.map((p) => {
+            const stalePath = p.annotatedPath;
+            const dropStale = () => { if (stalePath) window.__liftLibraryDeletePhoto(stalePath).catch(() => {}); };
+            if (!p.annotations || !p.annotations.length) {
+              dropStale();
+              delete p.annotatedUrl;
+              delete p.annotatedPath;
+              return p;
+            }
+            return llCompositePhoto(p.url, p.annotations).then((blob) => {
+              // Couldn't composite (see llCompositePhoto - currently
+              // expected for an existing photo, cross-bucket CORS) -
+              // leave any existing composite/fields exactly as they
+              // were rather than guessing; the live DOM-overlay display
+              // still works either way.
+              if (!blob) return p;
+              const file = new File([blob], 'annotated.jpg', { type: 'image/jpeg' });
+              return window.__liftLibraryUploadPhoto(entryId, file).then(({ url, path }) => {
+                if (stalePath && stalePath !== path) dropStale();
+                p.annotatedUrl = url;
+                p.annotatedPath = path;
+                return p;
+              });
+            });
+          }));
+        })
+        .then((allPhotos) => {
           // Minimal, consistent shape regardless of edit history - a
           // photo whose annotations were all removed during this edit
           // shouldn't persist a stale/empty annotations: [] field.
@@ -14365,9 +14524,11 @@
             if (p.path) clean.path = p.path;
             if (p.nextcloud) clean.nextcloud = true;
             if (p.annotations && p.annotations.length) clean.annotations = p.annotations;
+            if (p.annotatedUrl) clean.annotatedUrl = p.annotatedUrl;
+            if (p.annotatedPath) clean.annotatedPath = p.annotatedPath;
             return clean;
           };
-          const data = { categoryId, title, photos: llExistingPhotos.concat(newPhotos).map(cleanPhoto) };
+          const data = { categoryId, title, photos: allPhotos.map(cleanPhoto) };
           const asset = document.getElementById('ll-form-asset').value.trim();
           const part = document.getElementById('ll-form-part').value.trim();
           const link = document.getElementById('ll-form-link').value.trim();

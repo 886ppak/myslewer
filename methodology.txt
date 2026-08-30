@@ -13796,3 +13796,97 @@ cranes get their own subsections as they're built.
   cover-cropped square as always.
 
   CACHE_VERSION v291 -> v292, app-version v8.3 -> v8.4.
+
+143. Lift Plan Library: bake annotations into an actual copy of the photo
+
+  Person's follow-up after 142's fix: "I want the annotations uploaded
+  as part of the image is that something we can do as it no point
+  annotating the image then next user looks at the photo and the
+  annotation is only on the thumbnail" - a fair point independent of
+  142's bug: the overlay only ever exists in THIS app's own DOM, so
+  opening the raw photo directly (the detail view's own "open full
+  photo" link, a download, a share) never showed markup at all, even
+  once 142 made the in-app position correct.
+
+  Real architectural decision, not a small tweak, so asked first rather
+  than picking silently: keep the clean original AND generate a second,
+  separately-uploaded baked-in copy (chosen), vs. replacing the
+  original outright (simpler, less storage, but marking up a photo a
+  second time could only ever ADD more markers, never remove/move the
+  old ones, since the clean base would be gone). Went with keeping
+  both - matches how the Mark Up tool already works today (fully
+  non-destructive, add/move/remove anytime), and this shouldn't take
+  that away just to satisfy "the final view has it baked in".
+
+  llCompositePhoto(imgSrc, annotations) draws the photo onto a <canvas>
+  at its own natural resolution, draws each marker on top (dots as the
+  actual emoji via ctx.fillText, arrows as a stroked line + a filled
+  triangle head, gold #e5a900 matching --accent-gold since canvas can't
+  read CSS custom properties), and exports a JPEG Blob. Marker sizes
+  scale to a fraction of the photo's own shorter side rather than the
+  DOM overlay's fixed CSS px - a real phone-camera photo can be 3000+ px
+  wide, where a "40px" arrow would be nearly invisible.
+
+  Wired into llSubmitEntry as a step after photos are uploaded/
+  annotations merged but before the Firestore write: every photo
+  (existing AND newly-uploaded) with 1+ annotations gets a FRESH
+  composite generated from its CLEAN url + CURRENT annotation list
+  (never composited onto an already-baked copy - always redrawn from
+  scratch so removing or moving a marker is always fully honoured, not
+  layered on top of stale pixels) and uploaded as its own Storage
+  object (photos[].annotatedUrl/annotatedPath, parallel to the existing
+  url/path). A photo whose annotations were all just removed has its
+  stale composite queued for deletion and both fields dropped, matching
+  the existing sparse-field convention. llRemoveExistingPhoto and
+  llDeleteEntry both extended to clean up annotatedPath the same way
+  they already did for path.
+
+  Deliberately did NOT change what the FORM's own thumbnails show while
+  actively editing - those still render the clean original + the live
+  DOM overlay (142's fix), never a stale annotatedUrl, since the
+  overlay always reflects whatever's actually in memory right now,
+  which can be ahead of whatever was baked in on a previous save. Only
+  the read-only detail view (llOpenEntry) prefers annotatedUrl - the
+  actual "next user looks at the photo" case this was asked for - and
+  skips the DOM overlay entirely there once a composite exists, since
+  the markup is already part of its pixels.
+
+  One real, disclosed limitation: an EXISTING (already-uploaded) photo
+  being re-annotated in a later edit session can't currently be
+  composited, because loading a cross-origin firebasestorage.googleapis.com
+  image into a <canvas> and reading pixel data back out requires that
+  origin to send CORS headers permitting it, and the bucket isn't
+  configured for that. llCompositePhoto resolves null rather than
+  throwing when this happens (sets img.crossOrigin='anonymous' up
+  front, so a missing CORS policy fails the IMAGE LOAD itself with a
+  clean onerror rather than a tainted-canvas exception later), and the
+  submit pipeline treats a null result as "couldn't composite this one,
+  keep it on the live-overlay fallback" rather than failing the whole
+  save. A freshly selected photo marked up and submitted in the SAME
+  session never hits this at all - its blob: object-URL is always
+  same-origin - which covers the actual dominant use case (mark up a
+  photo you're logging right now, not going back to re-annotate an old
+  one later).
+
+  Verified all of this for real, not just by reading the code back:
+  three separate Playwright runs against two genuinely different local
+  origins (matching this session's established real-cross-origin
+  testing pattern) - (1) a freshly selected photo with a dot and an
+  arrow, submitted, confirmed exactly two uploads happened (clean +
+  composite) and the composite's own URL/path landed correctly on the
+  saved record, then separately rendered llCompositePhoto's actual
+  output to a real JPEG file and looked at it - clean, correctly
+  positioned markers, not just "the function didn't throw"; (2) an
+  existing entry whose photo was hosted on a genuinely different local
+  port with no CORS configured (mirroring the real bucket), confirmed
+  compositing failed gracefully (no annotatedUrl added, no thrown
+  error reaching the submit chain, the original annotation data
+  preserved, the save still completed) rather than trusting that the
+  try/catch would behave as intended; (3) stale-composite cleanup in
+  both directions - all markers removed (old composite queued for
+  deletion, fields dropped) and a marker just moved (old composite
+  deleted, new one uploaded and used) - plus a direct check that the
+  detail view actually picks the composite + skips the overlay when
+  one exists, and falls back to the live overlay when it doesn't.
+
+  CACHE_VERSION v292 -> v293, app-version v8.4 -> v8.5.
