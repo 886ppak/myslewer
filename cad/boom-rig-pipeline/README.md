@@ -324,16 +324,37 @@ The pipeline above assumes ONE swept axis-pair (boom length x angle). A
 jib-equipped config (T3F on the LTM 1650) needs a second, independent
 axis-pair (jib length x jib angle), captured via the same decoupled-sweep
 idea used elsewhere in this project: a boom L x A grid with the jib held at
-a fixed reference state, PLUS a jib JL x JA grid with the boom held at a
-fixed reference state (boom angle 30° - the "G30" convention already used
-by this crane's other reference plots). `extract_t3f.py` generalizes
-`extract_all_poses.py`'s per-axis logic into a reusable `extract_grid()`
-function and runs it twice, producing `t3f_poses.json` with independent
-`"boom"` and `"jib"` sections (each with its own palette, pivot, groundY -
-`find_pivot()` applied to the jib's own JA sweep locates the jib's hinge
-point on the boom tip, not the boom's own foot pivot; on this data it fit
-to 0.0mm spread across all 17 jib lengths, tighter even than the boom's own
-0.3mm).
+a fixed reference state, PLUS a jib JL x JA grid with the boom held at
+whatever fixed reference state the export used (not otherwise recorded -
+the pipeline never needed to know it, only that it's held constant across
+the whole jib sweep). `extract_t3f.py` generalizes `extract_all_poses.py`'s
+per-axis logic into a reusable `extract_grid()` function and runs it twice,
+producing `t3f_poses.json` with independent `"boom"` and `"jib"` sections
+(each with its own palette, pivot, groundY - `find_pivot()` applied to the
+jib's own JA sweep locates the jib's hinge point on the boom tip, not the
+boom's own foot pivot; on this data it fit to 0.0mm spread across all 17
+jib lengths, tighter even than the boom's own 0.3mm).
+
+`extract_t3f.py` was since generalized into `boom_rig_lib.py` (the shared
+`extract_grid()`/pivot/ground logic) + `extract_jib_config.py` (a thin CLI
+driver: config name + that config's own jib length/angle lists) to extend
+this to the other 8 T3-family configs without copy-pasting the script per
+config - each config's jib axis range was pulled straight from the real
+Nextcloud file listing (`pose_{CONFIG}_JL{len}_JA{angle}.dxf`), not assumed
+from the name: e.g. the N-family (T3N/T3NH/T3NY/T3NYH) uses a completely
+different 21-length jib catalog (21.0-91.0m) than the F-family's 17-length
+one (6.0-62.0m) T3F used.
+
+**A third independent axis surfaced going through the other configs: guy
+angle** (`G30`/`G45`/`G60` in the filenames - only 3 discrete states, not a
+dense sweep), present on every "Y" config (T3Y, T3NY, T3NYH, T3YVEF,
+T3YVEFH) on top of whichever of the boom/jib axes that config also has.
+This is what the 5 existing reference PDFs (`pose_T3Y_G30`, etc.) actually
+are - a specific guy-angle state, unrelated to boom angle. (Earlier text in
+this file called `G30` a "boom angle 30° reference" - that was wrong,
+corrected here; the two are unrelated dimensions.) Not yet extracted or
+built out - only 3 poses per length instead of a 9-angle sweep, so it likely
+doesn't need the same interpolation machinery, but that's unverified.
 
 **Does NOT** attempt a full 4-DOF (L, A, JL, JA) combined rig - that would
 require decomposing the jib grid into a local frame relative to the boom
