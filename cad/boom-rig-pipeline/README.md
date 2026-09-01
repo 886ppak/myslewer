@@ -425,6 +425,67 @@ per-shape accuracy on those extra panels matters before publishing.
   matches 1:1) or diff-alignment + nearest-neighbor fallback (see problem
   2 above)
 
+## Scaling to the other 8 T3-family configs
+
+Once T3F was proven, the same approach was extended to the remaining 8
+LTM 1650 T3-family configs (T3FH, T3N, T3NH, T3NY, T3NYH, T3Y, T3YVEF,
+T3YVEFH) - each with its own jib length catalog (discovered from the real
+Nextcloud file listing, never assumed: e.g. the N-family uses a completely
+different 21-length jib, 21.0-91.0m, vs the F-family's 17-length,
+6.0-62.0m) and, on 5 of them, a THIRD independent axis (`G` = guy angle,
+30°/45°/60°, only 3 discrete states - see the correction above).
+
+- `boom_rig_lib.py` + `extract_jib_config.py` - `extract_t3f.py`
+  generalized into a reusable library + a CLI driver taking any config
+  name and its own jib length/angle lists (see "Extending to jib-equipped
+  configs" above for how those get discovered per config).
+- `boom_rig_lib.py`'s `find_pivot()` was hardened after T3YVEF's jib grid
+  produced a pivot fit that disagreed by ~42m across lengths - not noise,
+  a REAL bug: 15 of 17 lengths agreed to 0.0mm, but exactly 2 (44.5, 58.5)
+  locked onto a completely different point, because T3YVEF's extra guy-
+  line/backstay geometry (absent from plain T3F) occasionally out-moves
+  the jib tip in the "farthest-moving vertex" landmark heuristic for those
+  specific lengths. Fixed by clustering the per-length fits (10mm
+  tolerance) and using the majority cluster instead of a naive mean of
+  all of them - the minority outliers get logged and excluded, not
+  silently averaged in. Confirmed on T3YVEF (2/17 excluded) and T3YVEFH
+  (4/17 excluded), both correctly resolving to the same jib pivot as
+  T3F's own (6724.5, 1979.0) despite the extra geometry.
+
+### A tried-and-disproven shortcut: transferring T3F's colors across configs
+
+Before getting real reference plots for all 8, cross-config color transfer
+was tried first: diff-align each config's shapes against T3F's own
+already-calibrated shape list (`(kind, pointcount)` tuples), on the theory
+that it's the same crane/paint scheme, only the attachment differs.
+Structural diff-match rates looked encouraging (72-96% depending on
+config) - **but this measures sequence alignment, not shape identity, and
+turned out to be unreliable**: cross-validated against a real reference
+photo (a carrier-only crop that happened to already exist for 5 configs),
+only ~11% of carrier shapes actually matched real pixel colors. A large,
+solid, unambiguous wheel-arch/fender panel came back assigned bright
+yellow by the transfer when it's genuinely solid gray - not a sampling
+edge case, a real, large, wrong swap. Two structurally-similar drawings
+can have long runs of coincidentally-matching `(kind, pointcount)` tokens
+that are actually different physical shapes; diff-alignment only reflects
+genuine identity within variants of the SAME config (e.g. T3F's own
+different jib lengths - proven reliable there), not across configs.
+
+**Lesson: don't reuse one config's colors on another's geometry, even for
+the "same" crane, without real per-config pixel ground truth.** All 8
+configs got their own reference plot (`L16.6_A0`, same convention as
+T3F's own) and were calibrated independently via `calibrate_config.py` -
+same registration + sampling + diff-align-within-config method as
+`calibrate_t3f.py`/`apply_t3f_colors.py`, generalized to take a config
+name, `poses.json` path, reference PNG, and the `sx/sy/ox/oy` transform
+from `solve_calibration.py` as arguments. All 9 T3-family configs are now
+fully extracted, pivot-validated, and color-calibrated against real
+per-config ground truth.
+
+- `calibrate_config.py` - the generic per-config version of
+  `calibrate_t3f.py` + `apply_t3f_colors.py` combined; run once per
+  config against that config's own `L16.6_A0` reference plot
+
 ## Verification checklist before publishing
 
 Take screenshots (Playwright/headless Chromium against the built HTML
@@ -470,3 +531,39 @@ DXF/pose files are not committed here — regenerate from the pipeline
 above if needed (verified byte-reproducible end to end, given the same
 source DXFs and reference PDF), or pull the live version straight from
 the published artifact.
+
+## A second crane: LTM 1300
+
+Same overall pipeline (`boom_rig_lib.py`'s `extract_grid()`), a second,
+independently-verified crane, run on a separate machine in parallel with
+the LTM 1650 work above — the same `command`-indirection bug (see "the
+whole multi-day debugging saga" this project's methodology notes elsewhere)
+and its fix applied there too via `export_sweep_ltm1300.lsp`. Four configs,
+discovered from the real Nextcloud file listing the same way as the LTM
+1650 ones (never assumed from dynamic-block property names alone):
+
+- `T` — boom only, 15 lengths (14.7-78.0m) x 9 angles, no jib. Its own
+  boom length catalog, unrelated to the LTM 1650's 10-length one -
+  `extract_boom_only_config.py` takes the catalog as an argument instead
+  of hardcoding it, specifically so it isn't LTM-1650-shaped by accident.
+- `TF` — boom + a 9-length x 9-angle jib (14.0-42.0m), same shape as the
+  LTM 1650's F-family.
+- `TN` — boom + a 16-length x 9-angle jib (17.5-70.0m).
+- `TK` — boom + jib, but **the jib has NO angle dynamic property at all**
+  (`Гусек ТК` in the source block only exposes length, confirmed from the
+  file listing: `pose_TK_JL{len}.dxf`, no `_JA` suffix anywhere, only 7
+  catalog lengths). `boom_rig_lib.extract_grid()` assumes an angle sweep
+  to interpolate and circle-fit a pivot from, so this needed a dedicated,
+  deliberately minimal extractor: `extract_tk_jib.py` pulls one static
+  frame per length, no interpolation axis, and no pivot/groundY fit for
+  the jib section (can't circle-fit a single frame - the boom section's
+  own pivot/groundY still work normally, only the jib is fixed-angle).
+  Worth checking for on any future crane: a dynamic block's jib angle
+  property isn't guaranteed to exist just because a jib does.
+
+All four configs' geometry is extracted and pivot-validated (TK's boom
+pivot: (3390.0, 3873.8), matching T's own boom pivot almost exactly, a
+good cross-config sanity check same as the LTM 1650 family's shared jib
+pivot). Color calibration not yet done for this crane - needs its own
+`L{shortest}_A0`-style reference plot(s) per config, same as the LTM 1650
+work above.
