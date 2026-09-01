@@ -221,9 +221,42 @@
                             orig-vis orig-len orig-ang orig-jn orig-jf orig-ja orig-guy
                             total done skipped len-pair angle-deg jlen-pair guy-pair fname)
   (if (not (vl-file-directory-p *OUTDIR*)) (vl-mkdir *OUTDIR*))
-  (setq crane-obj (find-crane-obj))
+
+  ;; LOUD, IMMEDIATE self-test before wasting time on a full sweep: can
+  ;; this process actually write a file into *OUTDIR* at all? A single
+  ;; isolated DIAGT3F-style test that wrote straight into Documents
+  ;; worked, but the full sweep writing into Documents\export never
+  ;; produced anything - if the subfolder itself is the problem (failed
+  ;; to create, wrong permissions, whatever), this catches it in under a
+  ;; second instead of after a 20+ minute sweep finds nothing.
+  (setq *WRITE-TEST-FILE* (strcat *OUTDIR* "write_test.txt"))
+  (setq *WRITE-TEST-OK* nil)
+  (if (not (vl-file-directory-p *OUTDIR*))
+    (princ (strcat "\n\n*** ABORTING: " *OUTDIR* " does not exist and vl-mkdir could not create it. ***"))
+    (progn
+      (setq *WT-F* (open *WRITE-TEST-FILE* "w"))
+      (if *WT-F*
+        (progn
+          (write-line "test" *WT-F*)
+          (close *WT-F*)
+          (setq *WRITE-TEST-OK* (findfile *WRITE-TEST-FILE*))
+          (if *WRITE-TEST-OK* (vl-file-delete *WRITE-TEST-FILE*))
+        )
+      )
+    )
+  )
+  (if (not *WRITE-TEST-OK*)
+    (princ (strcat "\n\n*** ABORTING: could not write a plain test file into "
+                    *OUTDIR* " - this folder is not actually writable from here. "
+                    "Check the exact path and permissions before re-running. ***"))
+  )
+
+  (setq crane-obj (if *WRITE-TEST-OK* (find-crane-obj) nil))
   (if (null crane-obj)
-    (princ "\nNo dynamic block found in modelspace. Aborting.")
+    (if *WRITE-TEST-OK*
+      (princ "\nNo dynamic block found in modelspace. Aborting.")
+      nil ;; already printed the write-test failure above
+    )
     (progn
       (setq visprop (get-prop crane-obj "Visibility1"))
       (setq lenprop (get-prop crane-obj "Стрела T3"))
