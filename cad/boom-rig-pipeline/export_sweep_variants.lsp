@@ -159,7 +159,7 @@
   )
 )
 
-(defun export-current-pose (crane-obj fname / copyobj copyename ss wbresult)
+(defun export-current-pose (crane-obj fname / copyobj copyename ss wbresult ok)
   (setq copyobj (vl-catch-all-apply 'vlax-invoke (list crane-obj 'Copy)))
   (if (vl-catch-all-error-p copyobj)
     (progn
@@ -170,20 +170,33 @@
       (setq copyename (vlax-vla-object->ename copyobj))
       (setq ss (ssadd))
       (setq ss (ssadd copyename ss))
+      ;; delete any pre-existing file first - this is also what makes the
+      ;; findfile check below a real ground-truth test: if wblock silently
+      ;; fails, there is nothing left over to false-positive on.
       (vl-catch-all-apply 'vl-file-delete (list fname))
 
-      ;; wrap the wblock call itself so a failure inside it (not just a
-      ;; dangling prompt after) can't kill the whole sweep, and flush any
-      ;; leftover pending prompt afterward (confirmed necessary and
-      ;; sufficient - verified T3F: 243/243 exported, 0 skipped).
       (setq wbresult (vl-catch-all-apply 'command
                        (list "_.-wblock" fname "" (list 0.0 0.0 0.0) ss "")))
       (flush-pending-command)
 
       (vl-catch-all-apply 'command (list "_.erase" ss ""))
       (flush-pending-command)
-      (princ (strcat "\n    -> " fname))
-      T
+
+      ;; Ground truth: does the file actually exist on disk? The command
+      ;; sequence "succeeding" (no Lisp error, CMDACTIVE back to 0) does
+      ;; NOT reliably mean wblock wrote the file - a prior version of this
+      ;; script trusted that and reported "243 exported" for a run that
+      ;; wrote zero files. Only trust findfile.
+      (setq ok (findfile fname))
+      (if ok
+        (princ (strcat "\n    -> " fname))
+        (princ (strcat "\n    FAILED (no file written): " fname
+                        (if (vl-catch-all-error-p wbresult)
+                          (strcat " | wblock error: " (vl-catch-all-error-message wbresult))
+                          ""
+                        )))
+      )
+      (if ok T nil)
     )
   )
 )
