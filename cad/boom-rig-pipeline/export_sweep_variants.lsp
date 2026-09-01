@@ -151,10 +151,21 @@
 ;; call after it errors with "bad order function: COMMAND". Flush
 ;; whatever's left pending (accepting defaults) instead of assuming a
 ;; fixed prompt count.
+;; Cancel (not blank-Enter) any leftover pending prompt. A blank "" at an
+;; already-idle Command: prompt REPEATS THE LAST COMMAND in AutoCAD - if
+;; CMDACTIVE briefly reads >0 right after a real command already
+;; finished (a timing quirk, not a genuinely stuck prompt), sending ""
+;; can silently re-trigger wblock/erase a second time with nothing there
+;; to answer its prompts, corrupting or wiping the file just written.
+;; This was traced to a real bug on the LTM 1300 sweep (findfile
+;; confirmed files that "exported" successfully were gone moments
+;; later); the LTM 1650 sweep likely just got lucky with CMDACTIVE
+;; timing. Escape (Ctrl+C) cancels instead of repeating, so it's safe
+;; either way regardless of why CMDACTIVE read nonzero.
 (defun flush-pending-command ( / n)
   (setq n 0)
   (while (and (> (getvar "CMDACTIVE") 0) (< n 10))
-    (command "")
+    (command "\x03\x03")
     (setq n (1+ n))
   )
 )
