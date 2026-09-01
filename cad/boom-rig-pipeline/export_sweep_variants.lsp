@@ -170,7 +170,7 @@
   )
 )
 
-(defun export-current-pose (crane-obj fname / copyobj copyename ss wbresult ok)
+(defun export-current-pose (crane-obj fname / copyobj copyename ss ok)
   (setq copyobj (vl-catch-all-apply 'vlax-invoke (list crane-obj 'Copy)))
   (if (vl-catch-all-error-p copyobj)
     (progn
@@ -186,11 +186,20 @@
       ;; fails, there is nothing left over to false-positive on.
       (vl-catch-all-apply 'vl-file-delete (list fname))
 
-      (setq wbresult (vl-catch-all-apply 'command
-                       (list "_.-wblock" fname "" (list 0.0 0.0 0.0) ss "")))
+      ;; Call command DIRECTLY, not through (vl-catch-all-apply 'command
+      ;; (list ...)) - command is a variadic/special AutoLISP function
+      ;; and does not reliably behave the same when invoked indirectly
+      ;; through apply-style argument passing, especially with a
+      ;; selection-set argument like ss. A minimal isolated test (bare
+      ;; direct command call, no indirection) reliably wrote its file;
+      ;; this indirected version never did. export-current-pose is
+      ;; already wrapped in vl-catch-all-apply at every call site, so a
+      ;; genuine error here still can't kill the whole sweep - we just
+      ;; lose the ability to print the specific wblock error message.
+      (command "_.-wblock" fname "" (list 0.0 0.0 0.0) ss "")
       (flush-pending-command)
 
-      (vl-catch-all-apply 'command (list "_.erase" ss ""))
+      (command "_.erase" ss "")
       (flush-pending-command)
 
       ;; Ground truth: does the file actually exist on disk? The command
@@ -201,11 +210,7 @@
       (setq ok (findfile fname))
       (if ok
         (princ (strcat "\n    -> " fname))
-        (princ (strcat "\n    FAILED (no file written): " fname
-                        (if (vl-catch-all-error-p wbresult)
-                          (strcat " | wblock error: " (vl-catch-all-error-message wbresult))
-                          ""
-                        )))
+        (princ (strcat "\n    FAILED (no file written): " fname))
       )
       (if ok T nil)
     )
