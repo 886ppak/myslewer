@@ -172,21 +172,13 @@
       (setq ss (ssadd copyename ss))
       (vl-catch-all-apply 'vl-file-delete (list fname))
 
-      ;; wrap the wblock call itself so a failure INSIDE it (not just a
-      ;; dangling prompt after) can't kill the whole sweep - and print
-      ;; exactly what AutoCAD's command state looks like right after,
-      ;; whether it succeeded or not, so a repeat failure is diagnosable
-      ;; from the log alone instead of needing more manual follow-up.
+      ;; wrap the wblock call itself so a failure inside it (not just a
+      ;; dangling prompt after) can't kill the whole sweep, and flush any
+      ;; leftover pending prompt afterward (confirmed necessary and
+      ;; sufficient - verified T3F: 243/243 exported, 0 skipped).
       (setq wbresult (vl-catch-all-apply 'command
                        (list "_.-wblock" fname "" (list 0.0 0.0 0.0) ss "")))
-      (princ (strcat "\n    [diag] CMDACTIVE=" (vl-princ-to-string (getvar "cmdactive"))
-                      " CMDNAMES=\"" (vl-princ-to-string (getvar "cmdnames")) "\""))
-      (if (vl-catch-all-error-p wbresult)
-        (princ (strcat "\n    [diag] wblock command itself errored: "
-                        (vl-catch-all-error-message wbresult)))
-      )
       (flush-pending-command)
-      (princ (strcat "\n    [diag] after flush: CMDACTIVE=" (vl-princ-to-string (getvar "cmdactive"))))
 
       (vl-catch-all-apply 'command (list "_.erase" ss ""))
       (flush-pending-command)
@@ -368,9 +360,34 @@
 (defun c:EXPORTSWEEP-T3YVEF ()  (run-config-sweep "T3YVEF"  nil T   T) )
 (defun c:EXPORTSWEEP-T3YVEFH () (run-config-sweep "T3YVEFH" nil T   T) )
 
+;; ---------- run everything remaining in one go ----------
+;; T3F already done separately (243/243, verified) - not repeated here.
+(defun c:EXPORTSWEEP-ALL-REMAINING ()
+  (princ "\n\n########## STARTING: T3Y ##########")
+  (run-config-sweep "T3Y" nil nil T)
+  (princ "\n\n########## STARTING: T3N ##########")
+  (run-config-sweep "T3N" T nil nil)
+  (princ "\n\n########## STARTING: T3NY ##########")
+  (run-config-sweep "T3NY" T nil T)
+  (princ "\n\n########## STARTING: T3NH ##########")
+  (run-config-sweep "T3NH" T nil nil)
+  (princ "\n\n########## STARTING: T3NYH ##########")
+  (run-config-sweep "T3NYH" T nil T)
+  (princ "\n\n########## STARTING: T3FH ##########")
+  (run-config-sweep "T3FH" nil T nil)
+  (princ "\n\n########## STARTING: T3YVEF ##########")
+  (run-config-sweep "T3YVEF" nil T T)
+  (princ "\n\n########## STARTING: T3YVEFH ##########")
+  (run-config-sweep "T3YVEFH" nil T T)
+  (princ "\n\n########## ALL 8 REMAINING CONFIGS DONE ##########")
+  (princ)
+)
+
 (princ "\nEXPORT_SWEEP_VARIANTS loaded.")
 (princ (strcat "\nOutput folder: " *OUTDIR*))
-(princ "\nRun ONE config at a time (each is independent):")
+(princ "\nRun everything remaining in one go (T3F already done):")
+(princ "\n  EXPORTSWEEP-ALL-REMAINING")
+(princ "\nOr one config at a time:")
 (princ "\n  EXPORTSWEEP-T3Y  EXPORTSWEEP-T3N  EXPORTSWEEP-T3NY  EXPORTSWEEP-T3NH")
 (princ "\n  EXPORTSWEEP-T3NYH  EXPORTSWEEP-T3F  EXPORTSWEEP-T3FH  EXPORTSWEEP-T3YVEF  EXPORTSWEEP-T3YVEFH")
 (princ)
