@@ -143,6 +143,22 @@
   )
 )
 
+;; Some configs (anything with a jib/heavy-hook attached) pull in nested
+;; block definitions the plain T3 sweep never touched, which can pop an
+;; extra confirmation prompt (e.g. block-redefinition) WBLOCK's normal
+;; sequence doesn't have - a fixed-length (command ...) arg list runs out
+;; mid-sequence when that happens, leaving the command dangling and every
+;; call after it errors with "bad order function: COMMAND". Flush
+;; whatever's left pending (accepting defaults) instead of assuming a
+;; fixed prompt count.
+(defun flush-pending-command ( / n)
+  (setq n 0)
+  (while (and (> (getvar "CMDACTIVE") 0) (< n 10))
+    (command "")
+    (setq n (1+ n))
+  )
+)
+
 (defun export-current-pose (crane-obj fname / copyobj copyename ss)
   (setq copyobj (vl-catch-all-apply 'vlax-invoke (list crane-obj 'Copy)))
   (if (vl-catch-all-error-p copyobj)
@@ -156,7 +172,9 @@
       (setq ss (ssadd copyename ss))
       (vl-catch-all-apply 'vl-file-delete (list fname))
       (command "_.-wblock" fname "" (list 0.0 0.0 0.0) ss "")
+      (flush-pending-command)
       (vl-catch-all-apply 'command (list "_.erase" ss ""))
+      (flush-pending-command)
       (princ (strcat "\n    -> " fname))
       T
     )
@@ -198,7 +216,7 @@
           (if (not (safe-put visprop config-name "Visibility1"))
             (princ (strcat "\nERROR: could not switch to " config-name ". Aborting this config."))
             (progn
-              (command "_.regen")
+              (progn (command "_.regen") (flush-pending-command))
               (setq total 0) (setq done 0) (setq skipped 0)
 
               ;; ---- pass 1: main boom sweep, jib/guy fixed at reference ----
@@ -207,7 +225,7 @@
               (if has-jib-f (safe-put jfprop (cdr (nth 0 *JIB-F-LENGTHS*)) "ref jib F"))
               (if (or has-jib-n has-jib-f) (safe-put japrop 0.0 "ref jib angle"))
               (if has-guy (safe-put gprop (cdr (nth 0 *GUY-ANGLES*)) "ref guy angle"))
-              (command "_.regen")
+              (progn (command "_.regen") (flush-pending-command))
 
               (foreach len-pair *LENGTHS*
                 (foreach angle-deg *ANGLES-FULL*
@@ -215,7 +233,7 @@
                   (if (and (safe-put lenprop (cdr len-pair) "main length")
                            (safe-put angprop (* angle-deg (/ *PI* 180.0)) "main angle"))
                     (progn
-                      (command "_.regen")
+                      (progn (command "_.regen") (flush-pending-command))
                       (setq fname (strcat *OUTDIR* "pose_" config-name "_L" (car len-pair)
                                            "_A" (itoa (fix angle-deg)) ".dwg"))
                       (if (export-current-pose crane-obj fname) (setq done (1+ done)) (setq skipped (1+ skipped)))
@@ -231,14 +249,14 @@
                   (princ (strcat "\n=== " config-name ": jib N sweep (main boom fixed) ==="))
                   (safe-put lenprop (cdr *REF-LENGTH*) "ref main length")
                   (safe-put angprop (* *REF-ANGLE* (/ *PI* 180.0)) "ref main angle")
-                  (command "_.regen")
+                  (progn (command "_.regen") (flush-pending-command))
                   (foreach jlen-pair *JIB-N-LENGTHS*
                     (foreach angle-deg *JIB-ANGLES*
                       (setq total (1+ total))
                       (if (and (safe-put jnprop (cdr jlen-pair) "jib N length")
                                (safe-put japrop (* angle-deg (/ *PI* 180.0)) "jib angle"))
                         (progn
-                          (command "_.regen")
+                          (progn (command "_.regen") (flush-pending-command))
                           (setq fname (strcat *OUTDIR* "pose_" config-name "_JL" (car jlen-pair)
                                                "_JA" (itoa (fix angle-deg)) ".dwg"))
                           (if (export-current-pose crane-obj fname) (setq done (1+ done)) (setq skipped (1+ skipped)))
@@ -256,14 +274,14 @@
                   (princ (strcat "\n=== " config-name ": jib F sweep (main boom fixed) ==="))
                   (safe-put lenprop (cdr *REF-LENGTH*) "ref main length")
                   (safe-put angprop (* *REF-ANGLE* (/ *PI* 180.0)) "ref main angle")
-                  (command "_.regen")
+                  (progn (command "_.regen") (flush-pending-command))
                   (foreach jlen-pair *JIB-F-LENGTHS*
                     (foreach angle-deg *JIB-ANGLES*
                       (setq total (1+ total))
                       (if (and (safe-put jfprop (cdr jlen-pair) "jib F length")
                                (safe-put japrop (* angle-deg (/ *PI* 180.0)) "jib angle"))
                         (progn
-                          (command "_.regen")
+                          (progn (command "_.regen") (flush-pending-command))
                           (setq fname (strcat *OUTDIR* "pose_" config-name "_JL" (car jlen-pair)
                                                "_JA" (itoa (fix angle-deg)) ".dwg"))
                           (if (export-current-pose crane-obj fname) (setq done (1+ done)) (setq skipped (1+ skipped)))
@@ -281,12 +299,12 @@
                   (princ (strcat "\n=== " config-name ": guy angle sweep (main boom fixed) ==="))
                   (safe-put lenprop (cdr *REF-LENGTH*) "ref main length")
                   (safe-put angprop (* *REF-ANGLE* (/ *PI* 180.0)) "ref main angle")
-                  (command "_.regen")
+                  (progn (command "_.regen") (flush-pending-command))
                   (foreach guy-pair *GUY-ANGLES*
                     (setq total (1+ total))
                     (if (safe-put gprop (cdr guy-pair) "guy angle")
                       (progn
-                        (command "_.regen")
+                        (progn (command "_.regen") (flush-pending-command))
                         (setq fname (strcat *OUTDIR* "pose_" config-name "_G" (car guy-pair) ".dwg"))
                         (if (export-current-pose crane-obj fname) (setq done (1+ done)) (setq skipped (1+ skipped)))
                       )
@@ -304,7 +322,7 @@
               (if (and jfprop orig-jf) (safe-put jfprop orig-jf "restore jib F"))
               (if (and japrop orig-ja) (safe-put japrop orig-ja "restore jib angle"))
               (if (and gprop orig-guy) (safe-put gprop orig-guy "restore guy angle"))
-              (command "_.regen")
+              (progn (command "_.regen") (flush-pending-command))
 
               (princ "\n----------------------------------------")
               (princ (strcat "\n" config-name " done: " (itoa done) " exported, "
