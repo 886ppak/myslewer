@@ -159,7 +159,7 @@
   )
 )
 
-(defun export-current-pose (crane-obj fname / copyobj copyename ss)
+(defun export-current-pose (crane-obj fname / copyobj copyename ss wbresult)
   (setq copyobj (vl-catch-all-apply 'vlax-invoke (list crane-obj 'Copy)))
   (if (vl-catch-all-error-p copyobj)
     (progn
@@ -171,8 +171,23 @@
       (setq ss (ssadd))
       (setq ss (ssadd copyename ss))
       (vl-catch-all-apply 'vl-file-delete (list fname))
-      (command "_.-wblock" fname "" (list 0.0 0.0 0.0) ss "")
+
+      ;; wrap the wblock call itself so a failure INSIDE it (not just a
+      ;; dangling prompt after) can't kill the whole sweep - and print
+      ;; exactly what AutoCAD's command state looks like right after,
+      ;; whether it succeeded or not, so a repeat failure is diagnosable
+      ;; from the log alone instead of needing more manual follow-up.
+      (setq wbresult (vl-catch-all-apply 'command
+                       (list "_.-wblock" fname "" (list 0.0 0.0 0.0) ss "")))
+      (princ (strcat "\n    [diag] CMDACTIVE=" (vl-princ-to-string (getvar "cmdactive"))
+                      " CMDNAMES=\"" (vl-princ-to-string (getvar "cmdnames")) "\""))
+      (if (vl-catch-all-error-p wbresult)
+        (princ (strcat "\n    [diag] wblock command itself errored: "
+                        (vl-catch-all-error-message wbresult)))
+      )
       (flush-pending-command)
+      (princ (strcat "\n    [diag] after flush: CMDACTIVE=" (vl-princ-to-string (getvar "cmdactive"))))
+
       (vl-catch-all-apply 'command (list "_.erase" ss ""))
       (flush-pending-command)
       (princ (strcat "\n    -> " fname))
@@ -236,7 +251,7 @@
                       (progn (command "_.regen") (flush-pending-command))
                       (setq fname (strcat *OUTDIR* "pose_" config-name "_L" (car len-pair)
                                            "_A" (itoa (fix angle-deg)) ".dwg"))
-                      (if (export-current-pose crane-obj fname) (setq done (1+ done)) (setq skipped (1+ skipped)))
+                      (if (vl-catch-all-apply 'export-current-pose (list crane-obj fname)) (setq done (1+ done)) (setq skipped (1+ skipped)))
                     )
                     (setq skipped (1+ skipped))
                   )
@@ -259,7 +274,7 @@
                           (progn (command "_.regen") (flush-pending-command))
                           (setq fname (strcat *OUTDIR* "pose_" config-name "_JL" (car jlen-pair)
                                                "_JA" (itoa (fix angle-deg)) ".dwg"))
-                          (if (export-current-pose crane-obj fname) (setq done (1+ done)) (setq skipped (1+ skipped)))
+                          (if (vl-catch-all-apply 'export-current-pose (list crane-obj fname)) (setq done (1+ done)) (setq skipped (1+ skipped)))
                         )
                         (setq skipped (1+ skipped))
                       )
@@ -284,7 +299,7 @@
                           (progn (command "_.regen") (flush-pending-command))
                           (setq fname (strcat *OUTDIR* "pose_" config-name "_JL" (car jlen-pair)
                                                "_JA" (itoa (fix angle-deg)) ".dwg"))
-                          (if (export-current-pose crane-obj fname) (setq done (1+ done)) (setq skipped (1+ skipped)))
+                          (if (vl-catch-all-apply 'export-current-pose (list crane-obj fname)) (setq done (1+ done)) (setq skipped (1+ skipped)))
                         )
                         (setq skipped (1+ skipped))
                       )
@@ -306,7 +321,7 @@
                       (progn
                         (progn (command "_.regen") (flush-pending-command))
                         (setq fname (strcat *OUTDIR* "pose_" config-name "_G" (car guy-pair) ".dwg"))
-                        (if (export-current-pose crane-obj fname) (setq done (1+ done)) (setq skipped (1+ skipped)))
+                        (if (vl-catch-all-apply 'export-current-pose (list crane-obj fname)) (setq done (1+ done)) (setq skipped (1+ skipped)))
                       )
                       (setq skipped (1+ skipped))
                     )
