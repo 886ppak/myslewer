@@ -318,6 +318,92 @@ that sidesteps this entire class of bug. Wasn't discovered as a cleaner
 alternative until after the raster-sampling approach above was already
 built and working — worth trying FIRST on a future crane.
 
+## Extending to jib-equipped configs (proof-of-concept: T3F)
+
+The pipeline above assumes ONE swept axis-pair (boom length x angle). A
+jib-equipped config (T3F on the LTM 1650) needs a second, independent
+axis-pair (jib length x jib angle), captured via the same decoupled-sweep
+idea used elsewhere in this project: a boom L x A grid with the jib held at
+a fixed reference state, PLUS a jib JL x JA grid with the boom held at a
+fixed reference state (boom angle 30° - the "G30" convention already used
+by this crane's other reference plots). `extract_t3f.py` generalizes
+`extract_all_poses.py`'s per-axis logic into a reusable `extract_grid()`
+function and runs it twice, producing `t3f_poses.json` with independent
+`"boom"` and `"jib"` sections (each with its own palette, pivot, groundY -
+`find_pivot()` applied to the jib's own JA sweep locates the jib's hinge
+point on the boom tip, not the boom's own foot pivot; on this data it fit
+to 0.0mm spread across all 17 jib lengths, tighter even than the boom's own
+0.3mm).
+
+**Does NOT** attempt a full 4-DOF (L, A, JL, JA) combined rig - that would
+require decomposing the jib grid into a local frame relative to the boom
+tip and re-attaching it under the boom's live rotation, not yet built or
+validated. The two grids currently drive two separate diagrams.
+
+### Two new problems this surfaced (neither existed in the boom-only case)
+
+**1. Bbox-ratio calibration can silently be wrong by several percent.**
+The original `sample_wipeout_colors.py`/`fix_dark_gray_shapes.py` approach
+computes `WX0/WX1/WY0/WY1` (a world bbox) and `PX0/PX1/PY0/PY1` (the PDF
+raster's non-white content bbox) and assumes they map onto each other
+directly. On the T3F reference plot this was off by ~4.5% on the aspect
+ratio (1.595 world vs 1.523 pixel) even though the pixel-bbox detection
+itself was clean - no stray content, robust to threshold changes. Root
+cause not fully pinned down (plausibly a hook/rigging element that isn't
+perfectly deterministic between the extracted DXF frame and a fresh live
+plot); rather than chase it, **`solve_calibration.py`** replaces the whole
+bbox-ratio idea with direct optimization: project a known pose's geometry
+under a candidate affine transform, minimize its vertices' distance to the
+nearest ink pixel (via a distance-transform of the raster's non-white
+mask, scipy Nelder-Mead over `sx, sy, ox, oy`). Cut mean misalignment by
+~6x here and produced a pixel-perfect overlay (verify with the
+`calibration_overlay.png` it saves - don't trust the optimizer blindly,
+same rule as everything else in this pipeline). **Use this for any future
+crane instead of the bbox-ratio method** - it needs no manually-read pixel
+coordinates at all, just one already-known pose's geometry and its plot.
+
+**2. WIPEOUT (P-kind) shape count isn't always constant across an axis.**
+The whole color-patch method assumes a fixed shape count/order across
+every value of the swept axis, verified true for the boom-only case (P-kind
+count was constant at every catalog length) - but on T3F's jib axis, P-kind
+count GROWS with jib length (334 at JL=6.0 up to 366 at JL=41.0) because
+longer jibs deploy more lattice-section decal panels, and the extra
+entries are inserted throughout the list, not appended at the end (checked
+via common-prefix length - diverges around index ~2810 out of 3385, well
+before the list ends). Index-based patching breaks here.
+
+Fix (`calibrate_t3f.py` + `apply_t3f_colors.py`): sample colors from ONE
+reference plot (any jib length works - `pose_T3F_JL6.0_JA0` was used here,
+the shortest, which happens to carry exactly the "base" 334-shape set
+common to every other length too, boom grid included - confirmed by diff,
+0 kind-mismatches for the boom grid and the five jib lengths that also
+have exactly 334 P-shapes). For lengths whose header list doesn't match
+1:1, `difflib.SequenceMatcher` on `(kind, pointcount)` tuples aligns each
+length's list against the base: matched runs inherit the base's sampled
+color, and any genuinely-new (inserted) entries fall back to their nearest
+matched neighbor's color. On this data that covered 8-32 unresolved
+shapes per length (out of 3385+), all successfully filled via a neighbor -
+**that fallback is a reasonable approximation for repeated decal-type
+panels, not verified pixel ground truth** (no reference plot shows a
+longer jib yet). Get a second reference plot at a longer jib length if
+per-shape accuracy on those extra panels matters before publishing.
+
+### Files added for this
+
+- `extract_t3f.py` - generalizes `extract_all_poses.py` into a reusable
+  `extract_grid()`, run twice (boom axis, jib axis) into one
+  `t3f_poses.json` with `"boom"`/`"jib"` sections
+- `solve_calibration.py` - direct-optimization world-to-pixel calibration
+  (see problem 1 above); reusable for any future crane's reference plot,
+  supersedes the bbox-ratio approach in `sample_wipeout_colors.py`
+- `calibrate_t3f.py` - samples P-kind + dark-gray-fixed F-kind colors from
+  the reference pose's own 334-shape base list (combines what
+  `sample_wipeout_colors.py` + `fix_dark_gray_shapes.py` did separately)
+- `apply_t3f_colors.py` - patches `t3f_poses.json`'s boom section directly
+  by index, and the jib section via direct index (where the header list
+  matches 1:1) or diff-alignment + nearest-neighbor fallback (see problem
+  2 above)
+
 ## Verification checklist before publishing
 
 Take screenshots (Playwright/headless Chromium against the built HTML
