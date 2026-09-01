@@ -14479,3 +14479,89 @@ cranes get their own subsections as they're built.
   No CACHE_VERSION/app-version bump - this is documentation/tooling
   under cad/, not part of the served app shell (index.html/sw.js
   untouched).
+
+
+152. Boom rig: added a building-clearance check, then generalized the
+     whole pipeline (auto pivot/ground detection) so it carries over to
+     future crane imports without hand-editing
+
+  Person, happy with the LTM 1650 boom rig from 151, asked for a new
+  capability on the same diagram: given a building's height and how far
+  back the crane sits from it, tell them the boom-down limit (minimum
+  safe angle before the boom line fouls the building) and the working
+  radius that limit gives - then wanted "the same kind of ideology"
+  generalized so it isn't hand-tuned to just this one crane, since more
+  crane models (and boom configs - T3N/T3Y, attachments) are still to
+  come through this pipeline.
+
+  Solving the clearance math needed the boom's actual pivot (foot pin)
+  location and height above ground - not documented anywhere, not asked
+  for from the person. Derived both directly from the already-extracted
+  CAD data instead: every point on the rotating boom traces a circle
+  centred on the pivot across the 9 captured angles, so circle-fitting
+  the boom tip's arc (least squares) gives the pivot; done independently
+  for all 10 catalog lengths and cross-checked against each other -
+  agreed to within 0.3mm using full-precision coordinates, confirming
+  it's the genuine mechanical pivot and not a fluke of one pose. Ground
+  level found the same evidence-based way: the single dominant cluster
+  of wheel-bottom vertices (every wheel's ground-tangent point repeats
+  at the same Y) versus a handful of scattered low outliers elsewhere
+  (outrigger pad marks, etc). First attempt at the ground-cluster window
+  (a % of the full multi-length Y range) pulled in unrelated upper-
+  vehicle geometry once a long boom's near-vertical pose entered the mix
+  and gave a visibly-too-high pivot; fixed by using one length's own
+  geometry with a fixed few-metre window above its lowest point instead.
+
+  Built the clearance panel (adjustable building height + standoff
+  distance sliders, live boom-down-limit/radius/CLEAR-FOULING readout,
+  building block drawn in the SVG) first against hardcoded LTM-1650-
+  specific pivot constants to prove the math and UI worked - verified
+  against hand-checked trig (16.6m boom at 40 degrees gives exactly
+  16.6*cos(40) = 12.7m radius; a 10m building at 10m standoff gives
+  exactly atan((10-3.9)/10) = 31.4 degrees) and the visual fouling state
+  (boom line visibly punching through the building block below the
+  critical angle, status pill flipping red). Deliberately did NOT commit
+  that hardcoded version into the saved pipeline - folding crane-
+  specific constants into a file documented as "reusable for any crane"
+  would have been misleading.
+
+  Once the person asked to generalize it for future crane imports,
+  moved the pivot/ground detection INTO extract_all_poses.py itself
+  (find_pivot()/find_ground_y(), auto-run at the end of extraction,
+  embedded as data.pivot/data.groundY) and rewired rig_template.html to
+  read those from the data payload instead of hardcoded numbers - so the
+  building-clearance panel now carries over automatically to whatever
+  crane's all_poses.json gets loaded, no re-deriving needed per crane.
+
+  Verifying this generalization by fully re-running the pipeline from
+  the raw DXFs surfaced a real bug: a clean re-extraction (only meant to
+  pick up pivot/ground detection) silently reproduced the pre-151-fix,
+  wrong-color render. Root cause: the two color patches from 151 (real
+  WIPEOUT colors sampled from a reference PDF, then a stroke-geometry-
+  aware fix for shapes miscolored dark-gray) live in separate JSON files
+  applied as a post-process step, not inside extract_all_poses.py - so
+  they don't survive a re-extraction, they have to be explicitly re-run
+  and re-applied every time. A second, subtler bug surfaced fixing that:
+  fix_dark_gray_shapes.py has to run AFTER the wipeout patch is already
+  applied to the file, not before - a pristine extraction resolves
+  WIPEOUT shapes to ezdxf's background-color placeholder rather than a
+  real color, so scanning for "colored dark-gray but should be yellow"
+  against still-pristine data finds almost nothing (checked 1 candidate,
+  0 changes, versus 19 real fixes once run in the correct order). Wrote
+  apply_color_patches.py to enforce this: takes an explicit `wipeout` or
+  `darkgray` argument rather than doing both at once, so the two-stage
+  dependency can't silently be run out of order again. Confirmed the
+  corrected sequence reproduces the exact same 19-shape fix and renders
+  identically to the hand-verified version.
+
+  Published the fully-reproduced, pipeline-only build to the same
+  artifact URL as a final check that "commit to the repo" and "what's
+  actually live" agree bit for bit. Committed extract_all_poses.py
+  (pivot/ground detection), rig_template.html (building-clearance panel,
+  now data-driven), sample_wipeout_colors.py and apply_color_patches.py
+  (previously undocumented/unsaved steps from 151 - now part of the
+  saved pipeline), and an expanded README documenting the required
+  color-patch order and the two bugs found verifying it.
+
+  No CACHE_VERSION/app-version bump - same as 151, this is
+  documentation/tooling under cad/, not part of the served app shell.

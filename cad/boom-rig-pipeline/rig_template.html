@@ -85,6 +85,36 @@
     line-height: 1.5;
   }
   .panel b { color: var(--text-main); }
+  .section-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-top: 1px solid var(--border-color);
+    padding-top: 12px;
+    margin-top: 2px;
+  }
+  .clearance-readout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    font-size: 0.8rem;
+  }
+  .clearance-readout .stat { display: flex; flex-direction: column; gap: 2px; }
+  .clearance-readout .stat-label { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .clearance-readout .stat-value { font-variant-numeric: tabular-nums; font-size: 1rem; }
+  .status-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .status-clear { background: rgba(52,199,89,0.18); color: #34c759; }
+  .status-foul { background: rgba(255,69,58,0.18); color: #ff453a; }
+  .status-unreachable { background: rgba(156,163,175,0.18); color: var(--text-muted); }
 </style>
 
 <header>
@@ -93,7 +123,12 @@
 </header>
 
 <div class="stage">
-  <svg id="rig-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  <svg id="rig-svg" xmlns="http://www.w3.org/2000/svg">
+    <rect id="bldg-rect" fill="#c4553b" fill-opacity="0.55" stroke="#8a3826" stroke-width="30"></rect>
+    <g id="boom-group"></g>
+    <line id="clearance-line" stroke-width="60" stroke-linecap="round"></line>
+    <circle id="pivot-marker" r="140" fill="#38bdf8"></circle>
+  </svg>
   <div id="status">Loading...</div>
 </div>
 
@@ -111,6 +146,47 @@
   <div class="panel">
     <b>Source:</b> Liebherr LTM 1650-8.1 dynamic block, T3 (3-section boom) configuration, main boom only &mdash; no jib/fly-jib. Length list from the block's own <code>&#1057;&#1090;&#1088;&#1077;&#1083;&#1072; T3</code> lookup parameter.
   </div>
+
+  <div class="section-label">Building clearance check</div>
+  <div class="control-row">
+    <label for="bldg-height-slider">Building height</label>
+    <input type="range" id="bldg-height-slider" min="0" max="50" step="0.5" value="10">
+    <span class="value-badge" id="bldg-height-badge">10.0 m</span>
+  </div>
+  <div class="control-row">
+    <label for="bldg-dist-slider">Standoff distance</label>
+    <input type="range" id="bldg-dist-slider" min="1" max="60" step="0.5" value="10">
+    <span class="value-badge" id="bldg-dist-badge">10.0 m</span>
+  </div>
+  <div class="clearance-readout">
+    <div class="stat">
+      <span class="stat-label">Boom-down limit</span>
+      <span class="stat-value" id="critical-angle-value">&mdash;</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Radius at that limit</span>
+      <span class="stat-value" id="critical-radius-value">&mdash;</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Current radius</span>
+      <span class="stat-value" id="current-radius-value">&mdash;</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Current angle status</span>
+      <span class="stat-value"><span class="status-pill" id="clearance-status">&mdash;</span></span>
+    </div>
+  </div>
+  <div class="panel">
+    Boom-only clearance (the boom's own pivot&rarr;tip line, not hook/rope
+    sag). Standoff distance and radius are both measured from the boom's
+    slew pivot &mdash; read straight out of the dataset's own <code>pivot</code>/
+    <code>groundY</code> fields (circle-fit to the boom tip's arc across the
+    captured angle sweep by <code>extract_all_poses.py</code>'s
+    <code>find_pivot()</code>, cross-checked across every catalog length at
+    build time), so this panel carries over automatically to any future
+    crane run through the same pipeline. Pivot height above ground &asymp;
+    <b id="pivot-height-label"></b> m for this crane.
+  </div>
 </div>
 
 <script>
@@ -118,15 +194,45 @@
   const DATA = window.__RIG_DATA__;
   const statusEl = document.getElementById('status');
   const svg = document.getElementById('rig-svg');
+  const boomGroup = document.getElementById('boom-group');
   const lengthSelect = document.getElementById('length-select');
   const lengthBadge = document.getElementById('length-badge');
   const angleSlider = document.getElementById('angle-slider');
   const angleBadge = document.getElementById('angle-badge');
+  const bldgHeightSlider = document.getElementById('bldg-height-slider');
+  const bldgHeightBadge = document.getElementById('bldg-height-badge');
+  const bldgDistSlider = document.getElementById('bldg-dist-slider');
+  const bldgDistBadge = document.getElementById('bldg-dist-badge');
+  const bldgRect = document.getElementById('bldg-rect');
+  const clearanceLine = document.getElementById('clearance-line');
+  const pivotMarker = document.getElementById('pivot-marker');
+  const criticalAngleValue = document.getElementById('critical-angle-value');
+  const criticalRadiusValue = document.getElementById('critical-radius-value');
+  const currentRadiusValue = document.getElementById('current-radius-value');
+  const clearanceStatus = document.getElementById('clearance-status');
+  const pivotHeightLabel = document.getElementById('pivot-height-label');
 
   const LENGTH_ORDER = ["16.6","22.4","28.2","33.9","39.7","45.3","51.0","52.0","53.0","54.0"];
   const ANGLES = DATA.angles; // [0,10,...,80]
   const PALETTE = DATA.palette;
   const OFFX = DATA.offx, OFFY = DATA.offy, SCALE = DATA.scale;
+
+  // Boom pivot (foot pin) and ground level, in the same world-mm space as
+  // everything else - computed by extract_all_poses.py's find_pivot()/
+  // find_ground_y() at build time from this crane's own data (circle-fit
+  // to the boom tip's arc across the captured angle sweep, cross-checked
+  // across every catalog length), not hardcoded per crane. Older datasets
+  // built before this existed won't have these fields - fall back to
+  // something visibly wrong rather than silently mis-locating the pivot.
+  const PIVOT_X_MM = DATA.pivot ? DATA.pivot.x : 0;
+  const PIVOT_Y_MM = DATA.pivot ? DATA.pivot.y : 0;
+  const GROUND_Y_MM = DATA.groundY != null ? DATA.groundY : 0;
+  const HAS_PIVOT = !!DATA.pivot && DATA.groundY != null;
+  const PIVOT_HEIGHT_M = (PIVOT_Y_MM - GROUND_Y_MM) / 1000;
+  const BUILDING_WIDTH_MM = 4000;
+  const MAX_CAPTURED_ANGLE = ANGLES[ANGLES.length - 1];
+
+  pivotHeightLabel.textContent = HAS_PIVOT ? PIVOT_HEIGHT_M.toFixed(1) : '?';
 
   function dequant(v, off) {
     return v * SCALE + off;
@@ -170,7 +276,7 @@
 
   function buildElementsForLength(L) {
     currentLengthData = getLengthData(L);
-    svg.innerHTML = '';
+    boomGroup.innerHTML = '';
     elements = [];
     const frag = document.createDocumentFragment();
     for (const p of currentLengthData.paths) {
@@ -197,7 +303,7 @@
       frag.appendChild(el);
       elements.push(el);
     }
-    svg.appendChild(frag);
+    boomGroup.appendChild(frag);
   }
 
   function updateAngle(angleDeg) {
@@ -233,21 +339,109 @@
     }
   }
 
+  // Boom-only building clearance: the straight pivot->tip line has to stay
+  // above the building's near-top corner. tan(criticalAngle) = (building
+  // height - pivot height) / standoff distance; below that angle the boom
+  // line dips under the building at the building's own distance out.
+  function computeClearance(buildingHeightM, standoffM, boomLenM) {
+    if (!(standoffM > 0)) return { valid: false };
+    const neededTan = (buildingHeightM - PIVOT_HEIGHT_M) / standoffM;
+    const criticalAngleDeg = Math.max(0, Math.atan(neededTan) * 180 / Math.PI);
+    const radiusAtCriticalM = boomLenM * Math.cos(criticalAngleDeg * Math.PI / 180);
+    const outOfReach = standoffM > boomLenM;
+    const extrapolated = criticalAngleDeg > MAX_CAPTURED_ANGLE;
+    return { valid: true, criticalAngleDeg, radiusAtCriticalM, outOfReach, extrapolated };
+  }
+
+  function updateClearance() {
+    if (!HAS_PIVOT) return;
+    const boomLenM = parseFloat(lengthSelect.value);
+    const angleDeg = parseFloat(angleSlider.value);
+    const buildingHeightM = parseFloat(bldgHeightSlider.value);
+    const standoffM = parseFloat(bldgDistSlider.value);
+
+    const currentRadiusM = boomLenM * Math.cos(angleDeg * Math.PI / 180);
+    currentRadiusValue.textContent = currentRadiusM.toFixed(1) + ' m';
+
+    const c = computeClearance(buildingHeightM, standoffM, boomLenM);
+    if (!c.valid) {
+      criticalAngleValue.textContent = '—';
+      criticalRadiusValue.textContent = '—';
+      clearanceStatus.textContent = '—';
+      clearanceStatus.className = 'status-pill';
+    } else if (c.outOfReach) {
+      criticalAngleValue.textContent = '—';
+      criticalRadiusValue.textContent = 'beyond reach';
+      clearanceStatus.textContent = 'OUT OF REACH';
+      clearanceStatus.className = 'status-pill status-unreachable';
+    } else {
+      criticalAngleValue.textContent = c.criticalAngleDeg.toFixed(1) + '°' + (c.extrapolated ? ' *' : '');
+      criticalRadiusValue.textContent = c.radiusAtCriticalM.toFixed(1) + ' m';
+      const clear = angleDeg >= c.criticalAngleDeg;
+      clearanceStatus.textContent = clear ? 'CLEAR' : 'FOULING';
+      clearanceStatus.className = 'status-pill ' + (clear ? 'status-clear' : 'status-foul');
+    }
+
+    // building block
+    const bx = PIVOT_X_MM + standoffM * 1000;
+    const bh = Math.max(0, buildingHeightM * 1000);
+    const topSvgY = -(GROUND_Y_MM + bh);
+    bldgRect.setAttribute('x', bx.toFixed(0));
+    bldgRect.setAttribute('y', topSvgY.toFixed(0));
+    bldgRect.setAttribute('width', BUILDING_WIDTH_MM.toFixed(0));
+    bldgRect.setAttribute('height', bh.toFixed(0));
+
+    // reference line from pivot to the current tip (trig, matches the
+    // catalog boom length + current angle - not the raw extracted geometry,
+    // just a clean visual indicator of what's being checked)
+    const rad = angleDeg * Math.PI / 180;
+    const tipX = PIVOT_X_MM + boomLenM * 1000 * Math.cos(rad);
+    const tipY = PIVOT_Y_MM + boomLenM * 1000 * Math.sin(rad);
+    clearanceLine.setAttribute('x1', PIVOT_X_MM.toFixed(0));
+    clearanceLine.setAttribute('y1', (-PIVOT_Y_MM).toFixed(0));
+    clearanceLine.setAttribute('x2', tipX.toFixed(0));
+    clearanceLine.setAttribute('y2', (-tipY).toFixed(0));
+    const lineColor = !c.valid ? '#9ca3af' : c.outOfReach ? '#9ca3af' : (angleDeg >= c.criticalAngleDeg ? '#34c759' : '#ff453a');
+    clearanceLine.setAttribute('stroke', lineColor);
+    clearanceLine.setAttribute('stroke-opacity', '0.85');
+
+    pivotMarker.setAttribute('cx', PIVOT_X_MM.toFixed(0));
+    pivotMarker.setAttribute('cy', (-PIVOT_Y_MM).toFixed(0));
+  }
+
+  function updateViewBox() {
+    const L = lengthSelect.value;
+    const bbox = DATA.lengths[L].bbox;
+    let minx = bbox.minx, maxx = bbox.maxx, miny = bbox.miny, maxy = bbox.maxy;
+
+    if (HAS_PIVOT) {
+      const standoffM = parseFloat(bldgDistSlider.value);
+      const buildingHeightM = parseFloat(bldgHeightSlider.value);
+      const bldgMaxX = PIVOT_X_MM + standoffM * 1000 + BUILDING_WIDTH_MM;
+      const bldgMaxY = GROUND_Y_MM + buildingHeightM * 1000;
+      minx = Math.min(minx, PIVOT_X_MM);
+      maxx = Math.max(maxx, bldgMaxX);
+      miny = Math.min(miny, GROUND_Y_MM);
+      maxy = Math.max(maxy, bldgMaxY);
+    }
+
+    const pad = 2500;
+    const vb = [
+      minx - pad,
+      -maxy - pad,
+      (maxx - minx) + 2 * pad,
+      (maxy - miny) + 2 * pad,
+    ];
+    svg.setAttribute('viewBox', vb.join(' '));
+  }
+
   function setLength(L) {
     buildElementsForLength(L);
     updateAngle(parseFloat(angleSlider.value));
     lengthBadge.textContent = L + ' m';
     statusEl.textContent = 'Length ' + L + 'm · ' + currentLengthData.paths.length + ' paths';
-
-    const bbox = DATA.lengths[L].bbox;
-    const pad = 2500;
-    const vb = [
-      bbox.minx - pad,
-      -bbox.maxy - pad,
-      (bbox.maxx - bbox.minx) + 2 * pad,
-      (bbox.maxy - bbox.miny) + 2 * pad,
-    ];
-    svg.setAttribute('viewBox', vb.join(' '));
+    updateClearance();
+    updateViewBox();
   }
 
   // populate length dropdown
@@ -264,6 +458,18 @@
     const a = parseFloat(angleSlider.value);
     angleBadge.textContent = a.toFixed(0) + '°';
     updateAngle(a);
+    updateClearance();
+    updateViewBox();
+  });
+  bldgHeightSlider.addEventListener('input', () => {
+    bldgHeightBadge.textContent = parseFloat(bldgHeightSlider.value).toFixed(1) + ' m';
+    updateClearance();
+    updateViewBox();
+  });
+  bldgDistSlider.addEventListener('input', () => {
+    bldgDistBadge.textContent = parseFloat(bldgDistSlider.value).toFixed(1) + ' m';
+    updateClearance();
+    updateViewBox();
   });
 
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
@@ -272,5 +478,7 @@
   angleSlider.value = "40";
   angleBadge.textContent = "40°";
   updateAngle(40);
+  updateClearance();
+  updateViewBox();
 })();
 </script>

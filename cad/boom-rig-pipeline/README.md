@@ -22,11 +22,25 @@ AutoCAD dynamic block (.dwg)
   -> N x M pose .dwg files (N lengths x M angles)
   -> ODA File Converter -> .dxf (ASCII, same version)
   -> extract_all_poses.py (ezdxf, on this side)
+     - also derives the boom's pivot point + ground level directly from
+       the geometry (find_pivot() / find_ground_y()) and embeds them
   -> all_poses.json (Uint16-quantized, base64-packed, one blob for
-     every pose)
+     every pose - pristine colors at this point, see step 5 below)
+  -> sample_wipeout_colors.py -> apply_color_patches.py wipeout
+     -> fix_dark_gray_shapes.py -> apply_color_patches.py darkgray
+     - REQUIRED, exact order matters - see "Two root-cause bugs" below
   -> rig_template.html (+ window.__RIG_DATA__ = all_poses.json)
   -> published as a Claude Artifact / dropped into the app
 ```
+
+**Re-running `extract_all_poses.py` overwrites `all_poses.json` from
+scratch, including any color patches already applied to it** - the color
+step (5, below) has to be re-run every time, it does not "stick" through
+a re-extraction. This bit once already in this project: a clean
+re-extraction (only to pick up pivot/ground detection, nothing color-
+related) silently regenerated the pre-bug-2-fix, wrong-color dataset,
+because the color patches live in separate JSON files applied as a
+post-process, not in `extract_all_poses.py` itself.
 
 ### 1. `export_sweep.lsp` — run inside AutoCAD LT, by the person, not Claude
 
@@ -93,8 +107,8 @@ different lookup state) are in play and need to be scoped out before
 this approach works at all.
 
 Output format (`all_poses.json`): a shared color palette (list of hex
-strings, deduplicated across all poses), plus one entry per length
-containing:
+strings, deduplicated across all poses), a `pivot: {x, y}` + `groundY`
+(world-mm, see below), plus one entry per length containing:
 - `h`: header list, one `[kind, paletteColorIndex, pointCount]` per path,
   in the SAME order for every length (this stability is what lets a
   color patch keyed by index apply across all lengths at once — see
@@ -105,13 +119,72 @@ containing:
   a diagram, and keeps the whole 90-pose set well under a browser tab's
   reasonable memory/network budget)
 
-### 4. `rig_template.html` — the interpolating SVG rig
+**Pivot and ground detection** (`find_pivot()` / `find_ground_y()`, run
+automatically at the end of `main()`): locates the boom's mechanical
+pivot (foot pin) and ground level directly from the extracted geometry,
+no manual measurement or per-crane constants needed.
+
+- *Pivot*: every point on the rotating boom traces a circle centred on
+  the pivot as it sweeps through the 9 captured angles. For each length
+  independently, the vertex that moved the most between the first and
+  last angle frame (a reliable "something out near the boom tip, far
+  from the pivot" proxy) gets its 9-angle arc least-squares circle-fit.
+  The fitted centre is then cross-checked across all N catalog lengths -
+  a genuine mechanical pivot doesn't move with boom length, so if the
+  fits disagree by more than ~200mm the script prints a warning (wrong
+  landmark picked, or this crane's block has some other part - a jib,
+  say - animated across the same angle sweep, confusing the heuristic).
+  On the LTM 1650 data this agreed to within 0.3mm across all 10
+  lengths using the full-precision (pre-quantization) coordinates.
+- *Ground*: the single largest cluster of vertices within a few metres
+  of the drawing's lowest point - every wheel's tangent-to-ground point
+  repeats at the same Y, so that cluster dwarfs any other low-lying
+  detail (an outrigger pad mark, a dimension tick). Deliberately scoped
+  to ONE length's own geometry with a fixed absolute window (not a
+  percentage of the full multi-length Y range, which pulls in unrelated
+  upper-vehicle geometry once a long boom's near-vertical pose is in the
+  mix - this was tried and produced a visibly wrong, too-high pivot
+  height until narrowed down).
+
+### 4. Color patches — REQUIRED, run every time after extraction
+
+`all_poses.json` fresh out of `extract_all_poses.py` has wrong colors
+(see "Two root-cause bugs" below, bug 2). Run in EXACTLY this order —
+`fix_dark_gray_shapes.py` has to run after the wipeout patch is already
+applied to the file, not before (a pristine extraction resolves WIPEOUT
+shapes to ezdxf's background-color placeholder, not a real color, so
+scanning for "colored dark-gray but should be yellow" against still-
+pristine data finds almost nothing — hit this once already, see
+`apply_color_patches.py`'s own docstring):
+```
+python3 sample_wipeout_colors.py        # writes wipeout_colors.json
+python3 apply_color_patches.py wipeout  # patches P-kind colors in
+python3 fix_dark_gray_shapes.py         # writes dark_gray_fix.json - now sees real P-kind colors
+python3 apply_color_patches.py darkgray # patches the dark-gray-fix shapes in
+```
+Both sampling scripts need their `PDF_PNG` reference image and
+`WX0/WX1/WY0/WY1/PX0/PX1/PY0/PY1` calibration constants updated for the
+new crane's own reference plot first — see bug 2 below for how those are
+derived, and each script's own docstring.
+
+### 5. `rig_template.html` — the interpolating SVG rig + building clearance
 
 Vanilla JS, no dependencies. Decodes one length's `Uint16Array` blob
 lazily, builds one `<polygon>`/`<polyline>` per path once per length
 selection, and on angle change just linearly interpolates each vertex
 between the two bracketing captured angle samples (10° spacing here) and
 rewrites `points`. Cheap enough to run on every slider `input` event.
+
+Also includes a built-in **building clearance check**: adjustable
+building height and standoff-distance sliders, with a live readout of
+the minimum safe boom-down angle before the boom's pivot→tip line fouls
+the building (`tan(criticalAngle) = (buildingHeight - pivotHeight) /
+standoff`) and the working radius that angle gives you, plus the current
+radius and a CLEAR/FOULING status that tracks the live angle slider.
+Boom-only clearance (the boom structure itself, not hook/rope sag under
+load). Entirely driven by `DATA.pivot`/`DATA.groundY` from step 3 above
+— no crane-specific constants in the template itself, so this carries
+over automatically to whatever crane's `all_poses.json` gets loaded.
 
 To use for a new crane: run the pipeline above to get a new
 `all_poses.json`, then inject it before this template's IIFE:
@@ -259,20 +332,34 @@ and angle `<input type=range>` via `dispatchEvent`) at:
 ## Files in this folder
 
 - `export_sweep.lsp` — AutoLISP, run by the user inside AutoCAD LT
-- `extract_all_poses.py` — DXF -> `all_poses.json`, run with ezdxf
-  installed, from a directory containing a `poses/` subfolder of
-  `pose_L{length}_A{angle}.dxf` files
+- `extract_all_poses.py` — DXF -> `all_poses.json`, run with ezdxf and
+  numpy installed, from a directory containing a `poses/` subfolder of
+  `pose_L{length}_A{angle}.dxf` files. Also derives and embeds
+  `pivot`/`groundY` automatically (see "Pivot and ground detection"
+  above) — no manual measurement needed per crane.
+- `sample_wipeout_colors.py` — samples real WIPEOUT (P-kind) colors from
+  a reference AutoCAD PDF plot; calibration constants (`WX0/WX1/WY0/WY1/
+  PX0/PX1/PY0/PY1`, `PDF_PNG`) are specific to the LTM 1650 reference
+  plot used here and need recalibrating per crane (compute from the
+  reference PDF's non-white content bbox vs. the known world-space bbox
+  of the same pose)
 - `fix_dark_gray_shapes.py` — reference implementation of the stroke-
-  aware color-correction pass (bug 2 above); calibration constants
-  (`WX0/WX1/WY0/WY1/PX0/PX1/PY0/PY1`, `PDF_PNG`) are specific to the
-  LTM 1650 reference plot used here and need recalibrating per crane
-  (compute from the reference PDF's non-white content bbox vs. the
-  known world-space bbox of the same pose)
-- `rig_template.html` — the reusable rig shell, z-order fix already
-  applied; inject a new `all_poses.json` as `window.__RIG_DATA__` and
-  update `LENGTH_ORDER` to build a rig for a different crane
+  aware color-correction pass (bug 2 above); same per-crane calibration
+  constants as above, MUST be run after the wipeout patch is applied
+  (see "Color patches" above for why)
+- `apply_color_patches.py` — applies the two sampling scripts' output
+  (`wipeout_colors.json`, `dark_gray_fix.json`) into `all_poses.json`;
+  takes a `wipeout` or `darkgray` argument, run in that order with the
+  sampling scripts interleaved, never both at once
+- `rig_template.html` — the reusable rig shell: z-order fix and the
+  building-clearance feature both already applied, both driven by
+  `DATA.pivot`/`DATA.groundY`/`DATA.lengths[L].bbox` rather than
+  hardcoded constants. Inject a new `all_poses.json` as
+  `window.__RIG_DATA__` and update `LENGTH_ORDER` to build a rig for a
+  different crane — everything else carries over automatically.
 
 The actual LTM 1650 `all_poses.json` (~11.5MB) and its 90 source
 DXF/pose files are not committed here — regenerate from the pipeline
-above if needed, or pull the live version straight from the published
-artifact.
+above if needed (verified byte-reproducible end to end, given the same
+source DXFs and reference PDF), or pull the live version straight from
+the published artifact.

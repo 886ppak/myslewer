@@ -1,4 +1,5 @@
 import ezdxf, math, json, struct, base64, sys
+import numpy as np
 from ezdxf.addons.drawing.recorder import Recorder
 from ezdxf.addons.drawing import RenderContext, Frontend
 
@@ -99,6 +100,107 @@ def extract_pose_raw(fname):
     return items
 
 
+def circle_fit(pts):
+    """Kasa least-squares circle fit. pts: [(x,y),...]. Returns (cx,cy,r,residuals)."""
+    x = np.array([p[0] for p in pts]); y = np.array([p[1] for p in pts])
+    A = np.c_[2 * x, 2 * y, np.ones(len(x))]
+    b = x ** 2 + y ** 2
+    sol, *_ = np.linalg.lstsq(A, b, rcond=None)
+    cx, cy, c = sol
+    r = math.sqrt(c + cx ** 2 + cy ** 2)
+    resid = [math.hypot(px - cx, py - cy) - r for px, py in pts]
+    return cx, cy, r, resid
+
+
+def find_pivot(all_length_data, LENGTHS):
+    """Locate the boom's mechanical pivot (foot pin) directly from the
+    data: every point ON the rotating boom traces a circle centred on the
+    pivot as it sweeps through the captured angles, so track whichever
+    vertex moves the most between the first and last angle frame (a
+    reliable proxy for "something out near the boom tip, far from the
+    pivot") and least-squares circle-fit its 9-angle arc. Repeated
+    independently for every catalog length and cross-checked against each
+    other - real mechanical pivots don't move with boom length, so if the
+    fitted centre doesn't agree to within a few mm across all lengths,
+    something is wrong (wrong landmark picked, or this crane's block has
+    some other animated part sharing the angle sweep)."""
+    fits = []
+    for L in LENGTHS:
+        paths = all_length_data[L]
+        best = None
+        for p in paths:
+            frames = p["f"]
+            n = len(frames[0])
+            for vi in range(n):
+                x0, y0 = frames[0][vi]
+                x8, y8 = frames[-1][vi]
+                d = (x0 - x8) ** 2 + (y0 - y8) ** 2
+                if best is None or d > best[0]:
+                    best = (d, p, vi)
+        _, p, vi = best
+        arc = [tuple(frame[vi]) for frame in p["f"]]
+        cx, cy, r, resid = circle_fit(arc)
+        fits.append((L, cx, cy, r, max(abs(v) for v in resid)))
+
+    xs = [f[1] for f in fits]; ys = [f[2] for f in fits]
+    pivot_x = sum(xs) / len(xs); pivot_y = sum(ys) / len(ys)
+    spread_x = max(xs) - min(xs); spread_y = max(ys) - min(ys)
+
+    print("\nPivot fit per length:", file=sys.stderr)
+    for L, cx, cy, r, maxresid in fits:
+        try:
+            expect_r = float(L) * 1000
+        except ValueError:
+            expect_r = float("nan")
+        print(f"  L={L:>6}  pivot=({cx:9.1f},{cy:8.1f})  r={r:9.1f} (expect~{expect_r:.0f})  "
+              f"max|residual|={maxresid:.2f}mm", file=sys.stderr)
+    print(f"  averaged pivot=({pivot_x:.1f},{pivot_y:.1f})  "
+          f"spread=({spread_x:.1f},{spread_y:.1f})mm across {len(LENGTHS)} lengths", file=sys.stderr)
+    if spread_x > 200 or spread_y > 200:
+        print("  WARNING: pivot fit disagrees by >200mm across lengths - verify the "
+              "landmark-selection heuristic actually picked a genuine boom-tip point at "
+              "every length (an animated jib/attachment sharing the same angle sweep could "
+              "throw this off) before trusting DATA.pivot downstream.", file=sys.stderr)
+
+    return pivot_x, pivot_y
+
+
+def find_ground_y(all_length_data, LENGTHS):
+    """Ground level = wherever the single largest cluster of vertices sits
+    near the bottom of the drawing - every wheel's tangent-to-ground point
+    repeats at the same Y, so that cluster dwarfs any other low point
+    (an outrigger pad mark, a dimension tick, etc). Much more reliable
+    than trusting the raw minimum Y in the drawing, which usually belongs
+    to one of those isolated low details instead of genuine ground
+    contact."""
+    # Chassis/wheel geometry is static across boom length, so one length's
+    # frame-0 vertices are enough - no need to aggregate all of them (and
+    # aggregating would also mean the window below has to account for
+    # wildly different per-length Y ranges, which is what actually caused
+    # this to misfire in testing: a window sized as a % of the full
+    # multi-length Y range pulled in unrelated upper-vehicle geometry).
+    # A crane's lowest drawn point is always at or extremely close to
+    # actual ground contact (a wheel, or at worst an outrigger pad a
+    # little below it) - so a fixed, generous few-metre window above
+    # the drawing's own minimum Y reliably brackets "near ground" without
+    # needing to know anything about this crane's actual scale.
+    L0 = LENGTHS[0]
+    all_y = [y for p in all_length_data[L0] for x, y in p["f"][0]]
+    all_y.sort()
+    WINDOW_MM = 3000
+    cutoff = all_y[0] + WINDOW_MM
+    low_y = [y for y in all_y if y <= cutoff]
+    if not low_y:
+        return all_y[0]
+    hist, edges = np.histogram(low_y, bins=60)
+    peak_i = int(np.argmax(hist))
+    ground_y = (edges[peak_i] + edges[peak_i + 1]) / 2
+    print(f"\nGround level: y={ground_y:.1f}  (peak histogram bin within {WINDOW_MM}mm of the "
+          f"drawing's lowest point, {hist[peak_i]} vertices, vs drawing minimum {all_y[0]:.1f})",
+          file=sys.stderr)
+    return ground_y
+
+
 def main():
     all_length_data = {}
     palette = []
@@ -197,11 +299,16 @@ def main():
         b64 = base64.b64encode(packed).decode("ascii")
         lengths_out[L] = {"h": headers, "d": b64, "bbox": per_length_bbox[L]}
 
+    pivot_x, pivot_y = find_pivot(all_length_data, LENGTHS)
+    ground_y = find_ground_y(all_length_data, LENGTHS)
+
     out = {
         "angles": ANGLES,
         "palette": palette,
         "offx": OFFX, "offy": OFFY, "scale": SCALE,
         "bbox": {"minx": minx, "maxx": maxx, "miny": miny, "maxy": maxy},
+        "pivot": {"x": round(pivot_x, 1), "y": round(pivot_y, 1)},
+        "groundY": round(ground_y, 1),
         "lengths": lengths_out,
     }
 
