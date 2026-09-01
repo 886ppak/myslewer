@@ -151,7 +151,7 @@
   )
 )
 
-(defun export-current-pose (crane-obj fname / copyobj copyename ss wbresult ok)
+(defun export-current-pose (crane-obj fname / copyobj copyename ss ok)
   (setq copyobj (vl-catch-all-apply 'vlax-invoke (list crane-obj 'Copy)))
   (if (vl-catch-all-error-p copyobj)
     (progn
@@ -164,22 +164,27 @@
       (setq ss (ssadd copyename ss))
       (vl-catch-all-apply 'vl-file-delete (list fname))
 
-      (setq wbresult (vl-catch-all-apply 'command
-                       (list "_.-wblock" fname "" (list 0.0 0.0 0.0) ss "")))
+      ;; Call command DIRECTLY, not through (vl-catch-all-apply 'command
+      ;; (list ...)) - command is a variadic/special AutoLISP function
+      ;; and does not reliably behave the same when invoked indirectly
+      ;; through apply-style argument passing, especially with a
+      ;; selection-set argument like ss. This was the actual root cause
+      ;; of files never landing on disk despite the sweep reporting
+      ;; success - confirmed by a minimal isolated test using a bare
+      ;; direct command call, which worked every time. export-current-
+      ;; pose is already wrapped in vl-catch-all-apply at every call
+      ;; site, so a genuine error here still can't kill the whole sweep.
+      (command "_.-wblock" fname "" (list 0.0 0.0 0.0) ss "")
       (flush-pending-command)
 
-      (vl-catch-all-apply 'command (list "_.erase" ss ""))
+      (command "_.erase" ss "")
       (flush-pending-command)
 
       ;; ground truth: trust only whether the file actually exists
       (setq ok (findfile fname))
       (if ok
         (princ (strcat "\n    -> " fname))
-        (princ (strcat "\n    FAILED (no file written): " fname
-                        (if (vl-catch-all-error-p wbresult)
-                          (strcat " | wblock error: " (vl-catch-all-error-message wbresult))
-                          ""
-                        )))
+        (princ (strcat "\n    FAILED (no file written): " fname))
       )
       (if ok T nil)
     )
@@ -218,14 +223,14 @@
           (if (not (safe-put cfgprop config-name "Состав стрелы"))
             (princ (strcat "\nERROR: could not switch to " config-name ". Aborting this config."))
             (progn
-              (progn (command "_.regen") (flush-pending-command))
+              (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
               (setq total 0) (setq done 0) (setq skipped 0)
 
               ;; ---- pass 1: main boom sweep, jib fixed at reference ----
               (princ (strcat "\n=== " config-name ": main boom sweep ==="))
               (if jibprop (safe-put jibprop (cdr (nth 0 jib-lengths)) "ref jib length"))
               (if jangprop (safe-put jangprop 0.0 "ref jib angle"))
-              (progn (command "_.regen") (flush-pending-command))
+              (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
 
               (foreach len-pair *LENGTHS*
                 (foreach angle-deg *ANGLES-FULL*
@@ -233,7 +238,7 @@
                   (if (and (safe-put lenprop (cdr len-pair) "main length")
                            (safe-put angprop (* angle-deg (/ *PI* 180.0)) "main angle"))
                     (progn
-                      (progn (command "_.regen") (flush-pending-command))
+                      (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
                       (setq fname (strcat *OUTDIR* "pose_" config-name "_L" (car len-pair)
                                            "_A" (itoa (fix angle-deg)) ".dwg"))
                       (if (vl-catch-all-apply 'export-current-pose (list crane-obj fname))
@@ -250,7 +255,7 @@
                   (princ (strcat "\n=== " config-name ": jib sweep (main boom fixed) ==="))
                   (safe-put lenprop (cdr *REF-LENGTH*) "ref main length")
                   (safe-put angprop (* *REF-ANGLE* (/ *PI* 180.0)) "ref main angle")
-                  (progn (command "_.regen") (flush-pending-command))
+                  (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
                   (if jangprop
                     ;; jib has its own angle control - sweep length x angle
                     (foreach jlen-pair jib-lengths
@@ -259,7 +264,7 @@
                         (if (and (safe-put jibprop (cdr jlen-pair) "jib length")
                                  (safe-put jangprop (* angle-deg (/ *PI* 180.0)) "jib angle"))
                           (progn
-                            (progn (command "_.regen") (flush-pending-command))
+                            (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
                             (setq fname (strcat *OUTDIR* "pose_" config-name "_JL" (car jlen-pair)
                                                  "_JA" (itoa (fix angle-deg)) ".dwg"))
                             (if (vl-catch-all-apply 'export-current-pose (list crane-obj fname))
@@ -274,7 +279,7 @@
                       (setq total (1+ total))
                       (if (safe-put jibprop (cdr jlen-pair) "jib length")
                         (progn
-                          (progn (command "_.regen") (flush-pending-command))
+                          (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
                           (setq fname (strcat *OUTDIR* "pose_" config-name "_JL" (car jlen-pair) ".dwg"))
                           (if (vl-catch-all-apply 'export-current-pose (list crane-obj fname))
                             (setq done (1+ done)) (setq skipped (1+ skipped)))
@@ -292,7 +297,7 @@
               (safe-put angprop orig-ang "restore main angle")
               (if (and jibprop orig-jib) (safe-put jibprop orig-jib "restore jib length"))
               (if (and jangprop orig-jang) (safe-put jangprop orig-jang "restore jib angle"))
-              (progn (command "_.regen") (flush-pending-command))
+              (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
 
               (princ "\n----------------------------------------")
               (princ (strcat "\n" config-name " done: " (itoa done) " exported, "
