@@ -59,25 +59,41 @@
   (setq line (strcat "  " (vl-princ-to-string pname)
                       "  =  " (vl-princ-to-string pval)))
 
-  ;; AllowedValues is nil (not an error) for ordinary properties that
-  ;; aren't a lookup/list type (e.g. this crane's boom length/angle,
-  ;; which are numeric and constraint-driven, not picked from a fixed
-  ;; list) - only force it through variant/safearray conversion when
-  ;; something was actually returned.
-  (setq avals (vl-catch-all-apply 'vlax-get (list prop 'AllowedValues)))
-  (if (and (not (vl-catch-all-error-p avals)) avals)
-    (progn
-      ;; try unwrapping as a variant-wrapped safearray first; if that
-      ;; fails, try treating it as an already-unwrapped safearray
-      ;; (different property types can come back either way)
-      (setq avlist (vl-catch-all-apply 'vlax-safearray->list
-                     (list (vl-catch-all-apply 'vlax-variant-value (list avals)))))
-      (if (vl-catch-all-error-p avlist)
-        (setq avlist (vl-catch-all-apply 'vlax-safearray->list (list avals)))
-      )
-      (if (and (not (vl-catch-all-error-p avlist)) avlist)
+  ;; AllowedValues: try the compiled vla-get-AllowedValues stub first
+  ;; (the documented way to read this on a DynamicBlockReferenceProperty
+  ;; COM object), falling back to late-bound vlax-get if that isn't
+  ;; available. Nil (not an error) is the normal, expected result for
+  ;; ordinary properties that aren't a lookup/list type (e.g. this
+  ;; crane's boom length/angle, which are numeric and constraint-driven)
+  ;; - only try unwrapping as a variant/safearray when something was
+  ;; actually returned, and report WHY if that unwrapping itself fails,
+  ;; rather than silently showing nothing either way.
+  (setq avals (vl-catch-all-apply 'vla-get-AllowedValues (list prop)))
+  (if (vl-catch-all-error-p avals)
+    (setq avals (vl-catch-all-apply 'vlax-get (list prop 'AllowedValues)))
+  )
+  (cond
+    ((vl-catch-all-error-p avals)
+     (setq line (strcat line "\n      (AllowedValues lookup errored: "
+                         (vl-catch-all-error-message avals) ")"))
+    )
+    ((null avals) nil) ;; genuinely no allowed-values list - fine, say nothing
+    (t
+     (setq avlist (vl-catch-all-apply 'vlax-safearray->list
+                    (list (vl-catch-all-apply 'vlax-variant-value (list avals)))))
+     (if (vl-catch-all-error-p avlist)
+       (setq avlist (vl-catch-all-apply 'vlax-safearray->list (list avals)))
+     )
+     (cond
+       ((and (not (vl-catch-all-error-p avlist)) avlist)
         (setq line (strcat line "\n      allowed values: " (vl-princ-to-string avlist)))
-      )
+       )
+       ((vl-catch-all-error-p avlist)
+        (setq line (strcat line "\n      (got AllowedValues but couldn't unwrap it: "
+                            (vl-catch-all-error-message avlist)
+                            " | raw type: " (vl-princ-to-string (type avals)) ")"))
+       )
+     )
     )
   )
   line
