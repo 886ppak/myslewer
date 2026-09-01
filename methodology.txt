@@ -14382,3 +14382,100 @@ cranes get their own subsections as they're built.
 
   No CACHE_VERSION/app-version bump - functions/index.js isn't part of
   the app shell those track.
+
+
+151. LTM 1650-8.1 interactive boom rig - real AutoCAD dynamic-block data,
+     two root-cause rendering bugs found and fixed, pipeline saved for reuse
+
+  Person wanted an accurate, interactive 2D boom-elevation diagram (real
+  boom angle + length controls) for the LTM 1650-8.1, built from the
+  actual Liebherr AutoCAD dynamic block CAD file rather than a heuristic
+  classification prototype from an earlier attempt. Confirmed the block's
+  own dynamic parameters (length, angle) can be driven programmatically,
+  and gave the person an AutoLISP script (export_sweep.lsp) to run
+  themselves inside AutoCAD LT (Claude cannot run AutoCAD) - batch-sets
+  the block's length/angle properties and WBLOCKs each resulting pose,
+  un-exploded (exploding disconnects BYBLOCK color context and breaks
+  live FIELD text). Person ran it for a 10-length x 9-angle sweep (90
+  poses), converted to DXF via ODA File Converter, shared via their
+  Nextcloud/WebDAV instance.
+
+  Extraction (extract_all_poses.py): ezdxf's Recorder backend gives
+  already-resolved, already-flattened path/point geometry per pose.
+  Packed into a shared-palette, Uint16-quantized, base64 blob
+  (all_poses.json, ~11.5MB for the full 90-pose set) so a plain HTML/JS
+  rig (rig_template.html) can decode one length's data client-side and
+  linearly interpolate between the two nearest captured angle samples on
+  every slider move - no server, no build step.
+
+  Getting the COLORS right took most of the session and produced a long
+  chain of failed attempts (visible in this session's own history: user
+  feedback escalated to "how can you not see it isn't right", eventually
+  "fucks sakes sort it out" after yet another color patch still looked
+  wrong) before landing on two distinct, previously-unidentified root
+  causes - documented in full, with the actual failed-approach history,
+  in cad/boom-rig-pipeline/README.md:
+
+  Bug 1 (z-order): raw DXF entity order interleaves each component's
+  outline strokes immediately followed by that same component's fill
+  (S,S,S,F,P,S,S,...). Rendered in literal encounter order - which is
+  what ezdxf's Recorder-based extraction preserves, unlike AutoCAD's own
+  internal draw-order resolution - the fill paints directly over the
+  strokes just drawn, burying ALL line detail under flat color blobs.
+  Diagnosed by temporarily hiding every fill element in the built HTML
+  and confirming the stroke-only render was already complete and
+  correct - proving this was a pure paint-order bug, not a missing-
+  geometry one. Fixed with a one-line stable sort in rig_template.html's
+  getLengthData(): every fill (F/P) before every stroke (S), preserving
+  relative order within each group - matches AutoCAD's real convention
+  (fills as background, line detail always on top).
+
+  Bug 2 (WIPEOUT fill colors unrecoverable from DXF data): ezdxf's
+  Frontend.draw_wipeout_entity hardcodes WIPEOUT fill to the layout
+  background color regardless of true resolved color - confirmed even
+  correct BYBLOCK resolution gives black, not the real color, because
+  the real color only exists in AutoCAD's own internal rendering logic.
+  Person proactively batch-plotted all 90 poses to PDF via AutoCAD
+  PUBLISH (consistent Page Setup, plot-to-extent, max quality) as
+  ground truth, specifically to stop Claude "trying to muck around."
+  Sampling real colors from that PDF still needed two more layers of
+  robustness on top of naive centroid sampling: (a) large/concave
+  shapes need grid-sampled, point-in-polygon-filtered, majority-voted
+  color, not one lucky/unlucky sample point; (b) shapes whose true fill
+  sits UNDER dense overlaid line-work (e.g. the engine-bay/turret
+  cluster, genuinely solid yellow underneath but showing dark gray)
+  fool even the grid-majority-vote, because more of the flattened raster
+  pixel area can genuinely be the black strokes on top than the shape's
+  own color. Fixed (fix_dark_gray_shapes.py) by using the pipeline's own
+  already-extracted VECTOR stroke geometry to exclude grid sample points
+  near any real stroke vertex before voting - correctly recovered yellow
+  for the dense-linework cluster while leaving genuinely-gray shapes
+  (e.g. handrail frames) unchanged, and independently reproduced one
+  previously-known-correct answer (a chassis hatch that should read
+  gray) as a sanity check. A couple of shapes with too little "clean"
+  area needed a manual override after direct visual inspection of a
+  zoomed reference-PDF crop at that shape's exact world-space location.
+
+  Verified with Playwright screenshots (file:// against the built HTML,
+  driving the length <select> and angle <input type=range> via
+  dispatchEvent) at multiple lengths (16.6m, 54.0m) and angles (0°,
+  40°), cropped and directly compared against the reference PDF -
+  confirmed match before publishing. Published as a Claude Artifact
+  (not yet wired into index.html/the live app - still a standalone
+  interactive diagram, same status as the earlier CG-visualization
+  Artifacts in notes/).
+
+  Saved the whole pipeline to cad/boom-rig-pipeline/ for reuse on other
+  crane models still in the backlog (LTM 1130, 1160, 1250, 1300, LRT
+  1100, LTR 1220): export_sweep.lsp, extract_all_poses.py,
+  fix_dark_gray_shapes.py, and rig_template.html (z-order fix already
+  applied) - with a README documenting both root-cause bugs above in
+  full, including the diagnostic steps that actually found them, so a
+  future session doesn't have to rediscover either one from scratch.
+  The actual LTM 1650 all_poses.json and source DXFs are NOT committed
+  (data, not pipeline code - regenerate from the pipeline, or pull from
+  the published artifact).
+
+  No CACHE_VERSION/app-version bump - this is documentation/tooling
+  under cad/, not part of the served app shell (index.html/sw.js
+  untouched).

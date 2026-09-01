@@ -1,0 +1,278 @@
+# Boom rig pipeline — build an interactive 2D crane diagram from real AutoCAD data
+
+Built for the LTM 1650-8.1 boom rig (2026-09-01). Produces an SVG diagram
+with working boom-length and boom-angle controls, where every frame is
+real AutoCAD dynamic-block-evaluated geometry — not a heuristic
+classification or hand-traced approximation. Reusable for any other crane
+model that ships as a Liebherr AutoCAD dynamic block.
+
+The whole point of this pipeline: AutoCAD's dynamic block already knows
+how to correctly evaluate the boom at any length/angle combination
+(that's what the block's own parameters are for) — so get AutoCAD itself
+to do that evaluation many times over a grid of poses, export each result,
+and turn the set into an interpolated web rig. Don't try to reimplement
+boom kinematics from scratch.
+
+## Pipeline overview
+
+```
+AutoCAD dynamic block (.dwg)
+  -> export_sweep.lsp run inside AutoCAD/AutoCAD LT
+     (sets the block's own length/angle parameters, WBLOCKs each pose)
+  -> N x M pose .dwg files (N lengths x M angles)
+  -> ODA File Converter -> .dxf (ASCII, same version)
+  -> extract_all_poses.py (ezdxf, on this side)
+  -> all_poses.json (Uint16-quantized, base64-packed, one blob for
+     every pose)
+  -> rig_template.html (+ window.__RIG_DATA__ = all_poses.json)
+  -> published as a Claude Artifact / dropped into the app
+```
+
+### 1. `export_sweep.lsp` — run inside AutoCAD LT, by the person, not Claude
+
+Claude cannot run AutoCAD. This AutoLISP script is meant to be loaded and
+run BY THE USER inside their own AutoCAD LT session, batch-exporting a
+grid of dynamic-block poses so Claude can turn the outputs into a rig
+without ever touching AutoCAD directly.
+
+Commands defined:
+- `TESTSWEEP` — exports 4 poses, for a quick sanity check before the full run
+- `EXPORTSWEEP` — exports the full sweep (10 lengths x 9 angles = 90 files
+  for the LTM 1650 config used here)
+
+Key correctness details, all hard-won:
+- Sets the block's OWN dynamic properties (`Стрела T3` = length,
+  `Наклон основной стрелы` = angle in radians — property names are
+  whatever the source block actually calls them; inspect with
+  `GetDynamicBlockProperties` first) via `vlax-put`, then `vla-Update`/
+  regens, rather than trying to redraw the boom geometrically.
+- Copies the block reference (`vla-Copy`) and `-wblock`s the COPY —
+  never explode it first. Exploding disconnects entities from their
+  BYBLOCK color context and breaks live FIELD text (e.g. the model
+  callout on the boom). WBLOCK-ing an un-exploded reference preserves
+  both.
+- Deletes any pre-existing output file before each `-wblock`
+  (`vl-catch-all-apply 'vl-file-delete`) — otherwise AutoCAD's overwrite
+  confirmation prompt breaks the scripted command sequencing on any
+  re-run.
+
+Output: `%USERPROFILE%\Documents\export\pose_L{length}_A{angle}.dwg`
+
+### 2. Convert to DXF
+
+ODA File Converter (free, from Open Design Alliance), batch mode, ASCII
+DXF output, same AutoCAD version as the source. Anything that reads DXF
+would technically work, but `extract_all_poses.py` is written against
+ezdxf's own file reader.
+
+### 3. `extract_all_poses.py` — the extraction pipeline
+
+Uses ezdxf's `Recorder` backend (`RenderContext` + `Frontend` +
+`Recorder`) to get already-resolved, already-flattened path/point
+geometry per pose, rather than walking raw DXF entities and resolving
+color/transform/curve-flattening by hand.
+
+Per pose file: extracts `PathRecord` (stroke/line work, kind `'S'`),
+`FilledPathsRecord` (solid fills/hatches, kind `'F'`), `PointsRecord`
+(WIPEOUT-derived shapes, kind `'P'`) in encounter order. A path can
+itself contain disjoint sub-loops (an outer boundary + inner hole
+concatenated into one vertex list) — `expand_sub_paths` splits those to
+avoid a spurious connector line between them.
+
+Cross-pose consistency: for a rig to interpolate smoothly, every pose at
+a given (length, path-index) needs the SAME point count across all 9
+angle samples, so the same index in the flat coordinate array always
+means "this vertex" no matter the angle. If natural vertex counts agree
+across all 9 angles for a given path AND are small enough
+(`MAX_POINTS_PER_PATH = 20`), the natural points are kept; otherwise
+every angle's version of that path gets arc-length resampled to a common
+point count. `assert len(items) == n_items` guards that entity counts
+themselves don't drift between angle samples — if that fires, config
+states (e.g. a jib section that only exists at some angles, or a
+different lookup state) are in play and need to be scoped out before
+this approach works at all.
+
+Output format (`all_poses.json`): a shared color palette (list of hex
+strings, deduplicated across all poses), plus one entry per length
+containing:
+- `h`: header list, one `[kind, paletteColorIndex, pointCount]` per path,
+  in the SAME order for every length (this stability is what lets a
+  color patch keyed by index apply across all lengths at once — see
+  below)
+- `d`: base64 of a flat `Uint16Array` — every path's 9 angle-frames'
+  (x,y) pairs back to back, quantized to a shared `OFFX/OFFY/SCALE` grid
+  (`SCALE = 4` doc units per step here, i.e. ~4mm resolution — plenty for
+  a diagram, and keeps the whole 90-pose set well under a browser tab's
+  reasonable memory/network budget)
+
+### 4. `rig_template.html` — the interpolating SVG rig
+
+Vanilla JS, no dependencies. Decodes one length's `Uint16Array` blob
+lazily, builds one `<polygon>`/`<polyline>` per path once per length
+selection, and on angle change just linearly interpolates each vertex
+between the two bracketing captured angle samples (10° spacing here) and
+rewrites `points`. Cheap enough to run on every slider `input` event.
+
+To use for a new crane: run the pipeline above to get a new
+`all_poses.json`, then inject it before this template's IIFE:
+```html
+<script>window.__RIG_DATA__ = /* ...all_poses.json contents... */;</script>
+<!-- rig_template.html contents follow -->
+```
+`LENGTH_ORDER` inside the template needs updating to that crane's own
+catalog length list.
+
+## Two root-cause bugs found the hard way — read this before repeating the process
+
+These cost the most time in this build and will recur on any future
+crane unless deliberately avoided.
+
+### Bug 1: fills painted over their own outline strokes (z-order)
+
+**Symptom:** boom/cab/counterweight rendered as flat blobs of color with
+NO visible black line detail anywhere, despite the line-work data being
+present and correct in the extraction.
+
+**Root cause:** raw DXF entity order interleaves each component's stroke
+(outline) entities immediately followed by that same component's fill —
+e.g. `S,S,S,F,P,S,S,...`. Rendered in that literal order, the fill paints
+directly on top of the strokes that were JUST drawn, hiding them
+completely. AutoCAD's real on-screen paint order is NOT simply raw
+database/creation order — it has its own draw-order resolution that
+ezdxf's `Recorder`-based extraction (unlike its own native
+`matplotlib`/other renderer backends) doesn't reproduce; it just replays
+entities in encounter order.
+
+**How it was actually diagnosed** (don't skip straight to the fix without
+this step on a future crane — verify the theory first): temporarily hide
+all fill/`polygon` elements in the built HTML (`#rig-svg polygon {
+display: none !important; }`) and re-render. If the stroke-only render
+looks complete and correct (matches the reference), it confirms the line
+data was extracted fine all along and this is purely a z-order problem —
+not a missing-geometry problem.
+
+**Fix**, in `getLengthData()` inside `rig_template.html`: stable-sort
+each length's path list so every fill (`F`/`P`) renders before every
+stroke (`S`), preserving relative order within each group:
+```js
+paths.sort((a, b) => {
+  const rank = (k) => (k === 'S' ? 1 : 0);
+  return rank(a.k) - rank(b.k);
+});
+```
+This matches AutoCAD's real convention (fills as a background layer,
+line detail always on top) and is already baked into this repo's copy of
+`rig_template.html`. It's a pure render-order fix — touches no color
+data, safe to apply unconditionally to any future extraction from this
+same pipeline.
+
+### Bug 2: WIPEOUT/hatch fill colors can't be read from the DXF data at all
+
+**Symptom:** individual shapes (mostly WIPEOUT-derived, kind `'P'`) come
+back the wrong color no matter how carefully BYBLOCK/BYLAYER resolution
+is implemented — even "correct" resolution gives black, not the shape's
+real visible color. This is a `ezdxf`-and-DXF-format limitation, not a
+bug in this pipeline's code: `Frontend.draw_wipeout_entity` in ezdxf's
+drawing addon hardcodes WIPEOUT fill to the current layout's background
+color regardless of the entity's true resolved color, and the true color
+in general isn't fully recoverable from the DXF data by any third-party
+reader — it only exists in AutoCAD's own internal rendering logic.
+
+**Fix:** sample real colors directly from AutoCAD's own PDF output
+(Publish/plot a reference pose to PDF, rasterize with `pdftoppm -r 300`+,
+sample pixel colors at each shape's known world-space location using the
+SAME quantized coordinates already in `all_poses.json`). Shape identity
+and order are stable across every length in the same dataset (confirmed:
+identical path count for every length here), so ONE reference PDF plot
+covers every length/angle combination — no need to plot all N*M poses.
+
+**The subtlety that actually caused most of the wasted time:** naive
+color sampling (take a shape's centroid, or centroid + a few points
+pulled toward vertices, snap to the nearest of a curated color list) is
+NOT robust for two different reasons layered on top of each other:
+
+1. **Large/concave/multi-region shapes** — a single WIPEOUT can span a
+   wide area that's mostly one color with a small sub-region of another
+   (e.g. a chassis hatch mostly gray with a small yellow notch). A
+   centroid-based sample can land in the minority sub-region by pure
+   chance depending on the shape's exact geometry. Fix: grid-sample many
+   points across the shape's bounding box, keep only the ones inside the
+   polygon via ray-casting (`point_in_polygon`), majority-vote the result
+   — representative of the shape's actual visible area instead of one
+   lucky/unlucky point.
+
+2. **Shapes underneath dense line-work** — a background WIPEOUT's TRUE
+   fill can be a single flat color (e.g. solid yellow) that, in the
+   flattened reference PDF raster, is mostly covered by a dense mesh of
+   separately-drawn stroke lines on top of it (hoses, panel outlines,
+   mechanical detail). Even the grid-majority-vote from (1) gets fooled
+   here: MORE of the sampled pixel area can genuinely be the thick black
+   strokes than the shape's own true color, so majority vote on the raw
+   raster gives the WRONG answer with high confidence. This is what
+   caused the engine-bay/turret cluster to render dark gray when it's
+   actually solid yellow underneath the line detail.
+
+   Fix (`fix_dark_gray_shapes.py`): use the pipeline's OWN already-
+   extracted vector stroke geometry (not more raster inference) to
+   exclude any grid sample point that falls within `STROKE_EXCLUDE_DIST`
+   world units of a real `S`-kind stroke vertex, THEN majority-vote only
+   the remaining "clean" points. This is a general, principled fix (not
+   a per-shape guess) — it correctly recovered yellow for the
+   dense-linework shapes while leaving genuinely-gray shapes (e.g. a
+   handrail frame with no fill at all underneath) unchanged, and even
+   independently reproduced a previously-known-correct answer for one
+   shape (a large chassis hatch that should read gray) as a sanity check.
+
+   **This still isn't perfect** — a couple of shapes with very little
+   "clean" polygon area (small/thin/mostly-covered-by-stroke) needed a
+   manual override after visually inspecting a zoomed crop of the
+   reference PDF at that shape's exact world-space location, because the
+   automated method is conservative and under-fixes rather than
+   over-fixes (it left a few known-bad shapes unchanged rather than risk
+   flipping a correct one). Treat the automated pass as the first cut,
+   then spot-check a rendered result against the reference PDF at
+   multiple lengths/angles before trusting it, same as this build did
+   (see verification below).
+
+**Lesson for next time:** don't sample fill colors from a flattened
+raster at all if it can be avoided. If a future export can capture each
+entity's resolved RGB color directly (e.g. by NOT wrapping the WIPEOUT
+resolution through ezdxf's Frontend, or by asking AutoCAD itself to
+report resolved colors via the AutoLISP export script — e.g.
+`vlax-get` the entity's `TrueColor`/`Color` property at export time,
+before the WIPEOUT-specific rendering quirk ever enters the picture),
+that sidesteps this entire class of bug. Wasn't discovered as a cleaner
+alternative until after the raster-sampling approach above was already
+built and working — worth trying FIRST on a future crane.
+
+## Verification checklist before publishing
+
+Take screenshots (Playwright/headless Chromium against the built HTML
+file works well — `page.goto('file://...')`, drive the length `<select>`
+and angle `<input type=range>` via `dispatchEvent`) at:
+- multiple boom lengths (shortest, longest, at least one mid-range)
+- multiple angles (0°, and whatever the default slider value is)
+- crop and directly compare against the reference PDF/plot at the same
+  region — don't eyeball the whole diagram at once, the bugs above are
+  both local-region bugs that are easy to miss zoomed out
+
+## Files in this folder
+
+- `export_sweep.lsp` — AutoLISP, run by the user inside AutoCAD LT
+- `extract_all_poses.py` — DXF -> `all_poses.json`, run with ezdxf
+  installed, from a directory containing a `poses/` subfolder of
+  `pose_L{length}_A{angle}.dxf` files
+- `fix_dark_gray_shapes.py` — reference implementation of the stroke-
+  aware color-correction pass (bug 2 above); calibration constants
+  (`WX0/WX1/WY0/WY1/PX0/PX1/PY0/PY1`, `PDF_PNG`) are specific to the
+  LTM 1650 reference plot used here and need recalibrating per crane
+  (compute from the reference PDF's non-white content bbox vs. the
+  known world-space bbox of the same pose)
+- `rig_template.html` — the reusable rig shell, z-order fix already
+  applied; inject a new `all_poses.json` as `window.__RIG_DATA__` and
+  update `LENGTH_ORDER` to build a rig for a different crane
+
+The actual LTM 1650 `all_poses.json` (~11.5MB) and its 90 source
+DXF/pose files are not committed here — regenerate from the pipeline
+above if needed, or pull the live version straight from the published
+artifact.

@@ -1,0 +1,276 @@
+<title>LTM 1650 Boom Rig</title>
+<style>
+  :root {
+    --bg-dark: #121315;
+    --card-bg: #1c1e22;
+    --border-color: #383c45;
+    --accent-gold: #e5a900;
+    --accent-cyan: #38bdf8;
+    --text-main: #f0f2f5;
+    --text-muted: #9ca3af;
+    --stage-bg: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg-dark);
+    color: var(--text-main);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--border-color);
+  }
+  header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.02em; }
+  header p { margin-top: 4px; font-size: 0.76rem; color: var(--text-muted); max-width: 760px; line-height: 1.4; }
+  .stage {
+    flex: 1;
+    position: relative;
+    background: var(--stage-bg);
+    min-height: 55vh;
+  }
+  #rig-svg { width: 100%; height: 100%; display: block; }
+  #status {
+    position: absolute; top: 10px; left: 10px;
+    background: rgba(20,21,24,0.85); color: var(--text-main);
+    font-size: 0.7rem; padding: 6px 9px; border-radius: 6px;
+    font-variant-numeric: tabular-nums; line-height: 1.5;
+  }
+  .controls {
+    border-top: 1px solid var(--border-color);
+    background: var(--card-bg);
+    padding: 14px 18px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .control-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .control-row label {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    min-width: 90px;
+  }
+  select {
+    background: var(--bg-dark);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+  }
+  input[type=range] {
+    flex: 1;
+    min-width: 200px;
+    accent-color: var(--accent-gold);
+  }
+  .value-badge {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.85rem;
+    color: var(--accent-gold);
+    min-width: 54px;
+    text-align: right;
+  }
+  .panel {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .panel b { color: var(--text-main); }
+</style>
+
+<header>
+  <h1>LTM 1650-8.1 Boom Rig &mdash; authentic multi-pose CAD data</h1>
+  <p>Every frame here is real AutoCAD dynamic-block-evaluated geometry &mdash; 90 poses exported directly from the source CAD block (10 real catalog boom lengths &times; 9 sampled angles), not guessed or classified. Length snaps to real catalog values; angle interpolates smoothly between the two nearest captured angle samples.</p>
+</header>
+
+<div class="stage">
+  <svg id="rig-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div id="status">Loading...</div>
+</div>
+
+<div class="controls">
+  <div class="control-row">
+    <label for="length-select">Boom length</label>
+    <select id="length-select"></select>
+    <span class="value-badge" id="length-badge"></span>
+  </div>
+  <div class="control-row">
+    <label for="angle-slider">Boom angle</label>
+    <input type="range" id="angle-slider" min="0" max="80" step="0.5" value="40">
+    <span class="value-badge" id="angle-badge">40&deg;</span>
+  </div>
+  <div class="panel">
+    <b>Source:</b> Liebherr LTM 1650-8.1 dynamic block, T3 (3-section boom) configuration, main boom only &mdash; no jib/fly-jib. Length list from the block's own <code>&#1057;&#1090;&#1088;&#1077;&#1083;&#1072; T3</code> lookup parameter.
+  </div>
+</div>
+
+<script>
+(function() {
+  const DATA = window.__RIG_DATA__;
+  const statusEl = document.getElementById('status');
+  const svg = document.getElementById('rig-svg');
+  const lengthSelect = document.getElementById('length-select');
+  const lengthBadge = document.getElementById('length-badge');
+  const angleSlider = document.getElementById('angle-slider');
+  const angleBadge = document.getElementById('angle-badge');
+
+  const LENGTH_ORDER = ["16.6","22.4","28.2","33.9","39.7","45.3","51.0","52.0","53.0","54.0"];
+  const ANGLES = DATA.angles; // [0,10,...,80]
+  const PALETTE = DATA.palette;
+  const OFFX = DATA.offx, OFFY = DATA.offy, SCALE = DATA.scale;
+
+  function dequant(v, off) {
+    return v * SCALE + off;
+  }
+
+  // Decode a length's base64 coord blob into a Uint16Array, and build a
+  // per-path {kind, colorIdx, n, offset} index into that flat array.
+  const decodedCache = {};
+  function getLengthData(L) {
+    if (decodedCache[L]) return decodedCache[L];
+    const entry = DATA.lengths[L];
+    const binStr = atob(entry.d);
+    const bytes = new Uint8Array(binStr.length);
+    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+    const u16 = new Uint16Array(bytes.buffer);
+    const paths = [];
+    let cursor = 0;
+    for (const [k, c, n] of entry.h) {
+      paths.push({ k, c, n, offset: cursor });
+      cursor += 9 * n * 2; // 9 angle frames, n points, 2 coords
+    }
+    // AutoCAD draws fills/wipeouts as a background layer with the actual
+    // line detail always painted on top of them; the raw DXF entity order
+    // interleaves them locally (fill right after its own outline strokes),
+    // which buries the line work under opaque fills. Stable-partition so
+    // every fill (F/P) renders before every stroke (S), matching AutoCAD's
+    // real paint order, while preserving relative order within each group.
+    paths.sort((a, b) => {
+      const rank = (k) => (k === 'S' ? 1 : 0);
+      return rank(a.k) - rank(b.k);
+    });
+    const result = { u16, paths };
+    decodedCache[L] = result;
+    return result;
+  }
+
+  // SVG element pool: one <polyline>/<polygon> per path, created once per
+  // length, then just have their `points` attribute updated on angle change.
+  let currentLengthData = null;
+  let elements = [];
+
+  function buildElementsForLength(L) {
+    currentLengthData = getLengthData(L);
+    svg.innerHTML = '';
+    elements = [];
+    const frag = document.createDocumentFragment();
+    for (const p of currentLengthData.paths) {
+      // Kind 'P' (WIPEOUT-derived shapes): ezdxf cannot resolve their real
+      // color from the DXF data (verified: even correct BYBLOCK resolution
+      // gives black, not the true per-shape color - AutoCAD determines it
+      // through internal logic not exposed in the file). Each one's real
+      // color was instead sampled directly from a real AutoCAD PDF plot
+      // (pixel-sampled per shape, by position) and baked into its own
+      // palette index here - same as any other shape now.
+      const isFill = p.k === 'F' || p.k === 'P';
+      const el = document.createElementNS('http://www.w3.org/2000/svg', isFill ? 'polygon' : 'polyline');
+      const color = PALETTE[p.c];
+      if (isFill) {
+        el.setAttribute('fill', color);
+        el.setAttribute('stroke', 'none');
+      } else {
+        el.setAttribute('fill', 'none');
+        el.setAttribute('stroke', color);
+        el.setAttribute('stroke-width', '12');
+        el.setAttribute('stroke-linecap', 'round');
+        el.setAttribute('stroke-linejoin', 'round');
+      }
+      frag.appendChild(el);
+      elements.push(el);
+    }
+    svg.appendChild(frag);
+  }
+
+  function updateAngle(angleDeg) {
+    if (!currentLengthData) return;
+    // find bracketing angle indices (ANGLES is fixed 10deg spacing: 0,10,...,80)
+    const step = ANGLES[1] - ANGLES[0];
+    let idx0 = Math.floor((angleDeg - ANGLES[0]) / step);
+    idx0 = Math.max(0, Math.min(idx0, ANGLES.length - 2));
+    const idx1 = idx0 + 1;
+    const a0 = ANGLES[idx0], a1 = ANGLES[idx1];
+    const t = a1 > a0 ? (angleDeg - a0) / (a1 - a0) : 0;
+
+    const u16 = currentLengthData.u16;
+    const paths = currentLengthData.paths;
+    for (let pi = 0; pi < paths.length; pi++) {
+      if (elements[pi] === null) continue;
+      const p = paths[pi];
+      const n = p.n;
+      const frameStride = n * 2;
+      const base0 = p.offset + idx0 * frameStride;
+      const base1 = p.offset + idx1 * frameStride;
+      let str = '';
+      for (let k = 0; k < n; k++) {
+        const x0 = dequant(u16[base0 + k * 2], OFFX);
+        const y0 = dequant(u16[base0 + k * 2 + 1], OFFY);
+        const x1 = dequant(u16[base1 + k * 2], OFFX);
+        const y1 = dequant(u16[base1 + k * 2 + 1], OFFY);
+        const x = x0 + (x1 - x0) * t;
+        const y = y0 + (y1 - y0) * t;
+        str += x.toFixed(0) + ',' + (-y).toFixed(0) + ' ';
+      }
+      elements[pi].setAttribute('points', str);
+    }
+  }
+
+  function setLength(L) {
+    buildElementsForLength(L);
+    updateAngle(parseFloat(angleSlider.value));
+    lengthBadge.textContent = L + ' m';
+    statusEl.textContent = 'Length ' + L + 'm · ' + currentLengthData.paths.length + ' paths';
+
+    const bbox = DATA.lengths[L].bbox;
+    const pad = 2500;
+    const vb = [
+      bbox.minx - pad,
+      -bbox.maxy - pad,
+      (bbox.maxx - bbox.minx) + 2 * pad,
+      (bbox.maxy - bbox.miny) + 2 * pad,
+    ];
+    svg.setAttribute('viewBox', vb.join(' '));
+  }
+
+  // populate length dropdown
+  for (const L of LENGTH_ORDER) {
+    const opt = document.createElement('option');
+    opt.value = L;
+    opt.textContent = L + ' m';
+    lengthSelect.appendChild(opt);
+  }
+  lengthSelect.value = "16.6";
+
+  lengthSelect.addEventListener('change', () => setLength(lengthSelect.value));
+  angleSlider.addEventListener('input', () => {
+    const a = parseFloat(angleSlider.value);
+    angleBadge.textContent = a.toFixed(0) + '°';
+    updateAngle(a);
+  });
+
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+  setLength("16.6");
+  angleSlider.value = "40";
+  angleBadge.textContent = "40°";
+  updateAngle(40);
+})();
+</script>
