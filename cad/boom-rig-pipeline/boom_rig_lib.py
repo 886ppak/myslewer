@@ -126,18 +126,50 @@ def find_pivot(all_length_data, LENGTHS, label):
         cx, cy, r, resid = circle_fit(arc)
         fits.append((L, cx, cy, r, max(abs(v) for v in resid)))
 
-    xs = [f[1] for f in fits]; ys = [f[2] for f in fits]
-    pivot_x = sum(xs) / len(xs); pivot_y = sum(ys) / len(ys)
-    spread_x = max(xs) - min(xs); spread_y = max(ys) - min(ys)
+    # Cluster fits instead of averaging all of them: on configs with extra
+    # animated geometry sharing the same angle sweep (e.g. T3YVEF's guy-line/
+    # backstay assembly, absent from plain T3F), the "farthest-moving vertex"
+    # landmark heuristic occasionally locks onto that other part instead of
+    # the boom/jib tip for a handful of lengths - found on T3YVEF, where 15
+    # of 17 jib lengths agreed to 0.0mm and exactly 2 (44.5, 58.5) landed on
+    # a completely different point ~45m away, silently dragging a naive mean
+    # to a location matching NEITHER cluster. Cluster by proximity (10mm)
+    # instead and use the majority cluster - robust as long as genuine
+    # outliers stay a minority, which held here (2/17).
+    pts = [(f[1], f[2]) for f in fits]
+    clusters = []  # list of [members...]
+    for i, p in enumerate(pts):
+        placed = False
+        for c in clusters:
+            cx0, cy0 = c[0]
+            if math.hypot(p[0] - cx0, p[1] - cy0) < 10.0:
+                c.append(p)
+                placed = True
+                break
+        if not placed:
+            clusters.append([p])
+    clusters.sort(key=len, reverse=True)
+    majority = clusters[0]
+    outlier_lengths = [fits[i][0] for i, p in enumerate(pts) if p not in majority]
+    pivot_x = sum(p[0] for p in majority) / len(majority)
+    pivot_y = sum(p[1] for p in majority) / len(majority)
+    spread_x = max(p[0] for p in majority) - min(p[0] for p in majority)
+    spread_y = max(p[1] for p in majority) - min(p[1] for p in majority)
 
     print(f"\n[{label}] Pivot fit per axis-length:", file=sys.stderr)
     for L, cx, cy, r, maxresid in fits:
         print(f"  {L:>6}  pivot=({cx:9.1f},{cy:8.1f})  r={r:9.1f}  "
               f"max|residual|={maxresid:.2f}mm", file=sys.stderr)
-    print(f"  averaged pivot=({pivot_x:.1f},{pivot_y:.1f})  "
-          f"spread=({spread_x:.1f},{spread_y:.1f})mm across {len(LENGTHS)} values", file=sys.stderr)
+    print(f"  majority-cluster pivot=({pivot_x:.1f},{pivot_y:.1f})  "
+          f"spread=({spread_x:.1f},{spread_y:.1f})mm across {len(majority)}/{len(LENGTHS)} values",
+          file=sys.stderr)
+    if outlier_lengths:
+        print(f"  EXCLUDED as outliers (landmark heuristic likely locked onto a different "
+              f"animated part at these lengths - some other config-specific geometry, not "
+              f"the boom/jib tip): {outlier_lengths}", file=sys.stderr)
     if spread_x > 200 or spread_y > 200:
-        print(f"  WARNING [{label}]: pivot fit disagrees by >200mm across axis-lengths.", file=sys.stderr)
+        print(f"  WARNING [{label}]: majority-cluster pivot fit STILL disagrees by >200mm - "
+              f"this is a real problem, not just a minority outlier.", file=sys.stderr)
 
     return pivot_x, pivot_y
 
