@@ -280,7 +280,7 @@
           (if (not (safe-put visprop config-name "Visibility1"))
             (princ (strcat "\nERROR: could not switch to " config-name ". Aborting this config."))
             (progn
-              (progn (command "_.regen") (flush-pending-command))
+              (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
               (setq total 0) (setq done 0) (setq skipped 0)
 
               ;; ---- pass 1: main boom sweep, jib/guy fixed at reference ----
@@ -289,7 +289,7 @@
               (if has-jib-f (safe-put jfprop (cdr (nth 0 *JIB-F-LENGTHS*)) "ref jib F"))
               (if (or has-jib-n has-jib-f) (safe-put japrop 0.0 "ref jib angle"))
               (if has-guy (safe-put gprop (cdr (nth 0 *GUY-ANGLES*)) "ref guy angle"))
-              (progn (command "_.regen") (flush-pending-command))
+              (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
 
               (foreach len-pair *LENGTHS*
                 (foreach angle-deg *ANGLES-FULL*
@@ -297,7 +297,7 @@
                   (if (and (safe-put lenprop (cdr len-pair) "main length")
                            (safe-put angprop (* angle-deg (/ *PI* 180.0)) "main angle"))
                     (progn
-                      (progn (command "_.regen") (flush-pending-command))
+                      (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
                       (setq fname (strcat *OUTDIR* "pose_" config-name "_L" (car len-pair)
                                            "_A" (itoa (fix angle-deg)) ".dwg"))
                       (if (vl-catch-all-apply 'export-current-pose (list crane-obj fname)) (setq done (1+ done)) (setq skipped (1+ skipped)))
@@ -313,14 +313,14 @@
                   (princ (strcat "\n=== " config-name ": jib N sweep (main boom fixed) ==="))
                   (safe-put lenprop (cdr *REF-LENGTH*) "ref main length")
                   (safe-put angprop (* *REF-ANGLE* (/ *PI* 180.0)) "ref main angle")
-                  (progn (command "_.regen") (flush-pending-command))
+                  (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
                   (foreach jlen-pair *JIB-N-LENGTHS*
                     (foreach angle-deg *JIB-ANGLES*
                       (setq total (1+ total))
                       (if (and (safe-put jnprop (cdr jlen-pair) "jib N length")
                                (safe-put japrop (* angle-deg (/ *PI* 180.0)) "jib angle"))
                         (progn
-                          (progn (command "_.regen") (flush-pending-command))
+                          (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
                           (setq fname (strcat *OUTDIR* "pose_" config-name "_JL" (car jlen-pair)
                                                "_JA" (itoa (fix angle-deg)) ".dwg"))
                           (if (vl-catch-all-apply 'export-current-pose (list crane-obj fname)) (setq done (1+ done)) (setq skipped (1+ skipped)))
@@ -338,14 +338,14 @@
                   (princ (strcat "\n=== " config-name ": jib F sweep (main boom fixed) ==="))
                   (safe-put lenprop (cdr *REF-LENGTH*) "ref main length")
                   (safe-put angprop (* *REF-ANGLE* (/ *PI* 180.0)) "ref main angle")
-                  (progn (command "_.regen") (flush-pending-command))
+                  (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
                   (foreach jlen-pair *JIB-F-LENGTHS*
                     (foreach angle-deg *JIB-ANGLES*
                       (setq total (1+ total))
                       (if (and (safe-put jfprop (cdr jlen-pair) "jib F length")
                                (safe-put japrop (* angle-deg (/ *PI* 180.0)) "jib angle"))
                         (progn
-                          (progn (command "_.regen") (flush-pending-command))
+                          (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
                           (setq fname (strcat *OUTDIR* "pose_" config-name "_JL" (car jlen-pair)
                                                "_JA" (itoa (fix angle-deg)) ".dwg"))
                           (if (vl-catch-all-apply 'export-current-pose (list crane-obj fname)) (setq done (1+ done)) (setq skipped (1+ skipped)))
@@ -363,12 +363,12 @@
                   (princ (strcat "\n=== " config-name ": guy angle sweep (main boom fixed) ==="))
                   (safe-put lenprop (cdr *REF-LENGTH*) "ref main length")
                   (safe-put angprop (* *REF-ANGLE* (/ *PI* 180.0)) "ref main angle")
-                  (progn (command "_.regen") (flush-pending-command))
+                  (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
                   (foreach guy-pair *GUY-ANGLES*
                     (setq total (1+ total))
                     (if (safe-put gprop (cdr guy-pair) "guy angle")
                       (progn
-                        (progn (command "_.regen") (flush-pending-command))
+                        (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
                         (setq fname (strcat *OUTDIR* "pose_" config-name "_G" (car guy-pair) ".dwg"))
                         (if (vl-catch-all-apply 'export-current-pose (list crane-obj fname)) (setq done (1+ done)) (setq skipped (1+ skipped)))
                       )
@@ -386,7 +386,7 @@
               (if (and jfprop orig-jf) (safe-put jfprop orig-jf "restore jib F"))
               (if (and japrop orig-ja) (safe-put japrop orig-ja "restore jib angle"))
               (if (and gprop orig-guy) (safe-put gprop orig-guy "restore guy angle"))
-              (progn (command "_.regen") (flush-pending-command))
+              (vl-catch-all-apply (function (lambda () (command "_.regen"))) nil)
 
               (princ "\n----------------------------------------")
               (princ (strcat "\n" config-name " done: " (itoa done) " exported, "
