@@ -1744,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.14</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.15</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2583,7 +2583,7 @@
           <svg id="rig-svg" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:340px; display:block;">
             <rect id="rig-bldg-rect" fill="#c4553b" fill-opacity="0.55" stroke="#8a3826" stroke-width="30"></rect>
             <g id="rig-boom-group"></g>
-            <line id="rig-clearance-line" stroke-width="60" stroke-linecap="round"></line>
+            <polyline id="rig-clearance-line" fill="none" stroke-width="60" stroke-linecap="round" stroke-linejoin="round"></polyline>
             <circle id="rig-pivot-marker" r="140" fill="#38bdf8"></circle>
           </svg>
           <button type="button" class="carrier3d-fullscreen-btn" data-wrap="rig-stage-wrap" onclick="toggleWrapFullscreen('rig-stage-wrap')" title="Fullscreen" aria-label="Fullscreen">
@@ -2617,7 +2617,6 @@
               <div><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Current radius</div><div id="rig-current-radius-value" style="font-variant-numeric:tabular-nums; font-size:1rem;">—</div></div>
               <div><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Status</div><div id="rig-clearance-status" style="font-weight:600; font-size:0.85rem;">—</div></div>
             </div>
-            <div id="rig-clearance-margin-note" style="font-size:0.72rem; color:var(--text-muted); margin-top:8px; line-height:1.35;"></div>
           </div>
         </div>
         <div class="disclaimer" style="margin-top:12px;">
@@ -4341,8 +4340,9 @@
     function buildRigElementsForLength(L) {
       const section = rigCurrentSection();
       rigCurrentLengthData = getRigLengthData(rigAxis, L);
-      if (rigAxis === 'boom' && section.pivot && !(rigConfigKey in rigUndersideOffsetCache)) {
-        rigUndersideOffsetCache[rigConfigKey] = rigComputeBoomUndersideOffsetMm(
+      const profileKey = rigConfigKey + ':' + L;
+      if (rigAxis === 'boom' && section.pivot && !(profileKey in rigUndersideProfileCache)) {
+        rigUndersideProfileCache[profileKey] = rigComputeBoomUndersideProfile(
           rigCurrentLengthData, section, section.pivot.x, section.pivot.y);
       }
       const boomGroup = document.getElementById('rig-boom-group');
@@ -4404,66 +4404,130 @@
       }
     }
 
-    // Estimate the boom's own cross-sectional depth below its pivot
-    // (rotation axis), from the actual extracted geometry at angle=0 -
-    // found this matters a lot in practice: measured on the T3F boom, the
-    // pivot sits only ~1.15m below the boom's TOP edge but ~3.0m above its
-    // UNDERSIDE - it's nowhere near the vertical center. Treating the boom
-    // as a zero-thickness line through the pivot (the original approach)
-    // silently checked clearance against a reference ~3m too high, exactly
-    // the "using the top edge instead of the underside" bug a user caught
-    // by eye. Only look at points clearly forward of the turret
-    // (x > pivot.x + 2000mm) and close to pivot height (within 3000mm) so
-    // this measures the boom's own base cross-section, not the carrier or
-    // ground-level wheels, which could otherwise pollute a naive min scan.
-    // Stable across boom length (checked directly against the real data:
-    // identical at L=16.6 and L=54.0), so this only needs computing once
-    // per config, cached in rigUndersideOffsetCache.
-    let rigUndersideOffsetCache = {};
-    function rigComputeBoomUndersideOffsetMm(lengthData, section, pivotXmm, pivotYmm) {
+    // Profile the boom's own underside depth as a function of distance
+    // along its centerline, from the actual extracted geometry at angle=0
+    // - a single constant offset (the earlier fix) was too conservative: a
+    // telescopic boom TAPERS (the base box section is much deeper than
+    // the thinner tip sections), so a line held at the base's offset for
+    // the boom's whole length sits proud of the boom's real, thinner tip
+    // by 2-3m - not a rendering bug, but not what a user tracing the
+    // boom's actual underside by eye wants either.
+    //
+    // A raw per-position minimum is too noisy to use directly: the CAD
+    // art has no layer/entity metadata separating the boom's outer skin
+    // from internal brackets, pins, and sheave/mount hardware drawn in
+    // the same body color, and those occasionally sit BETWEEN the
+    // centerline and the true edge - i.e. they read as shallower than
+    // the real edge, which is the unsafe direction (it would pull the
+    // line inward, through the boom). Two filters clean this up reliably:
+    //  1. Only accept points meaningfully below the pivot (200-3000mm) -
+    //     by definition the underside can't be at or above the
+    //     centerline, which throws out most stray hardware/rigging
+    //     detail outright.
+    //  2. Morphological closing (dilate then erode with a ~1.5m window)
+    //     on the per-bin deepest-point profile - this fills in narrow,
+    //     one-off shallow readings (a bracket, a pin) while leaving wide,
+    //     multi-meter-long plateaus and taper steps (the boom's real
+    //     structure) untouched, since real taper steps are far wider
+    //     than any single stray hardware detail.
+    // Verified against the real data at L=16.6, 33.9 and 54.0m: comes out
+    // smooth (one clear taper step, then a long plateau, then a gradual
+    // widen back out at the boom-head fitting) with no leftover spikes.
+    // Computed once per config+length (a longer boom has more sections
+    // telescoped out, so the taper shape isn't identical across lengths),
+    // cached in rigUndersideProfileCache.
+    let rigUndersideProfileCache = {};
+    function rigComputeBoomUndersideProfile(lengthData, section, pivotXmm, pivotYmm) {
       const u16 = lengthData.u16;
-      let minY = Infinity;
+      const BIN_MM = 300;
+      const bins = new Map();
+      let maxS = 0;
       for (const p of lengthData.paths) {
         const base = p.offset; // frame 0 = angle 0, boom horizontal
         for (let k = 0; k < p.n; k++) {
           const x = rigDequant(u16[base + k * 2], section.offx, section.scale);
           const y = rigDequant(u16[base + k * 2 + 1], section.offy, section.scale);
-          if (x > pivotXmm + 2000 && Math.abs(y - pivotYmm) < 3000 && y < minY) minY = y;
+          const s = x - pivotXmm;
+          const offset = pivotYmm - y;
+          if (s > 1500 && offset > 200 && offset < 3000) {
+            if (s > maxS) maxS = s;
+            const bin = Math.round(s / BIN_MM);
+            const cur = bins.get(bin);
+            if (cur === undefined || offset > cur) bins.set(bin, offset);
+          }
         }
       }
-      return minY === Infinity ? 0 : (pivotYmm - minY);
+      if (!bins.size) return [];
+      const minBin = Math.round(1500 / BIN_MM), maxBin = Math.round(maxS / BIN_MM);
+      const dense = [];
+      let last = null;
+      for (let b = minBin; b <= maxBin; b++) {
+        if (bins.has(b)) last = bins.get(b);
+        dense.push(last);
+      }
+      const rollWin = (arr, W, fn) => {
+        const half = Math.floor(W / 2);
+        return arr.map((_, i) => {
+          const lo = Math.max(0, i - half), hi = Math.min(arr.length - 1, i + half);
+          const win = arr.slice(lo, hi + 1).filter(v => v != null);
+          return win.length ? fn(win) : arr[i];
+        });
+      };
+      const dilated = rollWin(dense, 5, (w) => Math.max(...w));
+      const closed = rollWin(dilated, 5, (w) => Math.min(...w));
+      return closed.map((offset, i) => ({ s: (minBin + i) * BIN_MM, offset }));
     }
 
-    // The boom's underside is a straight line PARALLEL to its centerline
-    // but offset perpendicular to it by undersideOffsetMm - that offset
-    // direction rotates WITH the boom angle (it's fixed relative to the
-    // boom's own frame, not the world), so a simple constant vertical
-    // shift of the pivot would overcorrect at steep angles (the offset
-    // becomes mostly horizontal, not vertical, as the boom stands up).
-    // No closed form once the offset rotates into the equation, so this
-    // solves for the underside line's world-Y at a given world-X directly,
-    // then bisects over angle for the critical case - straightforward and
-    // exactly reduces to the old zero-thickness formula when offset = 0.
-    function rigUndersideLineY(angleDeg, pivotXmm, pivotYmm, worldXmm, offsetMm) {
+    // Linear-interpolate (clamped at the ends) the profile's offset at a
+    // given distance-along-boom s.
+    function rigProfileOffsetAt(profile, s) {
+      if (!profile.length) return 0;
+      if (s <= profile[0].s) return profile[0].offset;
+      const last = profile[profile.length - 1];
+      if (s >= last.s) return last.offset;
+      for (let i = 1; i < profile.length; i++) {
+        if (s <= profile[i].s) {
+          const p0 = profile[i - 1], p1 = profile[i];
+          const t = (s - p0.s) / (p1.s - p0.s);
+          return p0.offset + (p1.offset - p0.offset) * t;
+        }
+      }
+      return last.offset;
+    }
+
+    // The boom's underside is a curve PARALLEL-ish to its centerline but
+    // offset perpendicular to it by a distance that both rotates WITH the
+    // boom angle (fixed relative to the boom's own frame, not the world)
+    // AND varies along its length per the taper profile above. Solving
+    // for world-Y at a given world-X now means also solving for WHERE
+    // along the boom (s) that world-X falls, since s depends on the very
+    // offset being looked up - a few fixed-point iterations converge fast
+    // since the offset only varies gradually along a real boom.
+    function rigUndersideLineY(angleDeg, pivotXmm, pivotYmm, worldXmm, profile) {
       const rad = angleDeg * Math.PI / 180;
       const cosT = Math.cos(rad), sinT = Math.sin(rad);
       if (Math.abs(cosT) < 1e-9) return null;
-      const t = (worldXmm - pivotXmm - offsetMm * sinT) / cosT;
-      return pivotYmm - offsetMm * cosT + t * sinT;
+      let offset = profile.length ? profile[Math.floor(profile.length / 2)].offset : 0;
+      let s = 0;
+      for (let i = 0; i < 8; i++) {
+        s = (worldXmm - pivotXmm - offset * sinT) / cosT;
+        offset = rigProfileOffsetAt(profile, s);
+      }
+      return pivotYmm - offset * cosT + s * sinT;
     }
 
-    function rigComputeClearance(buildingHeightM, standoffM, boomLenM, pivotXmm, pivotYmm, groundYmm, maxCapturedAngle, undersideOffsetMm) {
+    function rigComputeClearance(buildingHeightM, standoffM, boomLenM, pivotXmm, pivotYmm, groundYmm, maxCapturedAngle, undersideProfile) {
       if (!(standoffM > 0)) return { valid: false };
       const targetYmm = groundYmm + buildingHeightM * 1000;
       const standoffXmm = pivotXmm + standoffM * 1000;
-      const offset = undersideOffsetMm || 0;
+      const profile = undersideProfile || [];
 
-      // bisect for the angle where the underside line's Y at standoffXmm
+      // bisect for the angle where the underside curve's Y at standoffXmm
       // equals the building's top - monotonic in angle over 0..89.9 for
-      // any physically sane standoff/offset, same range the old atan-based
-      // version implicitly covered.
+      // any physically sane standoff/profile, same range the old
+      // atan-based version implicitly covered.
       let lo = 0, hi = 89.9;
-      const f = (a) => rigUndersideLineY(a, pivotXmm, pivotYmm, standoffXmm, offset) - targetYmm;
+      const f = (a) => rigUndersideLineY(a, pivotXmm, pivotYmm, standoffXmm, profile) - targetYmm;
       const fLo = f(lo), fHi = f(hi);
       let criticalAngleDeg;
       if (fLo >= 0) {
@@ -4489,9 +4553,10 @@
       if (rigAxis !== 'boom' || !section.pivot || section.groundY == null) return;
       const pivotXmm = section.pivot.x, pivotYmm = section.pivot.y, groundYmm = section.groundY;
       const maxCapturedAngle = section.angles[section.angles.length - 1];
-      const undersideOffsetMm = rigUndersideOffsetCache[rigConfigKey] || 0;
+      const boomLenStr = document.getElementById('rig-length-select').value;
+      const boomLenM = parseFloat(boomLenStr);
+      const undersideProfile = rigUndersideProfileCache[rigConfigKey + ':' + boomLenStr] || [];
 
-      const boomLenM = parseFloat(document.getElementById('rig-length-select').value);
       const angleDeg = parseFloat(document.getElementById('rig-angle-slider').value);
       const buildingHeightM = parseFloat(document.getElementById('rig-bldg-height-slider').value);
       const standoffM = parseFloat(document.getElementById('rig-bldg-dist-slider').value);
@@ -4499,7 +4564,7 @@
       const currentRadiusM = boomLenM * Math.cos(angleDeg * Math.PI / 180);
       document.getElementById('rig-current-radius-value').textContent = currentRadiusM.toFixed(1) + ' m';
 
-      const c = rigComputeClearance(buildingHeightM, standoffM, boomLenM, pivotXmm, pivotYmm, groundYmm, maxCapturedAngle, undersideOffsetMm);
+      const c = rigComputeClearance(buildingHeightM, standoffM, boomLenM, pivotXmm, pivotYmm, groundYmm, maxCapturedAngle, undersideProfile);
       const critAngleEl = document.getElementById('rig-critical-angle-value');
       const critRadiusEl = document.getElementById('rig-critical-radius-value');
       const statusEl = document.getElementById('rig-clearance-status');
@@ -4516,22 +4581,6 @@
         statusEl.style.color = clear ? '#34c759' : '#ff453a';
       }
 
-      // The boom tapers toward its tip, but the underside reference used
-      // above is measured at its widest point (the base box section) and
-      // held constant for the whole length - deliberately conservative,
-      // since we can't reliably tell the boom's own outer skin apart from
-      // its internal bracing/reinforcement in the source CAD art at any
-      // other point along its length. Real clearance is normally BETTER
-      // than shown here, never worse - surfaced so the gap between this
-      // line and the boom's visible taper (especially near the tip) reads
-      // as an intentional safety margin, not a rendering bug.
-      const marginNote = document.getElementById('rig-clearance-margin-note');
-      if (undersideOffsetMm > 0) {
-        marginNote.textContent = `Conservative estimate: uses the boom's widest cross-section (~${(undersideOffsetMm / 1000).toFixed(1)} m below its pivot) as the underside for its full length, since the boom is thinner than this everywhere past the base. Real clearance is normally better than shown here, never worse.`;
-      } else {
-        marginNote.textContent = '';
-      }
-
       const bldgRect = document.getElementById('rig-bldg-rect');
       const BUILDING_WIDTH_MM = 4000;
       const bx = pivotXmm + standoffM * 1000;
@@ -4541,22 +4590,29 @@
       bldgRect.setAttribute('width', BUILDING_WIDTH_MM.toFixed(0));
       bldgRect.setAttribute('height', bh.toFixed(0));
 
-      // draw the TRUE underside line (pivot and tip both shifted by the
-      // perpendicular offset, which rotates with the boom angle) rather
-      // than the raw centerline, so what's drawn matches what's checked
+      // Draw the TRUE underside curve - each profile sample (distance s
+      // along the boom, taper offset at that s) rotated into the boom's
+      // current-angle world position - so what's drawn actually hugs the
+      // boom's real taper instead of standing off it at one fixed offset.
       const rad = angleDeg * Math.PI / 180;
-      const offX = undersideOffsetMm * Math.sin(rad), offY = -undersideOffsetMm * Math.cos(rad);
-      const undersidePivotX = pivotXmm + offX, undersidePivotY = pivotYmm + offY;
-      const tipX = undersidePivotX + boomLenM * 1000 * Math.cos(rad);
-      const tipY = undersidePivotY + boomLenM * 1000 * Math.sin(rad);
+      const cosT = Math.cos(rad), sinT = Math.sin(rad);
+      const boomLenMm = boomLenM * 1000;
+      const sSamples = undersideProfile.length
+        ? [0, ...undersideProfile.map(p => p.s).filter(s => s > 0 && s < boomLenMm), boomLenMm]
+        : [0, boomLenMm];
+      const pts = sSamples.map(s => {
+        const offset = rigProfileOffsetAt(undersideProfile, s);
+        const wx = pivotXmm + s * cosT + offset * sinT;
+        const wy = pivotYmm - offset * cosT + s * sinT;
+        return wx.toFixed(0) + ',' + (-wy).toFixed(0);
+      });
       const clearanceLine = document.getElementById('rig-clearance-line');
-      clearanceLine.setAttribute('x1', undersidePivotX.toFixed(0));
-      clearanceLine.setAttribute('y1', (-undersidePivotY).toFixed(0));
-      clearanceLine.setAttribute('x2', tipX.toFixed(0));
-      clearanceLine.setAttribute('y2', (-tipY).toFixed(0));
+      clearanceLine.setAttribute('points', pts.join(' '));
       const lineColor = !c.valid ? '#9ca3af' : c.outOfReach ? '#9ca3af' : (angleDeg >= c.criticalAngleDeg ? '#34c759' : '#ff453a');
       clearanceLine.setAttribute('stroke', lineColor);
       clearanceLine.setAttribute('stroke-opacity', '0.85');
+      const pivotOffset = rigProfileOffsetAt(undersideProfile, 0);
+      const undersidePivotX = pivotXmm + pivotOffset * sinT, undersidePivotY = pivotYmm - pivotOffset * cosT;
       document.getElementById('rig-pivot-marker').setAttribute('cx', undersidePivotX.toFixed(0));
       document.getElementById('rig-pivot-marker').setAttribute('cy', (-undersidePivotY).toFixed(0));
     }
