@@ -1744,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.24</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.25</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -10384,7 +10384,25 @@
       '1250': { rearSpan: 8294, frontSpan: 8294, C1: 3423,   C2: 5885, C3: 5521, C4: 3807 },
       '1300': { rearSpan: 8532, frontSpan: 8532, C1: 3500,   C2: 5416, C3: 5022, C4: 3910 },
       '1650': { rearSpan: 9578, frontSpan: 9578, C1: 4000.5, C2: 6530, C3: 6042, C4: 4528.5 },
-      '1100': { rearSpan: 7300, frontSpan: 7300, C1: 3923,   C2: 3554, C3: 3880, C4: 3597 }
+      '1100': { rearSpan: 7300, frontSpan: 7300, C1: 3923,   C2: 3554, C3: 3880, C4: 3597 },
+      // Source: Liebherr doc LTM-0286-5-000 (bal_28600-02-02), chapter
+      // 1.03 Technical data, "3.1 Support base" table (page 62) for span
+      // (Width b, "Wide"/100%: 7.87m -> 7870), and Fig.159732 "Crane
+      // dimensions" (page 53) for the longitudinal split - its own
+      // ground-track dimension chain gives 4639mm front-of-center /
+      // 3435mm rear-of-center (totaling 8074mm, matching the support-
+      // base table's own "Length a" of 8.06m within normal rounding).
+      // Unlike the other cranes above, this crane's own OEM figures never
+      // break the four legs out into separate left/right witness lines -
+      // only ONE combined length and ONE combined width for the whole
+      // support base. C1/C4 and C2/C3 are therefore set equal here
+      // (assumed left-right symmetric) rather than read individually -
+      // every other crane's real C-values show small but genuine L/R
+      // differences even when their span is symmetric, so this is a
+      // simplification worth revisiting if a clearer per-leg source
+      // (e.g. a support-pad placement drawing with all 4 legs
+      // individually witnessed) turns up.
+      '1150': { rearSpan: 7870, frontSpan: 7870, C1: 3435, C2: 4639, C3: 4639, C4: 3435 }
     };
 
     // Is point (x,y) under the crane's CURRENT (unshifted) chassis footprint?
