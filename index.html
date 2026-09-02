@@ -1744,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.16</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.17</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -4276,6 +4276,9 @@
       const cfg = RIG_CONFIGS[key];
       if (cfg.hasJib && !(key in rigJibReferenceCache)) {
         rigJibReferenceCache[key] = rigComputeJibReference(data);
+        if (rigJibReferenceCache[key]) {
+          rigStaticIndexCache[key] = rigBuildStaticPointIndex(data.boom);
+        }
       }
       setRigAxis(rigAxis, /*skipConfigCheck*/ true);
     }
@@ -4515,6 +4518,82 @@
       return { pivotX: boomPivot.x, pivotY: boomPivot.y, deltaRad };
     }
 
+    // The jib frame's own points include the WHOLE crane, not just the
+    // boom+jib - carrier, turntable, counterweight, cab are all baked in
+    // too, at whatever position they sit at real-world. Rotating
+    // literally everything (the first version of this feature) spun the
+    // carrier along with the boom, which is wrong - only the boom (and
+    // the jib rigidly attached to it) should move; the carrier stays put
+    // on the ground.
+    //
+    // There's no per-entity label to tell them apart, but the boom
+    // dataset's own real angle sweep tells us directly: a point that's
+    // part of the carrier/turntable never moves as boom angle changes: a
+    // point that's part of the boom does. Building a spatial index of
+    // "points that never move" from the boom dataset, then checking each
+    // jib-frame path against it (shared world coordinates, confirmed
+    // earlier), classifies every path as carrier (skip the rotation) or
+    // boom+jib (apply it) - grounded in the real data, not a guessed
+    // geometric threshold.
+    let rigStaticIndexCache = {}; // configKey -> Map spatial hash
+    let rigPathRotateMaskCache = {}; // `${configKey}:${jibLenStr}` -> boolean[] (true = rotate)
+    const RIG_STATIC_TOL = 8;
+
+    function rigBuildStaticPointIndex(boomSection) {
+      const anyLen = Object.keys(boomSection.lengths)[0];
+      const lenData = rigDecodeLengthEntry(boomSection, anyLen);
+      const u16 = lenData.u16;
+      const nAngles = boomSection.angles.length;
+      const grid = new Map();
+      for (const p of lenData.paths) {
+        const n = p.n, frameStride = n * 2;
+        for (let k = 0; k < n; k++) {
+          let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity, x0 = null, y0 = null;
+          for (let ai = 0; ai < nAngles; ai++) {
+            const base = p.offset + ai * frameStride;
+            const x = rigDequant(u16[base + k * 2], boomSection.offx, boomSection.scale);
+            const y = rigDequant(u16[base + k * 2 + 1], boomSection.offy, boomSection.scale);
+            if (ai === 0) { x0 = x; y0 = y; }
+            if (x < minx) minx = x; if (x > maxx) maxx = x;
+            if (y < miny) miny = y; if (y > maxy) maxy = y;
+          }
+          if (Math.max(maxx - minx, maxy - miny) <= 20) { // didn't move across the whole sweep
+            const key = Math.round(x0 / RIG_STATIC_TOL) + ',' + Math.round(y0 / RIG_STATIC_TOL);
+            grid.set(key, true);
+          }
+        }
+      }
+      return grid;
+    }
+
+    function rigIsStaticPoint(staticIndex, x, y) {
+      const cx = Math.round(x / RIG_STATIC_TOL), cy = Math.round(y / RIG_STATIC_TOL);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          if (staticIndex.has((cx + dx) + ',' + (cy + dy))) return true;
+        }
+      }
+      return false;
+    }
+
+    // Per-path: majority of its own points match a known-static (carrier)
+    // point -> don't rotate it; otherwise it's boom/jib structure -> do.
+    function rigClassifyJibPaths(jibLengthData, jibSection, staticIndex) {
+      const u16 = jibLengthData.u16;
+      return jibLengthData.paths.map(p => {
+        const base = p.offset; // frame 0
+        let staticHits = 0;
+        for (let k = 0; k < p.n; k++) {
+          const x = rigDequant(u16[base + k * 2], jibSection.offx, jibSection.scale);
+          const y = rigDequant(u16[base + k * 2 + 1], jibSection.offy, jibSection.scale);
+          if (rigIsStaticPoint(staticIndex, x, y)) staticHits++;
+        }
+        return staticHits <= p.n / 2; // true = rotate (boom/jib), false = carrier
+      });
+    }
+
+    let rigCurrentRotateMask = null; // per-path boolean[] for the jib axis - true = part of the boom/jib assembly
+
     function buildRigElementsForLength(L) {
       const section = rigCurrentSection();
       rigCurrentLengthData = getRigLengthData(rigAxis, L);
@@ -4522,6 +4601,15 @@
       if (rigAxis === 'boom' && section.pivot && !(profileKey in rigUndersideProfileCache)) {
         rigUndersideProfileCache[profileKey] = rigComputeBoomUndersideProfile(
           rigCurrentLengthData, section, section.pivot.x, section.pivot.y);
+      }
+      rigCurrentRotateMask = null;
+      if (rigAxis === 'jib' && rigStaticIndexCache[rigConfigKey]) {
+        const maskKey = rigConfigKey + ':' + L;
+        if (!(maskKey in rigPathRotateMaskCache)) {
+          rigPathRotateMaskCache[maskKey] = rigClassifyJibPaths(
+            rigCurrentLengthData, section, rigStaticIndexCache[rigConfigKey]);
+        }
+        rigCurrentRotateMask = rigPathRotateMaskCache[maskKey];
       }
       const boomGroup = document.getElementById('rig-boom-group');
       boomGroup.innerHTML = '';
@@ -4560,13 +4648,15 @@
       const a0 = angles[idx0], a1 = angles[idx1];
       const t = a1 > a0 ? (angleDeg - a0) / (a1 - a0) : 0;
 
-      // On the jib axis with a jib attached, additionally rotate every
-      // point rigidly around the boom's pivot so the frozen boom (and
-      // the jib rigidly attached to it) shows at the user's chosen boom
-      // angle instead of the CAD export's fixed reference angle - see
-      // rigCombinedRotation.
+      // On the jib axis with a jib attached, additionally rotate the
+      // boom+jib assembly (NOT the carrier, which is also baked into
+      // this frame but must stay put on the ground - see
+      // rigCurrentRotateMask) around the boom's pivot so the frozen boom
+      // shows at the user's chosen boom angle instead of the CAD
+      // export's fixed reference angle - see rigCombinedRotation.
       const rot = rigCombinedRotation();
       const cosD = rot ? Math.cos(rot.deltaRad) : 1, sinD = rot ? Math.sin(rot.deltaRad) : 0;
+      const rotateMask = rigCurrentRotateMask;
 
       const u16 = rigCurrentLengthData.u16;
       const paths = rigCurrentLengthData.paths;
@@ -4576,6 +4666,7 @@
         const frameStride = n * 2;
         const base0 = p.offset + idx0 * frameStride;
         const base1 = p.offset + idx1 * frameStride;
+        const applyRot = rot && (!rotateMask || rotateMask[pi]);
         let str = '';
         for (let k = 0; k < n; k++) {
           const x0 = rigDequant(u16[base0 + k * 2], OFFX, SCALE);
@@ -4584,7 +4675,7 @@
           const y1 = rigDequant(u16[base1 + k * 2 + 1], OFFY, SCALE);
           let x = x0 + (x1 - x0) * t;
           let y = y0 + (y1 - y0) * t;
-          if (rot) [x, y] = rigRotatePoint(x, y, rot.pivotX, rot.pivotY, cosD, sinD);
+          if (applyRot) [x, y] = rigRotatePoint(x, y, rot.pivotX, rot.pivotY, cosD, sinD);
           str += x.toFixed(0) + ',' + (-y).toFixed(0) + ' ';
         }
         rigElements[pi].setAttribute('points', str);
@@ -4836,16 +4927,20 @@
 
       // The stored bbox is for the UNROTATED frame (the CAD export's own
       // reference boom angle) - once rigCombinedRotation re-aims the
-      // whole assembly, the true extent rotates with it. Rotating the
-      // bbox's own 4 corners and taking their bounding box is a cheap,
-      // always-safe over-approximation of the rotated shape's real extent.
+      // whole assembly, the true extent rotates with it - except the
+      // carrier, which rigCurrentRotateMask/rigCombinedRotation keep
+      // fixed on the ground. Since this bbox covers both together, take
+      // the union of the ORIGINAL bbox (bounds the carrier, which never
+      // moves) and the bbox ROTATED as a whole (a cheap, always-safe
+      // over-approximation of wherever the boom+jib part ends up) rather
+      // than just the rotated one, so the carrier can't get clipped.
       const rot = rigCombinedRotation();
       if (rot) {
         const cosD = Math.cos(rot.deltaRad), sinD = Math.sin(rot.deltaRad);
         const corners = [[minx, miny], [minx, maxy], [maxx, miny], [maxx, maxy]]
           .map(([x, y]) => rigRotatePoint(x, y, rot.pivotX, rot.pivotY, cosD, sinD));
-        minx = Math.min(...corners.map(c => c[0])); maxx = Math.max(...corners.map(c => c[0]));
-        miny = Math.min(...corners.map(c => c[1])); maxy = Math.max(...corners.map(c => c[1]));
+        minx = Math.min(minx, ...corners.map(c => c[0])); maxx = Math.max(maxx, ...corners.map(c => c[0]));
+        miny = Math.min(miny, ...corners.map(c => c[1])); maxy = Math.max(maxy, ...corners.map(c => c[1]));
       }
 
       const boomSection = rigAxis === 'boom' ? section : rigDataCache[rigConfigKey].boom;
