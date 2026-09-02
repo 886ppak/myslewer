@@ -1744,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.21</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.22</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -6367,6 +6367,116 @@
           { items: ['p1', 'p2a', 'p3a'] },
           { items: ['p1', 'p2a', 'p3a', 'p2b', 'p3b'] },
           { items: ['p1', 'p2a', 'p3a', 'p2b', 'p3b', 'p2c', 'p3c'] }
+        ]
+      },
+      // Source: Liebherr doc LTM-0286-5-000 (bal_28600-02-02), chapter
+      // 4.07 Counterweight, "5 Counterweight combinations" (PDF pages
+      // 874-886 of the crane's Operating Instructions manual), (c)
+      // Liebherr-Werk Ehingen GmbH 2021. 49 combos (0-45.0t), each
+      // verified by subset-sum against its own stated composition -
+      // parsed programmatically from the manual's text, not hand-typed,
+      // to avoid transcription slips across a chapter this size.
+      // Diagram cropped directly from the manual's own Fig.160590
+      // "Counterweight overview" exploded-view artwork (page 861).
+      // Hotspot polygons are approximate rectangular regions estimated
+      // from the rendered PDF page, NOT traced from AutoCAD/DXF vector
+      // source like several other cranes' diagrams - good enough to tap
+      // the right plate, but not pixel-precise silhouettes. Worth
+      // re-tracing properly if a vector source ever turns up.
+      //
+      // "Winch 2*" is a real line item in the manual's own combination
+      // chart (the second/auxiliary winch's own weight counts toward
+      // total counterweight when fitted) but isn't a physical plate shown
+      // in the exploded-view diagram, so it has no hotspot - selectable
+      // only via the "Jump to Known Combination" dropdown or a future
+      // dedicated toggle, same as it not being clickable costs nothing
+      // functionally.
+      //
+      // "Auxiliary ballast 9" is two identical 8.0t pieces (matches the
+      // diagram's own two "9" labels, one per side) - modelled as
+      // interchangeableGroup like LTM 1160's repeated plate 3, same
+      // reason: cwtMatchSignature() already handles a same-named,
+      // same-weight pair generically once tagged.
+      '1150': {
+        label: 'LTM 1150-5.3',
+        sourceNote: 'Source: Liebherr doc LTM-0286-5-000 (bal_28600-02-02), chapter 4.07 Counterweight, © Liebherr-Werk Ehingen GmbH 2021, for combination data. Diagram cropped from the same manual’s own Fig.160590 exploded-view artwork; hotspot outlines are approximate (estimated from the rendered PDF page, not AutoCAD-traced). Reference tool only — cross-check against the current OEM load chart and assembly drawing before use on site.',
+        diagramImage: './counterweight/img/ltm1150-cwt-exploded.png',
+        diagramAlt: 'LTM 1150-5.3 counterweight exploded-view line diagram, plates 1-9 (receptacle, six counterweight plates, replacement ballast, two auxiliary ballast pieces)',
+        diagramWidth: 1680,
+        diagramHeight: 1370,
+        figRef: 'Fig.160590: Counterweight overview - OEM artwork, cropped directly from the manual page.',
+        components: [
+          { id: 'p1', name: 'Receptacle plate 1', weight: 1.9, shortLabel: '1',
+            hotspots: [{ points: '660,1165 1180,1165 1180,1315 660,1315' }] },
+          { id: 'p2', name: 'Counterweight plate 2', weight: 2.8, shortLabel: '2',
+            hotspots: [{ points: '660,975 1020,975 1020,1120 660,1120' }] },
+          { id: 'p3', name: 'Counterweight plate 3', weight: 7.0, shortLabel: '3',
+            hotspots: [{ points: '660,720 1150,720 1150,975 660,975' }] },
+          { id: 'p4', name: 'Counterweight plate 4', weight: 3.8, shortLabel: '4',
+            hotspots: [{ points: '875,545 1090,545 1090,720 875,720' }] },
+          { id: 'p5', name: 'Counterweight plate 5', weight: 4.0, shortLabel: '5',
+            hotspots: [{ points: '665,545 895,545 895,720 665,720' }] },
+          { id: 'p6', name: 'Counterweight plate 6', weight: 5.2, shortLabel: '6',
+            hotspots: [{ points: '660,375 1150,375 1150,545 660,545' }] },
+          { id: 'p7', name: 'Counterweight plate 7', weight: 3.5, shortLabel: '7',
+            hotspots: [{ points: '660,205 1140,205 1140,375 660,375' }] },
+          { id: 'p8', name: 'Replacement ballast 8', weight: 0.8, shortLabel: '8',
+            hotspots: [{ points: '850,100 1150,100 1150,185 850,185' }] },
+          { id: 'p9a', name: 'Auxiliary ballast 9', weight: 8.0, interchangeableGroup: 'aux9_1150', shortLabel: '9',
+            hotspots: [{ points: '420,570 730,570 730,915 420,915' }] },
+          { id: 'p9b', name: 'Auxiliary ballast 9', weight: 8.0, interchangeableGroup: 'aux9_1150', shortLabel: '9',
+            hotspots: [{ points: '1330,570 1600,570 1600,910 1330,910' }] },
+          { id: 'pw', name: 'Winch 2*', weight: 0.8, shortLabel: '' }
+        ],
+        combos: [
+          { items: [] },
+          { items: ['pw'] },
+          { items: ['p1'] },
+          { items: ['p1', 'pw'] },
+          { items: ['p7'] },
+          { items: ['p7', 'p8'] },
+          { items: ['p1', 'p2'] },
+          { items: ['p1', 'p7'] },
+          { items: ['p1', 'p2', 'pw'] },
+          { items: ['p1', 'p7', 'p8'] },
+          { items: ['p1', 'p2', 'p7'] },
+          { items: ['p1', 'p2', 'p7', 'p8'] },
+          { items: ['p6', 'p7', 'p8'] },
+          { items: ['p1', 'p3', 'pw'] },
+          { items: ['p1', 'p6', 'p7', 'p8'] },
+          { items: ['p1', 'p2', 'p3'] },
+          { items: ['p1', 'p2', 'p3', 'pw'] },
+          { items: ['p1', 'p3', 'p7', 'p8'] },
+          { items: ['p1', 'p2', 'p6', 'p7', 'p8'] },
+          { items: ['p1', 'p2', 'p3', 'p7'] },
+          { items: ['p1', 'p2', 'p3', 'p7', 'p8'] },
+          { items: ['p1', 'p3', 'p4', 'p5', 'pw'] },
+          { items: ['p1', 'p3', 'p6', 'p7'] },
+          { items: ['p1', 'p3', 'p6', 'p7', 'p8'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'pw'] },
+          { items: ['p1', 'p3', 'p4', 'p5', 'p7', 'p8'] },
+          { items: ['p1', 'p2', 'p3', 'p6', 'p7', 'p8'] },
+          { items: ['p1', 'p3', 'p4', 'p5', 'p6', 'pw'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p7'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p7', 'p8'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'pw'] },
+          { items: ['p1', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'] },
+          { items: ['p1', 'p3', 'p4', 'p5', 'p9a', 'p9b', 'pw'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p9a', 'p9b'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p9a', 'p9b', 'pw'] },
+          { items: ['p1', 'p3', 'p4', 'p5', 'p7', 'p8', 'p9a', 'p9b'] },
+          { items: ['p1', 'p3', 'p4', 'p5', 'p6', 'p9a', 'p9b', 'pw'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p7', 'p9a', 'p9b'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p7', 'p8', 'p9a', 'p9b'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p9a', 'p9b'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p9a', 'p9b', 'pw'] },
+          { items: ['p1', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9a', 'p9b'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p9a', 'p9b'] },
+          { items: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9a', 'p9b'] }
         ]
       }
     };
