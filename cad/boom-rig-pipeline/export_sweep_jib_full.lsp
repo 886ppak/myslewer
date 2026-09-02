@@ -17,15 +17,22 @@
 ;; cost of a MUCH bigger export than anything run so far in this
 ;; pipeline. See the pose-count math below before running anything.
 ;;
+;; The H variants (T3NH, T3NYH, T3FH, T3YVEFH) are essentially the same
+;; geometry as their non-H counterpart (T3N, T3NY, T3F, T3YVEF) - dropped
+;; entirely from this script rather than doubling an already enormous
+;; export for configs that wouldn't add real coverage. Only run this for
+;; T3N, T3NY, T3F, T3YVEF; if the H variants ever do need their own real
+;; data, copy one of the confirm-and-run-full lines near the bottom.
+;;
 ;; ############################################################
 ;; ##  POSE COUNT - READ THIS BEFORE RUNNING ANYTHING BELOW  ##
 ;; ############################################################
 ;;   For ONE config: (boom lengths) x (boom angles) x (jib lengths) x (jib angles)
-;;     Jib N configs (T3N, T3NH, T3NY, T3NYH):  10 x 9 x 21 x 9 = 17,010 poses each
-;;     Jib F configs (T3F, T3FH, T3YVEF, T3YVEFH): 10 x 9 x 17 x 9 = 13,770 poses each
-;;   All 8 jib configs, fully: (4 x 17,010) + (4 x 13,770) = 122,880 poses.
+;;     Jib N configs (T3N, T3NY):  10 x 9 x 21 x 9 = 17,010 poses each
+;;     Jib F configs (T3F, T3YVEF): 10 x 9 x 17 x 9 = 13,770 poses each
+;;   All 4 jib configs, fully: (2 x 17,010) + (2 x 13,770) = 61,560 poses.
 ;;   At roughly 2-3 seconds per pose (wblock + regen overhead, consistent
-;;   with the earlier sweeps), that's 70-100+ HOURS of AutoCAD run time
+;;   with the earlier sweeps), that's 35-50+ HOURS of AutoCAD run time
 ;;   for everything - not realistic in one sitting, or several.
 ;;
 ;;   *BOOM-ANGLES-SWEEP* and *LENGTHS* below are edit-before-you-run
@@ -41,7 +48,7 @@
 ;;       lengths and pick up later without losing progress, and lets you
 ;;       ship boom lengths as they finish instead of waiting for all 10.
 ;;
-;; Guy angle (T3NY/T3NYH/T3YVEF/T3YVEFH) is held at its reference value
+;; Guy angle (T3NY/T3YVEF) is held at its reference value
 ;; throughout, same as the original decoupled sweep - adding a 3-way guy
 ;; axis on top of this would triple an already enormous export for very
 ;; little real value (guy angle doesn't interact with boom/jib geometry).
@@ -62,9 +69,8 @@
 ;;   RUN-ONE-LENGTH     -> prompts for config name + which boom length
 ;;                          index (0-9) to sweep fully (all 9 angles x
 ;;                          full jib grid) - the resumable, chunked way.
-;;   EXPORTSWEEP-T3N-FULL, EXPORTSWEEP-T3NH-FULL, EXPORTSWEEP-T3NY-FULL,
-;;   EXPORTSWEEP-T3NYH-FULL, EXPORTSWEEP-T3F-FULL, EXPORTSWEEP-T3FH-FULL,
-;;   EXPORTSWEEP-T3YVEF-FULL, EXPORTSWEEP-T3YVEFH-FULL
+;;   EXPORTSWEEP-T3N-FULL, EXPORTSWEEP-T3NY-FULL,
+;;   EXPORTSWEEP-T3F-FULL, EXPORTSWEEP-T3YVEF-FULL
 ;;                       -> sweeps ALL 10 boom lengths for that config in
 ;;                          one sitting (prints the pose count and asks
 ;;                          you to type YES before starting).
@@ -350,22 +356,18 @@
 )
 
 (defun c:EXPORTSWEEP-T3N-FULL ()     (confirm-and-run-full "T3N"     'N nil) )
-(defun c:EXPORTSWEEP-T3NH-FULL ()    (confirm-and-run-full "T3NH"    'N nil) )
 (defun c:EXPORTSWEEP-T3NY-FULL ()    (confirm-and-run-full "T3NY"    'N T) )
-(defun c:EXPORTSWEEP-T3NYH-FULL ()   (confirm-and-run-full "T3NYH"   'N T) )
 (defun c:EXPORTSWEEP-T3F-FULL ()     (confirm-and-run-full "T3F"     'F nil) )
-(defun c:EXPORTSWEEP-T3FH-FULL ()    (confirm-and-run-full "T3FH"    'F nil) )
 (defun c:EXPORTSWEEP-T3YVEF-FULL ()  (confirm-and-run-full "T3YVEF"  'F T) )
-(defun c:EXPORTSWEEP-T3YVEFH-FULL () (confirm-and-run-full "T3YVEFH" 'F T) )
 
 ;; ---------- chunked, resumable single-length runner ----------
 (defun c:RUN-ONE-LENGTH ( / cfg kind-str kind has-guy idx-str idx len-pair)
-  (princ "\nConfig name (e.g. T3N, T3F, T3NY, T3YVEFH): ")
+  (princ "\nConfig name (T3N, T3F, T3NY, or T3YVEF - H variants dropped, see top of file): ")
   (setq cfg (strcase (getstring)))
-  (setq kind (cond ((member cfg '("T3N" "T3NH" "T3NY" "T3NYH")) 'N)
-                    ((member cfg '("T3F" "T3FH" "T3YVEF" "T3YVEFH")) 'F)
+  (setq kind (cond ((member cfg '("T3N" "T3NY")) 'N)
+                    ((member cfg '("T3F" "T3YVEF")) 'F)
                     (T nil)))
-  (setq has-guy (member cfg '("T3NY" "T3NYH" "T3YVEF" "T3YVEFH")))
+  (setq has-guy (member cfg '("T3NY" "T3YVEF")))
   (if (null kind)
     (princ (strcat "\nUnrecognized config: " cfg ". Aborting."))
     (progn
@@ -391,7 +393,7 @@
 (princ "\nResumable, one boom length at a time (recommended):")
 (princ "\n  RUN-ONE-LENGTH")
 (princ "\nOr all 10 boom lengths for one config in one sitting (asks to confirm first):")
-(princ "\n  EXPORTSWEEP-T3N-FULL  EXPORTSWEEP-T3NH-FULL  EXPORTSWEEP-T3NY-FULL  EXPORTSWEEP-T3NYH-FULL")
-(princ "\n  EXPORTSWEEP-T3F-FULL  EXPORTSWEEP-T3FH-FULL  EXPORTSWEEP-T3YVEF-FULL  EXPORTSWEEP-T3YVEFH-FULL")
+(princ "\n  EXPORTSWEEP-T3N-FULL  EXPORTSWEEP-T3NY-FULL  EXPORTSWEEP-T3F-FULL  EXPORTSWEEP-T3YVEF-FULL")
+(princ "\n(H variants dropped - see top of file)")
 (princ "\nEdit *BOOM-ANGLES-SWEEP* near the top to trade off completeness vs. runtime first.")
 (princ)
