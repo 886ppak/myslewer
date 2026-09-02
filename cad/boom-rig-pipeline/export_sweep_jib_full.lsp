@@ -71,9 +71,14 @@
 ;;                          full jib grid) - the resumable, chunked way.
 ;;   EXPORTSWEEP-T3N-FULL, EXPORTSWEEP-T3NY-FULL,
 ;;   EXPORTSWEEP-T3F-FULL, EXPORTSWEEP-T3YVEF-FULL
-;;                       -> sweeps ALL 10 boom lengths for that config in
+;;                       -> sweeps ALL 10 boom lengths for ONE config in
 ;;                          one sitting (prints the pose count and asks
 ;;                          you to type YES before starting).
+;;   EXPORTSWEEP-ALL-JIB-FULL
+;;                       -> commits to ALL 4 configs, all 10 boom lengths
+;;                          each, back-to-back with ONE confirmation up
+;;                          front (~61,500 poses, ~35-50 hours - this is
+;;                          the "just run everything now" command).
 
 ;; ===== OUTPUT FOLDER =====
 (setq *OUTDIR* (strcat (getenv "USERPROFILE") "/Documents/export/"))
@@ -360,6 +365,46 @@
 (defun c:EXPORTSWEEP-T3F-FULL ()     (confirm-and-run-full "T3F"     'F nil) )
 (defun c:EXPORTSWEEP-T3YVEF-FULL ()  (confirm-and-run-full "T3YVEF"  'F T) )
 
+;; ---------- all 4 remaining jib configs, one sitting, one confirmation ----------
+;; Same YES safeguard as confirm-and-run-full but totalled across all 4
+;; configs up front, then runs each in sequence with no further prompts -
+;; this is the "commit to everything now" command. Still writes and
+;; verifies (findfile) every file as it goes and restores the drawing's
+;; original property values after each config, same as every other path
+;; through this script - an interruption partway through (Escape) just
+;; means the LATER configs weren't attempted, nothing already written is
+;; at risk.
+(defun c:EXPORTSWEEP-ALL-JIB-FULL ( / est-n est-f total ans all-lengths)
+  (setq all-lengths (append '(0 1 2 3 4 5 6 7 8 9) nil))
+  (setq est-n (* (length *LENGTHS*) (length *BOOM-ANGLES-SWEEP*)
+                  (length *JIB-N-LENGTHS*) (length *JIB-ANGLES*)))
+  (setq est-f (* (length *LENGTHS*) (length *BOOM-ANGLES-SWEEP*)
+                  (length *JIB-F-LENGTHS*) (length *JIB-ANGLES*)))
+  (setq total (+ (* 2 est-n) (* 2 est-f))) ;; T3N+T3NY, T3F+T3YVEF
+  (princ (strcat "\nALL 4 configs (T3N, T3NY, T3F, T3YVEF), all 10 boom lengths each: "
+                  "up to " (itoa total) " poses total."))
+  (princ "\nAt ~2-3 sec/pose that's roughly ")
+  (princ (rtos (/ (* total 2.5) 3600.0) 2 1))
+  (princ " hours, run back-to-back with no further prompts once started.")
+  (princ "\nType YES (all caps) to proceed, anything else to cancel: ")
+  (setq ans (getstring))
+  (if (/= ans "YES")
+    (princ "\nCancelled - nothing exported.")
+    (progn
+      (princ "\n\n########## STARTING: T3N ##########")
+      (run-full-jib-sweep "T3N" 'N nil all-lengths)
+      (princ "\n\n########## STARTING: T3NY ##########")
+      (run-full-jib-sweep "T3NY" 'N T all-lengths)
+      (princ "\n\n########## STARTING: T3F ##########")
+      (run-full-jib-sweep "T3F" 'F nil all-lengths)
+      (princ "\n\n########## STARTING: T3YVEF ##########")
+      (run-full-jib-sweep "T3YVEF" 'F T all-lengths)
+      (princ "\n\n########## ALL 4 CONFIGS DONE ##########")
+    )
+  )
+  (princ)
+)
+
 ;; ---------- chunked, resumable single-length runner ----------
 (defun c:RUN-ONE-LENGTH ( / cfg kind-str kind has-guy idx-str idx len-pair)
   (princ "\nConfig name (T3N, T3F, T3NY, or T3YVEF - H variants dropped, see top of file): ")
@@ -394,6 +439,8 @@
 (princ "\n  RUN-ONE-LENGTH")
 (princ "\nOr all 10 boom lengths for one config in one sitting (asks to confirm first):")
 (princ "\n  EXPORTSWEEP-T3N-FULL  EXPORTSWEEP-T3NY-FULL  EXPORTSWEEP-T3F-FULL  EXPORTSWEEP-T3YVEF-FULL")
+(princ "\nOr commit to all 4 configs right now, one confirmation, back-to-back:")
+(princ "\n  EXPORTSWEEP-ALL-JIB-FULL")
 (princ "\n(H variants dropped - see top of file)")
 (princ "\nEdit *BOOM-ANGLES-SWEEP* near the top to trade off completeness vs. runtime first.")
 (princ)
