@@ -1744,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.9</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.10</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2272,6 +2272,7 @@
              shown only by window.__updateX650TabVisibility. See that
              function (below) for both conditions. -->
         <button class="mode-btn" id="cad-subtab-x650" onclick="setCadSubTab('x650')" style="display:none;">X%H</button>
+        <button class="mode-btn" id="cad-subtab-rig" onclick="setCadSubTab('rig')">Boom Rig</button>
       </div>
 
       <div id="cad-panel-pads" style="display:none;">
@@ -2562,6 +2563,68 @@
       </div>
       </div>
       <!-- /cad-panel-x650 -->
+
+      <div id="cad-panel-rig" style="display:none;">
+      <div class="card">
+        <div class="card-title">LTM 1650-8.1 — Boom &amp; Jib Rig</div>
+        <div class="disclaimer" style="margin-bottom:12px;">
+          Every frame here is real AutoCAD dynamic-block-evaluated geometry — exported directly from the source CAD block at a grid of real catalog lengths &times; sampled angles, not guessed or traced. Boom and jib are each their own independent sweep (the jib grid was captured with the boom held at a fixed reference state, and vice versa) — this shows one or the other, not a combined live boom+jib pose yet.
+        </div>
+        <div class="form-group">
+          <label>Attachment configuration</label>
+          <select id="rig-config" onchange="onRigConfigChange()"></select>
+        </div>
+        <div class="mode-toggle" id="rig-axis-toggle" style="margin-top:10px;">
+          <button class="mode-btn active" id="rig-axis-boom" onclick="setRigAxis('boom')">Boom</button>
+          <button class="mode-btn" id="rig-axis-jib" onclick="setRigAxis('jib')">Jib</button>
+        </div>
+        <div id="rig-loading" style="padding:30px 16px; text-align:center; color:var(--text-muted); font-size:0.85rem;">Select a configuration to load its data.</div>
+        <div id="rig-stage-wrap" class="assembly-image-wrap" style="display:none; background:#fff; min-height:340px;">
+          <svg id="rig-svg" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:340px; display:block;">
+            <rect id="rig-bldg-rect" fill="#c4553b" fill-opacity="0.55" stroke="#8a3826" stroke-width="30"></rect>
+            <g id="rig-boom-group"></g>
+            <line id="rig-clearance-line" stroke-width="60" stroke-linecap="round"></line>
+            <circle id="rig-pivot-marker" r="140" fill="#38bdf8"></circle>
+          </svg>
+          <button type="button" class="carrier3d-fullscreen-btn" data-wrap="rig-stage-wrap" onclick="toggleWrapFullscreen('rig-stage-wrap')" title="Fullscreen" aria-label="Fullscreen">
+            <svg class="fs-icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+            <svg class="fs-icon-compress" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg>
+          </button>
+        </div>
+        <div id="rig-controls" style="display:none; margin-top:14px;">
+          <div class="form-group">
+            <label id="rig-length-label">Boom length</label>
+            <select id="rig-length-select" onchange="onRigLengthChange()"></select>
+          </div>
+          <div class="form-group" style="margin-top:10px;">
+            <label id="rig-angle-label">Boom angle: <span id="rig-angle-badge"></span></label>
+            <input type="range" id="rig-angle-slider" min="0" max="80" step="0.5" value="40" oninput="onRigAngleInput()">
+          </div>
+
+          <div id="rig-clearance-section" style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
+            <div class="card-title" style="font-size:0.85rem;">Building clearance check (boom only)</div>
+            <div class="form-group" style="margin-top:8px;">
+              <label>Building height: <span id="rig-bldg-height-badge">10.0 m</span></label>
+              <input type="range" id="rig-bldg-height-slider" min="0" max="50" step="0.5" value="10" oninput="onRigClearanceInput()">
+            </div>
+            <div class="form-group" style="margin-top:10px;">
+              <label>Standoff distance: <span id="rig-bldg-dist-badge">10.0 m</span></label>
+              <input type="range" id="rig-bldg-dist-slider" min="1" max="60" step="0.5" value="10" oninput="onRigClearanceInput()">
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:18px; margin-top:10px; font-size:0.8rem;">
+              <div><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Boom-down limit</div><div id="rig-critical-angle-value" style="font-variant-numeric:tabular-nums; font-size:1rem;">—</div></div>
+              <div><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Radius at that limit</div><div id="rig-critical-radius-value" style="font-variant-numeric:tabular-nums; font-size:1rem;">—</div></div>
+              <div><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Current radius</div><div id="rig-current-radius-value" style="font-variant-numeric:tabular-nums; font-size:1rem;">—</div></div>
+              <div><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Status</div><div id="rig-clearance-status" style="font-weight:600; font-size:0.85rem;">—</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="disclaimer" style="margin-top:12px;">
+          <span id="rig-shape-note"></span> Some longer jib lengths carry a handful of lattice-panel decal shapes whose color was inferred (nearest-neighbor within the same config), not directly pixel-sampled — cosmetic only, geometry is exact throughout.
+        </div>
+      </div>
+      </div>
+      <!-- /cad-panel-rig -->
     </div>
 
     <!-- ================= TAB 4: REEVING PLAN ================= -->
@@ -4054,10 +4117,14 @@
       document.getElementById('cad-subtab-layout').classList.toggle('active', mode === 'layout');
       const x650Btn = document.getElementById('cad-subtab-x650');
       if (x650Btn) x650Btn.classList.toggle('active', mode === 'x650');
+      const rigBtn = document.getElementById('cad-subtab-rig');
+      if (rigBtn) rigBtn.classList.toggle('active', mode === 'rig');
       document.getElementById('cad-panel-pads').style.display = mode === 'pads' ? '' : 'none';
       document.getElementById('cad-panel-layout').style.display = mode === 'layout' ? '' : 'none';
       const x650Panel = document.getElementById('cad-panel-x650');
       if (x650Panel) x650Panel.style.display = mode === 'x650' ? '' : 'none';
+      const rigPanel = document.getElementById('cad-panel-rig');
+      if (rigPanel) rigPanel.style.display = mode === 'rig' ? '' : 'none';
       if (mode === 'layout') {
         initSlewClearanceTab();
         if (carrier3DLayoutActive) activateCarrier3DLayout(carrier3DLayoutModelKey, CARRIER_MODELS[carrier3DLayoutModelKey]);
@@ -4065,6 +4132,8 @@
         if (carrier3DActive) activateCarrier3D(carrier3DModelKey, CARRIER_MODELS[carrier3DModelKey]);
       } else if (mode === 'x650') {
         renderX650Diagram();
+      } else if (mode === 'rig') {
+        initBoomRigTab();
       }
     }
 
@@ -4106,6 +4175,342 @@
       img.style.display = 'none';
       img.src = X650_DIAGRAMS[x650Side][x650Orientation];
       x650ZoomReset();
+    }
+
+    // Boom Rig sub-tab: interactive SVG boom/jib diagram, one config at a
+    // time, built from cad/boom-rig-pipeline/*_poses.json (see that
+    // folder's README for how these are produced - every frame is real
+    // AutoCAD dynamic-block-evaluated geometry from a grid of exported
+    // poses, not traced/guessed). Each file is tens of MB, so - same
+    // lazy-load-on-selection pattern as ensureLoadChartLoaded() - nothing
+    // fetches until a config is actually picked, and the fetched blob is
+    // cached per config for the rest of the session.
+    //
+    // Hosted on Nextcloud, not committed to this repo: confirmed CORS is
+    // already configured there for this exact origin (886ppak.github.io)
+    // and reads need no auth token. Update BOOM_RIG_NEXTCLOUD_BASE below
+    // once the files are uploaded - everything else just works off it.
+    const BOOM_RIG_NEXTCLOUD_BASE = 'REPLACE_WITH_NEXTCLOUD_FOLDER_URL/';
+
+    // Boom length/angle catalog is identical across every LTM 1650
+    // T3-family config (see boom_rig_lib.py) - only the jib axis (and
+    // whether one exists at all) varies per config, pulled from the real
+    // Nextcloud file listing at export time, not assumed from the name.
+    const RIG_BOOM_LENGTHS = ["16.6","22.4","28.2","33.9","39.7","45.3","51.0","52.0","53.0","54.0"];
+    const RIG_CONFIGS = {
+      T3F:     { label: 'T3F',     file: 't3f_poses.json',     hasJib: true },
+      T3FH:    { label: 'T3FH',    file: 't3fh_poses.json',    hasJib: true },
+      T3N:     { label: 'T3N',     file: 't3n_poses.json',     hasJib: true },
+      T3NH:    { label: 'T3NH',    file: 't3nh_poses.json',    hasJib: true },
+      T3NY:    { label: 'T3NY',    file: 't3ny_poses.json',    hasJib: true },
+      T3NYH:   { label: 'T3NYH',   file: 't3nyh_poses.json',   hasJib: true },
+      T3Y:     { label: 'T3Y',     file: 't3y_poses.json',     hasJib: false },
+      T3YVEF:  { label: 'T3YVEF',  file: 't3yvef_poses.json',  hasJib: true },
+      T3YVEFH: { label: 'T3YVEFH', file: 't3yvefh_poses.json', hasJib: true }
+    };
+
+    let rigConfigKey = null;
+    let rigAxis = 'boom'; // 'boom' | 'jib'
+    let rigDataCache = {}; // configKey -> parsed poses.json
+    let rigDecodedCache = {}; // `${configKey}:${axis}:${length}` -> {u16, paths}
+    let rigCurrentLengthData = null;
+    let rigElements = [];
+    let rigFetchToken = 0; // guards against a slow fetch resolving after the user picked a different config
+
+    function initBoomRigTab() {
+      const sel = document.getElementById('rig-config');
+      if (sel.options.length === 0) {
+        buildSelect(sel, Object.keys(RIG_CONFIGS), (k) => RIG_CONFIGS[k].label, (k) => k);
+        sel.value = 'T3F';
+        onRigConfigChange();
+      }
+    }
+
+    function onRigConfigChange() {
+      const key = document.getElementById('rig-config').value;
+      rigConfigKey = key;
+      const cfg = RIG_CONFIGS[key];
+
+      const jibBtn = document.getElementById('rig-axis-jib');
+      jibBtn.style.display = cfg.hasJib ? '' : 'none';
+      rigAxis = 'boom';
+      document.getElementById('rig-axis-boom').classList.add('active');
+      jibBtn.classList.remove('active');
+
+      document.getElementById('rig-stage-wrap').style.display = 'none';
+      document.getElementById('rig-controls').style.display = 'none';
+      const loadingEl = document.getElementById('rig-loading');
+      loadingEl.style.display = '';
+      loadingEl.textContent = 'Loading ' + cfg.label + ' data…';
+
+      const myToken = ++rigFetchToken;
+      if (rigDataCache[key]) {
+        onRigDataReady(key, rigDataCache[key], myToken);
+        return;
+      }
+      fetch(BOOM_RIG_NEXTCLOUD_BASE + cfg.file)
+        .then(r => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(data => {
+          rigDataCache[key] = data;
+          onRigDataReady(key, data, myToken);
+        })
+        .catch(err => {
+          if (myToken !== rigFetchToken) return;
+          loadingEl.textContent = 'Could not load ' + cfg.label + ' data (' + err.message + ').';
+        });
+    }
+
+    function onRigDataReady(key, data, myToken) {
+      if (myToken !== rigFetchToken) return; // user already switched configs
+      document.getElementById('rig-loading').style.display = 'none';
+      document.getElementById('rig-stage-wrap').style.display = '';
+      document.getElementById('rig-controls').style.display = '';
+      setRigAxis(rigAxis, /*skipConfigCheck*/ true);
+    }
+
+    function setRigAxis(axis, skipConfigCheck) {
+      if (!skipConfigCheck && !rigDataCache[rigConfigKey]) return;
+      const cfg = RIG_CONFIGS[rigConfigKey];
+      if (axis === 'jib' && !cfg.hasJib) axis = 'boom';
+      rigAxis = axis;
+      document.getElementById('rig-axis-boom').classList.toggle('active', axis === 'boom');
+      document.getElementById('rig-axis-jib').classList.toggle('active', axis === 'jib');
+      document.getElementById('rig-length-label').textContent = axis === 'boom' ? 'Boom length' : 'Jib length';
+      document.getElementById('rig-angle-label').innerHTML = (axis === 'boom' ? 'Boom angle: ' : 'Jib angle: ') + '<span id="rig-angle-badge"></span>';
+      // building-clearance panel only makes sense against the boom's own pivot
+      document.getElementById('rig-clearance-section').style.display = axis === 'boom' ? '' : 'none';
+
+      const data = rigDataCache[rigConfigKey];
+      const section = data[axis];
+      const lengths = axis === 'boom' ? RIG_BOOM_LENGTHS : Object.keys(section.lengths);
+      const lengthSelect = document.getElementById('rig-length-select');
+      buildSelect(lengthSelect, lengths, (L) => L + ' m', (L) => L);
+      lengthSelect.value = lengths[0];
+
+      const angles = section.angles;
+      const angleSlider = document.getElementById('rig-angle-slider');
+      angleSlider.min = angles[0];
+      angleSlider.max = angles[angles.length - 1];
+      angleSlider.step = 0.5;
+      angleSlider.value = angles[0];
+
+      const noteEl = document.getElementById('rig-shape-note');
+      noteEl.textContent = axis === 'jib'
+        ? 'Jib colors were calibrated from this config\'s own reference plot and diff-matched across jib lengths.'
+        : '';
+
+      onRigLengthChange();
+    }
+
+    function rigCurrentSection() {
+      return rigDataCache[rigConfigKey][rigAxis];
+    }
+
+    function rigDequant(v, off, scale) { return v * scale + off; }
+
+    function getRigLengthData(axis, L) {
+      const cacheKey = rigConfigKey + ':' + axis + ':' + L;
+      if (rigDecodedCache[cacheKey]) return rigDecodedCache[cacheKey];
+      const section = rigCurrentSection();
+      const entry = section.lengths[L];
+      const binStr = atob(entry.d);
+      const bytes = new Uint8Array(binStr.length);
+      for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+      const u16 = new Uint16Array(bytes.buffer);
+      const nAngles = section.angles.length;
+      const paths = [];
+      let cursor = 0;
+      for (const [k, c, n] of entry.h) {
+        paths.push({ k, c, n, offset: cursor });
+        cursor += nAngles * n * 2;
+      }
+      // Fills/wipeouts paint as a background layer with line detail always
+      // on top in AutoCAD's real render order; raw DXF order interleaves
+      // them locally, burying line work under opaque fills unless sorted.
+      paths.sort((a, b) => (a.k === 'S' ? 1 : 0) - (b.k === 'S' ? 1 : 0));
+      const result = { u16, paths, nAngles };
+      rigDecodedCache[cacheKey] = result;
+      return result;
+    }
+
+    function buildRigElementsForLength(L) {
+      const section = rigCurrentSection();
+      rigCurrentLengthData = getRigLengthData(rigAxis, L);
+      const boomGroup = document.getElementById('rig-boom-group');
+      boomGroup.innerHTML = '';
+      rigElements = [];
+      const palette = section.palette;
+      const frag = document.createDocumentFragment();
+      for (const p of rigCurrentLengthData.paths) {
+        const isFill = p.k === 'F' || p.k === 'P';
+        const el = document.createElementNS('http://www.w3.org/2000/svg', isFill ? 'polygon' : 'polyline');
+        const color = palette[p.c];
+        if (isFill) {
+          el.setAttribute('fill', color);
+          el.setAttribute('stroke', 'none');
+        } else {
+          el.setAttribute('fill', 'none');
+          el.setAttribute('stroke', color);
+          el.setAttribute('stroke-width', '12');
+          el.setAttribute('stroke-linecap', 'round');
+          el.setAttribute('stroke-linejoin', 'round');
+        }
+        frag.appendChild(el);
+        rigElements.push(el);
+      }
+      boomGroup.appendChild(frag);
+    }
+
+    function updateRigAngle(angleDeg) {
+      if (!rigCurrentLengthData) return;
+      const section = rigCurrentSection();
+      const angles = section.angles;
+      const OFFX = section.offx, OFFY = section.offy, SCALE = section.scale;
+      const step = angles.length > 1 ? (angles[1] - angles[0]) : 1;
+      let idx0 = Math.floor((angleDeg - angles[0]) / step);
+      idx0 = Math.max(0, Math.min(idx0, angles.length - 2 >= 0 ? angles.length - 2 : 0));
+      const idx1 = Math.min(idx0 + 1, angles.length - 1);
+      const a0 = angles[idx0], a1 = angles[idx1];
+      const t = a1 > a0 ? (angleDeg - a0) / (a1 - a0) : 0;
+
+      const u16 = rigCurrentLengthData.u16;
+      const paths = rigCurrentLengthData.paths;
+      for (let pi = 0; pi < paths.length; pi++) {
+        const p = paths[pi];
+        const n = p.n;
+        const frameStride = n * 2;
+        const base0 = p.offset + idx0 * frameStride;
+        const base1 = p.offset + idx1 * frameStride;
+        let str = '';
+        for (let k = 0; k < n; k++) {
+          const x0 = rigDequant(u16[base0 + k * 2], OFFX, SCALE);
+          const y0 = rigDequant(u16[base0 + k * 2 + 1], OFFY, SCALE);
+          const x1 = rigDequant(u16[base1 + k * 2], OFFX, SCALE);
+          const y1 = rigDequant(u16[base1 + k * 2 + 1], OFFY, SCALE);
+          const x = x0 + (x1 - x0) * t;
+          const y = y0 + (y1 - y0) * t;
+          str += x.toFixed(0) + ',' + (-y).toFixed(0) + ' ';
+        }
+        rigElements[pi].setAttribute('points', str);
+      }
+    }
+
+    function rigComputeClearance(buildingHeightM, standoffM, boomLenM, pivotHeightM, maxCapturedAngle) {
+      if (!(standoffM > 0)) return { valid: false };
+      const neededTan = (buildingHeightM - pivotHeightM) / standoffM;
+      const criticalAngleDeg = Math.max(0, Math.atan(neededTan) * 180 / Math.PI);
+      const radiusAtCriticalM = boomLenM * Math.cos(criticalAngleDeg * Math.PI / 180);
+      const outOfReach = standoffM > boomLenM;
+      const extrapolated = criticalAngleDeg > maxCapturedAngle;
+      return { valid: true, criticalAngleDeg, radiusAtCriticalM, outOfReach, extrapolated };
+    }
+
+    function updateRigClearance() {
+      const section = rigCurrentSection();
+      if (rigAxis !== 'boom' || !section.pivot || section.groundY == null) return;
+      const pivotXmm = section.pivot.x, pivotYmm = section.pivot.y, groundYmm = section.groundY;
+      const pivotHeightM = (pivotYmm - groundYmm) / 1000;
+      const maxCapturedAngle = section.angles[section.angles.length - 1];
+
+      const boomLenM = parseFloat(document.getElementById('rig-length-select').value);
+      const angleDeg = parseFloat(document.getElementById('rig-angle-slider').value);
+      const buildingHeightM = parseFloat(document.getElementById('rig-bldg-height-slider').value);
+      const standoffM = parseFloat(document.getElementById('rig-bldg-dist-slider').value);
+
+      const currentRadiusM = boomLenM * Math.cos(angleDeg * Math.PI / 180);
+      document.getElementById('rig-current-radius-value').textContent = currentRadiusM.toFixed(1) + ' m';
+
+      const c = rigComputeClearance(buildingHeightM, standoffM, boomLenM, pivotHeightM, maxCapturedAngle);
+      const critAngleEl = document.getElementById('rig-critical-angle-value');
+      const critRadiusEl = document.getElementById('rig-critical-radius-value');
+      const statusEl = document.getElementById('rig-clearance-status');
+      if (!c.valid) {
+        critAngleEl.textContent = '—'; critRadiusEl.textContent = '—'; statusEl.textContent = '—'; statusEl.style.color = '';
+      } else if (c.outOfReach) {
+        critAngleEl.textContent = '—'; critRadiusEl.textContent = 'beyond reach';
+        statusEl.textContent = 'OUT OF REACH'; statusEl.style.color = 'var(--text-muted)';
+      } else {
+        critAngleEl.textContent = c.criticalAngleDeg.toFixed(1) + '°' + (c.extrapolated ? ' *' : '');
+        critRadiusEl.textContent = c.radiusAtCriticalM.toFixed(1) + ' m';
+        const clear = angleDeg >= c.criticalAngleDeg;
+        statusEl.textContent = clear ? 'CLEAR' : 'FOULING';
+        statusEl.style.color = clear ? '#34c759' : '#ff453a';
+      }
+
+      const bldgRect = document.getElementById('rig-bldg-rect');
+      const BUILDING_WIDTH_MM = 4000;
+      const bx = pivotXmm + standoffM * 1000;
+      const bh = Math.max(0, buildingHeightM * 1000);
+      bldgRect.setAttribute('x', bx.toFixed(0));
+      bldgRect.setAttribute('y', (-(groundYmm + bh)).toFixed(0));
+      bldgRect.setAttribute('width', BUILDING_WIDTH_MM.toFixed(0));
+      bldgRect.setAttribute('height', bh.toFixed(0));
+
+      const rad = angleDeg * Math.PI / 180;
+      const tipX = pivotXmm + boomLenM * 1000 * Math.cos(rad);
+      const tipY = pivotYmm + boomLenM * 1000 * Math.sin(rad);
+      const clearanceLine = document.getElementById('rig-clearance-line');
+      clearanceLine.setAttribute('x1', pivotXmm.toFixed(0));
+      clearanceLine.setAttribute('y1', (-pivotYmm).toFixed(0));
+      clearanceLine.setAttribute('x2', tipX.toFixed(0));
+      clearanceLine.setAttribute('y2', (-tipY).toFixed(0));
+      const lineColor = !c.valid ? '#9ca3af' : c.outOfReach ? '#9ca3af' : (angleDeg >= c.criticalAngleDeg ? '#34c759' : '#ff453a');
+      clearanceLine.setAttribute('stroke', lineColor);
+      clearanceLine.setAttribute('stroke-opacity', '0.85');
+      document.getElementById('rig-pivot-marker').setAttribute('cx', pivotXmm.toFixed(0));
+      document.getElementById('rig-pivot-marker').setAttribute('cy', (-pivotYmm).toFixed(0));
+    }
+
+    function updateRigViewBox() {
+      const section = rigCurrentSection();
+      const L = document.getElementById('rig-length-select').value;
+      const bbox = section.lengths[L].bbox;
+      let minx = bbox.minx, maxx = bbox.maxx, miny = bbox.miny, maxy = bbox.maxy;
+
+      if (rigAxis === 'boom' && section.pivot && section.groundY != null) {
+        const standoffM = parseFloat(document.getElementById('rig-bldg-dist-slider').value);
+        const buildingHeightM = parseFloat(document.getElementById('rig-bldg-height-slider').value);
+        const BUILDING_WIDTH_MM = 4000;
+        const bldgMaxX = section.pivot.x + standoffM * 1000 + BUILDING_WIDTH_MM;
+        const bldgMaxY = section.groundY + buildingHeightM * 1000;
+        minx = Math.min(minx, section.pivot.x);
+        maxx = Math.max(maxx, bldgMaxX);
+        miny = Math.min(miny, section.groundY);
+        maxy = Math.max(maxy, bldgMaxY);
+      }
+
+      const pad = 2500;
+      document.getElementById('rig-svg').setAttribute('viewBox',
+        [minx - pad, -maxy - pad, (maxx - minx) + 2 * pad, (maxy - miny) + 2 * pad].join(' '));
+    }
+
+    function onRigLengthChange() {
+      const L = document.getElementById('rig-length-select').value;
+      buildRigElementsForLength(L);
+      const angleSlider = document.getElementById('rig-angle-slider');
+      updateRigAngle(parseFloat(angleSlider.value));
+      document.getElementById('rig-angle-badge').textContent = parseFloat(angleSlider.value).toFixed(0) + '°';
+      updateRigClearance();
+      updateRigViewBox();
+    }
+
+    function onRigAngleInput() {
+      const angleSlider = document.getElementById('rig-angle-slider');
+      const a = parseFloat(angleSlider.value);
+      document.getElementById('rig-angle-badge').textContent = a.toFixed(0) + '°';
+      updateRigAngle(a);
+      updateRigClearance();
+      updateRigViewBox();
+    }
+
+    function onRigClearanceInput() {
+      document.getElementById('rig-bldg-height-badge').textContent = parseFloat(document.getElementById('rig-bldg-height-slider').value).toFixed(1) + ' m';
+      document.getElementById('rig-bldg-dist-badge').textContent = parseFloat(document.getElementById('rig-bldg-dist-slider').value).toFixed(1) + ' m';
+      updateRigClearance();
+      updateRigViewBox();
     }
 
     // Pinch-to-zoom/pan + fullscreen on the mud map - these are big,
