@@ -1744,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.13</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.14</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2617,6 +2617,7 @@
               <div><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Current radius</div><div id="rig-current-radius-value" style="font-variant-numeric:tabular-nums; font-size:1rem;">—</div></div>
               <div><div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase;">Status</div><div id="rig-clearance-status" style="font-weight:600; font-size:0.85rem;">—</div></div>
             </div>
+            <div id="rig-clearance-margin-note" style="font-size:0.72rem; color:var(--text-muted); margin-top:8px; line-height:1.35;"></div>
           </div>
         </div>
         <div class="disclaimer" style="margin-top:12px;">
@@ -4513,6 +4514,22 @@
         const clear = angleDeg >= c.criticalAngleDeg;
         statusEl.textContent = clear ? 'CLEAR' : 'FOULING';
         statusEl.style.color = clear ? '#34c759' : '#ff453a';
+      }
+
+      // The boom tapers toward its tip, but the underside reference used
+      // above is measured at its widest point (the base box section) and
+      // held constant for the whole length - deliberately conservative,
+      // since we can't reliably tell the boom's own outer skin apart from
+      // its internal bracing/reinforcement in the source CAD art at any
+      // other point along its length. Real clearance is normally BETTER
+      // than shown here, never worse - surfaced so the gap between this
+      // line and the boom's visible taper (especially near the tip) reads
+      // as an intentional safety margin, not a rendering bug.
+      const marginNote = document.getElementById('rig-clearance-margin-note');
+      if (undersideOffsetMm > 0) {
+        marginNote.textContent = `Conservative estimate: uses the boom's widest cross-section (~${(undersideOffsetMm / 1000).toFixed(1)} m below its pivot) as the underside for its full length, since the boom is thinner than this everywhere past the base. Real clearance is normally better than shown here, never worse.`;
+      } else {
+        marginNote.textContent = '';
       }
 
       const bldgRect = document.getElementById('rig-bldg-rect');
