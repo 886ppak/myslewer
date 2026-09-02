@@ -11,11 +11,16 @@
 ;; this pipeline.
 ;;
 ;; This script captures BOTH: for each of the 10 real main-boom lengths
-;; AND each of the 9 real main-boom angles, sweep jib (length x angle)
-;; fully. That's the "most complete" option - it also gives ground-truth
-;; data at every boom angle, not just the rotation-trick's math, at the
-;; cost of a MUCH bigger export than anything run so far in this
-;; pipeline. See the pose-count math below before running anything.
+;; AND each real main-boom angle worth having, sweep jib (length x angle)
+;; fully. Originally defaulted to all 9 catalog boom angles (0-80 in
+;; 10deg steps) for "most complete" coverage - but the actual T3N/T3F
+;; load chart manual shows the main boom, with a jib attached, only ever
+;; operates at ONE of FOUR real angles: 66/76/83/84 degrees (see
+;; *BOOM-ANGLES-SWEEP*'s own comment below for the source). There's no
+;; operational reason to capture the other 5 catalog angles - the crane
+;; is never rigged at them with a jib on - so this is now just 2 angles
+;; (the two catalog steps, 70/80, that land inside that real range), not
+;; 9. See the pose-count math below before running anything.
 ;;
 ;; The H variants (T3NH, T3NYH, T3FH, T3YVEFH) are essentially the same
 ;; geometry as their non-H counterpart (T3N, T3NY, T3F, T3YVEF) - dropped
@@ -36,27 +41,22 @@
 ;; ##  POSE COUNT - READ THIS BEFORE RUNNING ANYTHING BELOW  ##
 ;; ############################################################
 ;;   For ONE config: (boom lengths) x (boom angles) x (jib lengths) x (jib angles)
-;;     T3N (jib N): 10 x 9 x 21 x 9 = 17,010 poses
-;;     T3F (jib F): 10 x 9 x 17 x 9 = 13,770 poses
-;;   T3N + T3F together (EXPORTSWEEP-ALL-JIB-FULL): 30,780 poses.
+;;     T3N (jib N): 10 x 2 x 21 x 9 = 3,780 poses
+;;     T3F (jib F): 10 x 2 x 17 x 9 = 3,060 poses
+;;   T3N + T3F together (EXPORTSWEEP-ALL-JIB-FULL): 6,840 poses.
 ;;   At roughly 2-3 seconds per pose (wblock + regen overhead, consistent
-;;   with the earlier sweeps) that's ~21-26 hours of AutoCAD run time.
+;;   with the earlier sweeps) that's ~4-6 hours of AutoCAD run time.
 ;;   Real pose files from this same pipeline average ~6.8MB each, so
-;;   that's also roughly 30,780 x 6.8MB =~ 210GB of DWGs, and up to ~400GB
+;;   that's also roughly 6,840 x 6.8MB =~ 46GB of DWGs, and up to ~90GB
 ;;   peak if the later DXF conversion keeps both copies around at once.
 ;;
 ;;   *BOOM-ANGLES-SWEEP* and *LENGTHS* below are edit-before-you-run
-;;   lists, same as every other script in this pipeline - trim them
-;;   further if even this is too much. Two practical ways to cut it down
-;;   without losing much real value:
-;;     - Drop *BOOM-ANGLES-SWEEP* to a handful spread across the range
-;;       (e.g. 0/40/80) instead of all 9 - this is really a spot-check
-;;       against the rotation trick, not a real gap, so it doesn't need
-;;       dense coverage. Cuts the count to ~1/3.
-;;     - Run ONE boom length at a time (RUN-ONE-LENGTH prompts for
-;;       which) instead of all 10 in one sitting - lets you stop between
-;;       lengths and pick up later without losing progress, and lets you
-;;       ship boom lengths as they finish instead of waiting for all 10.
+;;   lists, same as every other script in this pipeline, if this still
+;;   needs trimming further. Running ONE boom length at a time
+;;   (RUN-ONE-LENGTH prompts for which) instead of all 10 in one sitting
+;;   lets you stop between lengths and pick up later without losing
+;;   progress, and lets you ship boom lengths as they finish instead of
+;;   waiting for all 10.
 ;;
 ;; Standalone from the other scripts here - load on its own.
 ;;
@@ -72,8 +72,9 @@
 ;; HOW TO RUN:
 ;;   (load "export_sweep_jib_full.lsp")
 ;;   RUN-ONE-LENGTH     -> prompts for config name + which boom length
-;;                          index (0-9) to sweep fully (all 9 angles x
-;;                          full jib grid) - the resumable, chunked way.
+;;                          index (0-9) to sweep fully (both real boom
+;;                          angles x full jib grid) - the resumable,
+;;                          chunked way.
 ;;   EXPORTSWEEP-T3N-FULL, EXPORTSWEEP-T3NY-FULL,
 ;;   EXPORTSWEEP-T3F-FULL, EXPORTSWEEP-T3YVEF-FULL
 ;;                       -> sweeps ALL 10 boom lengths for ONE config in
@@ -82,8 +83,8 @@
 ;;   EXPORTSWEEP-ALL-JIB-FULL
 ;;                       -> commits to T3N + T3F, all 10 boom lengths
 ;;                          each, back-to-back with ONE confirmation up
-;;                          front (~30,780 poses, ~21-26 hours, ~210GB -
-;;                          this is the "just run it" command).
+;;                          front (~6,840 poses, ~4-6 hours, ~46GB - this
+;;                          is the "just run it" command).
 
 ;; ===== OUTPUT FOLDER =====
 (setq *OUTDIR* (strcat (getenv "USERPROFILE") "/Documents/export/"))
@@ -100,12 +101,18 @@
     ("54.0" . "Стрела 54.0 м"))
 )
 
-;; EDIT THIS to trade off completeness vs. runtime - see the pose-count
-;; note at the top. Full catalog is 0-80 in 10deg steps; trimming to
-;; e.g. '(0 40 80) cuts the whole export to ~1/3 and is really all this
-;; axis needs (it's a spot-check against the rotation trick, not a real
-;; data gap the way boom length is).
-(setq *BOOM-ANGLES-SWEEP* '(0 10 20 30 40 50 60 70 80))
+;; The T3N load chart manual (Load_chart_manual/..._T275.303_T3N_T3NH.pdf,
+;; page 150 of the real PDF, table T275.303.00002 / jib N-21.0m) shows
+;; the main boom, with a jib attached, only ever actually operates at
+;; ONE of FOUR discrete angles - 66.0 / 76.0 / 83.0 / 84.0 degrees -
+;; repeating across every counterweight column on every table checked.
+;; The full 0-80deg catalog this axis defaulted to was real overkill:
+;; there's no operational reason to capture angles the crane is never
+;; actually rigged at with a jib on. Our catalog only has 10deg steps,
+;; so the only two that land inside that real 66-84 window are 70 and
+;; 80 - trimmed to just those. Still edit-before-you-run like everything
+;; else here if that ever needs to change.
+(setq *BOOM-ANGLES-SWEEP* '(70 80))
 
 ;; Reference value held fixed for whichever of jib/guy this pass isn't
 ;; sweeping (same convention as export_sweep_variants.lsp).
