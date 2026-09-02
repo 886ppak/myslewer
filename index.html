@@ -1744,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.15</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.16</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2568,7 +2568,7 @@
       <div class="card">
         <div class="card-title">LTM 1650-8.1 — Boom &amp; Jib Rig</div>
         <div class="disclaimer" style="margin-bottom:12px;">
-          Every frame here is real AutoCAD dynamic-block-evaluated geometry — exported directly from the source CAD block at a grid of real catalog lengths &times; sampled angles, not guessed or traced. Boom and jib are each their own independent sweep (the jib grid was captured with the boom held at a fixed reference state, and vice versa) — this shows one or the other, not a combined live boom+jib pose yet.
+          Every frame here is real AutoCAD dynamic-block-evaluated geometry — exported directly from the source CAD block at a grid of real catalog lengths &times; sampled angles, not guessed or traced. Boom and jib were each captured as their own independent sweep (the jib grid with the boom held at a fixed reference angle, and vice versa) — on the Jib view, the boom angle slider rigidly re-aims that frozen boom (with the jib still correctly attached) to whatever angle you pick, so the two move together as one live pose.
         </div>
         <div class="form-group">
           <label>Attachment configuration</label>
@@ -2599,6 +2599,10 @@
           <div class="form-group" style="margin-top:10px;">
             <label id="rig-angle-label">Boom angle: <span id="rig-angle-badge"></span></label>
             <input type="range" id="rig-angle-slider" min="0" max="80" step="0.5" value="40" oninput="onRigAngleInput()">
+          </div>
+          <div class="form-group" id="rig-boom-angle-group" style="margin-top:10px; display:none;">
+            <label>Boom angle: <span id="rig-boom-angle-badge"></span> <span id="rig-boom-angle-fixed-len" style="color:var(--text-muted); font-weight:400;"></span></label>
+            <input type="range" id="rig-boom-angle-slider" min="0" max="80" step="0.5" value="40" oninput="onRigBoomAngleInput()">
           </div>
 
           <div id="rig-clearance-section" style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
@@ -4269,6 +4273,10 @@
       document.getElementById('rig-loading').style.display = 'none';
       document.getElementById('rig-stage-wrap').style.display = '';
       document.getElementById('rig-controls').style.display = '';
+      const cfg = RIG_CONFIGS[key];
+      if (cfg.hasJib && !(key in rigJibReferenceCache)) {
+        rigJibReferenceCache[key] = rigComputeJibReference(data);
+      }
       setRigAxis(rigAxis, /*skipConfigCheck*/ true);
     }
 
@@ -4281,8 +4289,33 @@
       document.getElementById('rig-axis-jib').classList.toggle('active', axis === 'jib');
       document.getElementById('rig-length-label').textContent = axis === 'boom' ? 'Boom length' : 'Jib length';
       document.getElementById('rig-angle-label').innerHTML = (axis === 'boom' ? 'Boom angle: ' : 'Jib angle: ') + '<span id="rig-angle-badge"></span>';
-      // building-clearance panel only makes sense against the boom's own pivot
-      document.getElementById('rig-clearance-section').style.display = axis === 'boom' ? '' : 'none';
+
+      // When a jib is attached and we could pin down what boom angle/
+      // length the jib grid was frozen at, expose a second slider that
+      // rigidly rotates the whole frozen assembly to any boom angle
+      // (rigCombinedRotation) - lets the boom actually move while a jib
+      // is shown, instead of sitting frozen at whatever angle the CAD
+      // export happened to use.
+      const ref = axis === 'jib' ? rigJibReferenceCache[rigConfigKey] : null;
+      const boomAngleGroup = document.getElementById('rig-boom-angle-group');
+      if (ref) {
+        boomAngleGroup.style.display = '';
+        const boomSection = rigDataCache[rigConfigKey].boom;
+        const boomAngleSlider = document.getElementById('rig-boom-angle-slider');
+        boomAngleSlider.min = boomSection.angles[0];
+        boomAngleSlider.max = boomSection.angles[boomSection.angles.length - 1];
+        boomAngleSlider.step = 0.5;
+        boomAngleSlider.value = ref.refAngleDeg;
+        document.getElementById('rig-boom-angle-badge').textContent = ref.refAngleDeg.toFixed(0) + '°';
+        document.getElementById('rig-boom-angle-fixed-len').textContent = '(boom length fixed at ' + ref.refLengthStr + ' m for this view)';
+      } else {
+        boomAngleGroup.style.display = 'none';
+      }
+
+      // building-clearance panel needs the boom's own pivot - available
+      // directly on the boom axis, or on the jib axis once we know what
+      // boom angle/length its frame is frozen at
+      document.getElementById('rig-clearance-section').style.display = (axis === 'boom' || ref) ? '' : 'none';
 
       const data = rigDataCache[rigConfigKey];
       const section = data[axis];
@@ -4312,10 +4345,7 @@
 
     function rigDequant(v, off, scale) { return v * scale + off; }
 
-    function getRigLengthData(axis, L) {
-      const cacheKey = rigConfigKey + ':' + axis + ':' + L;
-      if (rigDecodedCache[cacheKey]) return rigDecodedCache[cacheKey];
-      const section = rigCurrentSection();
+    function rigDecodeLengthEntry(section, L) {
       const entry = section.lengths[L];
       const binStr = atob(entry.d);
       const bytes = new Uint8Array(binStr.length);
@@ -4332,9 +4362,157 @@
       // on top in AutoCAD's real render order; raw DXF order interleaves
       // them locally, burying line work under opaque fills unless sorted.
       paths.sort((a, b) => (a.k === 'S' ? 1 : 0) - (b.k === 'S' ? 1 : 0));
-      const result = { u16, paths, nAngles };
+      return { u16, paths, nAngles };
+    }
+
+    function getRigLengthData(axis, L) {
+      const cacheKey = rigConfigKey + ':' + axis + ':' + L;
+      if (rigDecodedCache[cacheKey]) return rigDecodedCache[cacheKey];
+      const section = rigDataCache[rigConfigKey][axis];
+      const result = rigDecodeLengthEntry(section, L);
       rigDecodedCache[cacheKey] = result;
       return result;
+    }
+
+    // --- Combined boom+jib live pose -----------------------------------
+    // The AutoCAD export sampled the boom and jib as two INDEPENDENT 1D
+    // sweeps: the jib grid was captured with the boom frozen at some
+    // fixed reference angle/length (not recorded anywhere - see the
+    // pipeline README), and vice versa. That's fine for viewing either
+    // axis alone, but it means the boom-angle slider has no effect while
+    // looking at the jib, which is confusing when a jib is actually
+    // attached.
+    //
+    // Fix: both axes were extracted from the SAME assembled CAD block, so
+    // the boom's real geometry appears verbatim inside every jib frame -
+    // it's just frozen. Brute-force testing every catalog boom
+    // angle/length against the jib dataset's own point cloud finds
+    // exactly which one it's frozen at (a real hit lands as an
+    // overwhelming majority match, a wrong guess as near-zero - see
+    // rigFuzzyMatchCount below), which then lets a whole-assembly rigid
+    // rotation around the boom's pivot re-aim the frozen boom (with the
+    // jib rigidly attached, so its relative angle is preserved) to
+    // whatever boom angle the user actually wants.
+    let rigJibReferenceCache = {}; // configKey -> {refAngleDeg, refLengthStr} | null
+
+    function rigExtractFramePoints(lengthData, section, filterFn) {
+      const u16 = lengthData.u16;
+      const out = [];
+      for (const p of lengthData.paths) {
+        const base = p.offset; // frame 0
+        for (let k = 0; k < p.n; k++) {
+          const x = rigDequant(u16[base + k * 2], section.offx, section.scale);
+          const y = rigDequant(u16[base + k * 2 + 1], section.offy, section.scale);
+          if (!filterFn || filterFn(x, y)) out.push([x, y]);
+        }
+      }
+      return out;
+    }
+
+    // Spatial-hash fuzzy point match: counts how many points in ptsA have
+    // some point in ptsB within tol mm (independent quantization between
+    // the two datasets means even a true match differs by a few mm).
+    function rigFuzzyMatchCount(ptsA, ptsB, tol) {
+      const grid = new Map();
+      for (const pt of ptsB) {
+        const key = Math.round(pt[0] / tol) + ',' + Math.round(pt[1] / tol);
+        let arr = grid.get(key);
+        if (!arr) { arr = []; grid.set(key, arr); }
+        arr.push(pt);
+      }
+      let matched = 0;
+      for (const pt of ptsA) {
+        const cx = Math.round(pt[0] / tol), cy = Math.round(pt[1] / tol);
+        let found = false;
+        for (let dx = -1; dx <= 1 && !found; dx++) {
+          for (let dy = -1; dy <= 1 && !found; dy++) {
+            const arr = grid.get((cx + dx) + ',' + (cy + dy));
+            if (!arr) continue;
+            for (const cand of arr) {
+              if (Math.abs(cand[0] - pt[0]) <= tol && Math.abs(cand[1] - pt[1]) <= tol) { found = true; break; }
+            }
+          }
+        }
+        if (found) matched++;
+      }
+      return matched;
+    }
+
+    function rigRotatePoint(x, y, pivotX, pivotY, cosD, sinD) {
+      const dx = x - pivotX, dy = y - pivotY;
+      return [pivotX + dx * cosD - dy * sinD, pivotY + dx * sinD + dy * cosD];
+    }
+
+    function rigComputeJibReference(bundle) {
+      const boomSection = bundle.boom, jibSection = bundle.jib;
+      if (!boomSection || !jibSection) return null;
+      const jibLenKeys = Object.keys(jibSection.lengths);
+      if (!jibLenKeys.length) return null;
+      const jibLen0 = rigDecodeLengthEntry(jibSection, jibLenKeys[0]);
+      const haystack = rigExtractFramePoints(jibLen0, jibSection, null);
+      if (!haystack.length) return null;
+
+      const pivotX = boomSection.pivot.x, pivotY = boomSection.pivot.y;
+
+      // Stage 1: angle. Structure within ~9-15m of the pivot is shared by
+      // every boom length (only the outer telescoping sections differ),
+      // so any catalog length works as the angle probe.
+      const nearLenData = rigDecodeLengthEntry(boomSection, RIG_BOOM_LENGTHS[0]);
+      const nearPts = rigExtractFramePoints(nearLenData, boomSection,
+        (x, y) => x - pivotX > 9000 && Math.hypot(x - pivotX, y - pivotY) < 15000);
+      if (!nearPts.length) return null;
+
+      // A real hit isn't just "high" in absolute terms (match rate varies
+      // with how much jib-mount hardware crowds the probed region across
+      // configs) - it's OVERWHELMING relative to every wrong guess, by a
+      // wide margin every time this has been checked. So confidence is
+      // "the winner beats the runner-up by a wide margin", not an
+      // absolute cutoff.
+      let bestAngle = null, bestAngleScore = -1, secondAngleScore = -1;
+      for (const cand of boomSection.angles) {
+        const rad = cand * Math.PI / 180, cosT = Math.cos(rad), sinT = Math.sin(rad);
+        const rotated = nearPts.map(([x, y]) => rigRotatePoint(x, y, pivotX, pivotY, cosT, sinT));
+        const score = rigFuzzyMatchCount(rotated, haystack, 8);
+        if (score > bestAngleScore) { secondAngleScore = bestAngleScore; bestAngleScore = score; bestAngle = cand; }
+        else if (score > secondAngleScore) { secondAngleScore = score; }
+      }
+      if (bestAngleScore < 20 || bestAngleScore < secondAngleScore * 5) return null; // no confident hit - give up quietly
+
+      // Stage 2: length, using the now-known angle. Points beyond 15m are
+      // telescoping-tip-specific, so only the true reference length's tip
+      // will actually appear in the jib dataset's point cloud.
+      let bestLen = null, bestLenScore = -1, secondLenScore = -1;
+      for (const cand of RIG_BOOM_LENGTHS) {
+        const lenData = rigDecodeLengthEntry(boomSection, cand);
+        const farPts = rigExtractFramePoints(lenData, boomSection, (x) => x - pivotX > 15000);
+        if (!farPts.length) continue;
+        const rad = bestAngle * Math.PI / 180, cosT = Math.cos(rad), sinT = Math.sin(rad);
+        const rotated = farPts.map(([x, y]) => rigRotatePoint(x, y, pivotX, pivotY, cosT, sinT));
+        const score = rigFuzzyMatchCount(rotated, haystack, 8);
+        const rate = score / farPts.length;
+        if (rate > bestLenScore) { secondLenScore = bestLenScore; bestLenScore = rate; bestLen = cand; }
+        else if (rate > secondLenScore) { secondLenScore = rate; }
+      }
+      if (bestLenScore < 0.1 || bestLenScore < secondLenScore * 5) return null;
+
+      return { refAngleDeg: bestAngle, refLengthStr: bestLen };
+    }
+
+    // Returns the whole-assembly rotation to apply to the current jib
+    // frame so the frozen boom shows at the user's chosen angle, or null
+    // when not in a combined-pose situation (plain boom axis, no jib, or
+    // reference detection failed).
+    function rigCombinedRotation() {
+      if (rigAxis !== 'jib') return null;
+      const cfg = RIG_CONFIGS[rigConfigKey];
+      if (!cfg || !cfg.hasJib) return null;
+      const ref = rigJibReferenceCache[rigConfigKey];
+      if (!ref) return null;
+      const boomAngleSlider = document.getElementById('rig-boom-angle-slider');
+      const boomPivot = rigDataCache[rigConfigKey].boom.pivot;
+      const chosenDeg = parseFloat(boomAngleSlider.value);
+      const deltaRad = (chosenDeg - ref.refAngleDeg) * Math.PI / 180;
+      return { pivotX: boomPivot.x, pivotY: boomPivot.y, deltaRad };
     }
 
     function buildRigElementsForLength(L) {
@@ -4382,6 +4560,14 @@
       const a0 = angles[idx0], a1 = angles[idx1];
       const t = a1 > a0 ? (angleDeg - a0) / (a1 - a0) : 0;
 
+      // On the jib axis with a jib attached, additionally rotate every
+      // point rigidly around the boom's pivot so the frozen boom (and
+      // the jib rigidly attached to it) shows at the user's chosen boom
+      // angle instead of the CAD export's fixed reference angle - see
+      // rigCombinedRotation.
+      const rot = rigCombinedRotation();
+      const cosD = rot ? Math.cos(rot.deltaRad) : 1, sinD = rot ? Math.sin(rot.deltaRad) : 0;
+
       const u16 = rigCurrentLengthData.u16;
       const paths = rigCurrentLengthData.paths;
       for (let pi = 0; pi < paths.length; pi++) {
@@ -4396,12 +4582,23 @@
           const y0 = rigDequant(u16[base0 + k * 2 + 1], OFFY, SCALE);
           const x1 = rigDequant(u16[base1 + k * 2], OFFX, SCALE);
           const y1 = rigDequant(u16[base1 + k * 2 + 1], OFFY, SCALE);
-          const x = x0 + (x1 - x0) * t;
-          const y = y0 + (y1 - y0) * t;
+          let x = x0 + (x1 - x0) * t;
+          let y = y0 + (y1 - y0) * t;
+          if (rot) [x, y] = rigRotatePoint(x, y, rot.pivotX, rot.pivotY, cosD, sinD);
           str += x.toFixed(0) + ',' + (-y).toFixed(0) + ' ';
         }
         rigElements[pi].setAttribute('points', str);
       }
+    }
+
+    function onRigBoomAngleInput() {
+      const boomAngleSlider = document.getElementById('rig-boom-angle-slider');
+      const v = parseFloat(boomAngleSlider.value);
+      document.getElementById('rig-boom-angle-badge').textContent = v.toFixed(0) + '°';
+      const jibAngleSlider = document.getElementById('rig-angle-slider');
+      updateRigAngle(parseFloat(jibAngleSlider.value));
+      updateRigClearance();
+      updateRigViewBox();
     }
 
     // Profile the boom's own underside depth as a function of distance
@@ -4549,15 +4746,29 @@
     }
 
     function updateRigClearance() {
-      const section = rigCurrentSection();
-      if (rigAxis !== 'boom' || !section.pivot || section.groundY == null) return;
-      const pivotXmm = section.pivot.x, pivotYmm = section.pivot.y, groundYmm = section.groundY;
-      const maxCapturedAngle = section.angles[section.angles.length - 1];
-      const boomLenStr = document.getElementById('rig-length-select').value;
+      let boomSection, boomLenStr, angleDeg;
+      if (rigAxis === 'boom') {
+        boomSection = rigCurrentSection();
+        boomLenStr = document.getElementById('rig-length-select').value;
+        angleDeg = parseFloat(document.getElementById('rig-angle-slider').value);
+      } else {
+        const ref = rigJibReferenceCache[rigConfigKey];
+        if (!ref) return;
+        boomSection = rigDataCache[rigConfigKey].boom;
+        boomLenStr = ref.refLengthStr;
+        angleDeg = parseFloat(document.getElementById('rig-boom-angle-slider').value);
+      }
+      if (!boomSection.pivot || boomSection.groundY == null) return;
+      const pivotXmm = boomSection.pivot.x, pivotYmm = boomSection.pivot.y, groundYmm = boomSection.groundY;
+      const maxCapturedAngle = boomSection.angles[boomSection.angles.length - 1];
       const boomLenM = parseFloat(boomLenStr);
-      const undersideProfile = rigUndersideProfileCache[rigConfigKey + ':' + boomLenStr] || [];
+      const profileKey = rigConfigKey + ':' + boomLenStr;
+      if (!(profileKey in rigUndersideProfileCache)) {
+        const boomLenData = getRigLengthData('boom', boomLenStr);
+        rigUndersideProfileCache[profileKey] = rigComputeBoomUndersideProfile(boomLenData, boomSection, pivotXmm, pivotYmm);
+      }
+      const undersideProfile = rigUndersideProfileCache[profileKey] || [];
 
-      const angleDeg = parseFloat(document.getElementById('rig-angle-slider').value);
       const buildingHeightM = parseFloat(document.getElementById('rig-bldg-height-slider').value);
       const standoffM = parseFloat(document.getElementById('rig-bldg-dist-slider').value);
 
@@ -4623,15 +4834,31 @@
       const bbox = section.lengths[L].bbox;
       let minx = bbox.minx, maxx = bbox.maxx, miny = bbox.miny, maxy = bbox.maxy;
 
-      if (rigAxis === 'boom' && section.pivot && section.groundY != null) {
+      // The stored bbox is for the UNROTATED frame (the CAD export's own
+      // reference boom angle) - once rigCombinedRotation re-aims the
+      // whole assembly, the true extent rotates with it. Rotating the
+      // bbox's own 4 corners and taking their bounding box is a cheap,
+      // always-safe over-approximation of the rotated shape's real extent.
+      const rot = rigCombinedRotation();
+      if (rot) {
+        const cosD = Math.cos(rot.deltaRad), sinD = Math.sin(rot.deltaRad);
+        const corners = [[minx, miny], [minx, maxy], [maxx, miny], [maxx, maxy]]
+          .map(([x, y]) => rigRotatePoint(x, y, rot.pivotX, rot.pivotY, cosD, sinD));
+        minx = Math.min(...corners.map(c => c[0])); maxx = Math.max(...corners.map(c => c[0]));
+        miny = Math.min(...corners.map(c => c[1])); maxy = Math.max(...corners.map(c => c[1]));
+      }
+
+      const boomSection = rigAxis === 'boom' ? section : rigDataCache[rigConfigKey].boom;
+      const clearanceVisible = rigAxis === 'boom' || rot;
+      if (clearanceVisible && boomSection.pivot && boomSection.groundY != null) {
         const standoffM = parseFloat(document.getElementById('rig-bldg-dist-slider').value);
         const buildingHeightM = parseFloat(document.getElementById('rig-bldg-height-slider').value);
         const BUILDING_WIDTH_MM = 4000;
-        const bldgMaxX = section.pivot.x + standoffM * 1000 + BUILDING_WIDTH_MM;
-        const bldgMaxY = section.groundY + buildingHeightM * 1000;
-        minx = Math.min(minx, section.pivot.x);
+        const bldgMaxX = boomSection.pivot.x + standoffM * 1000 + BUILDING_WIDTH_MM;
+        const bldgMaxY = boomSection.groundY + buildingHeightM * 1000;
+        minx = Math.min(minx, boomSection.pivot.x);
         maxx = Math.max(maxx, bldgMaxX);
-        miny = Math.min(miny, section.groundY);
+        miny = Math.min(miny, boomSection.groundY);
         maxy = Math.max(maxy, bldgMaxY);
       }
 
