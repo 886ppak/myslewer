@@ -1744,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.19</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.20</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2566,11 +2566,15 @@
 
       <div id="cad-panel-rig" style="display:none;">
       <div class="card">
-        <div class="card-title">LTM 1650-8.1 — Boom Rig</div>
+        <div class="card-title" id="rig-crane-title">LTM 1650-8.1 — Boom Rig</div>
         <div class="disclaimer" style="margin-bottom:12px;">
           Every frame here is real AutoCAD dynamic-block-evaluated geometry — exported directly from the source CAD block at a grid of real catalog lengths &times; sampled angles, not guessed or traced. Main boom only for now, to keep each crane's data small enough to add more cranes here.
         </div>
         <div class="form-group">
+          <label>Crane</label>
+          <select id="rig-crane" onchange="onRigCraneChange()"></select>
+        </div>
+        <div class="form-group" style="margin-top:10px;">
           <label>Attachment configuration</label>
           <select id="rig-config" onchange="onRigConfigChange()"></select>
         </div>
@@ -2623,9 +2627,7 @@
             </div>
           </div>
         </div>
-        <div class="disclaimer" style="margin-top:12px;">
-          <span id="rig-shape-note"></span> Some longer jib lengths carry a handful of lattice-panel decal shapes whose color was inferred (nearest-neighbor within the same config), not directly pixel-sampled — cosmetic only, geometry is exact throughout.
-        </div>
+        <div class="disclaimer" style="margin-top:12px;" id="rig-shape-note"></div>
       </div>
       </div>
       <!-- /cad-panel-rig -->
@@ -4192,27 +4194,42 @@
     //
     // Hosted on Nextcloud, not committed to this repo: confirmed CORS is
     // already configured there for this exact origin (886ppak.github.io)
-    // and reads need no auth token. Update BOOM_RIG_NEXTCLOUD_BASE below
-    // once the files are uploaded - everything else just works off it.
-    const BOOM_RIG_NEXTCLOUD_BASE = 'https://local.idull.au/public.php/dav/files/nrGXiwRDiYSKnq7/Myslewer/Cad_blocks/LTM1650/T3-ALL/rig-data/';
-
-    // Boom length/angle catalog is identical across every LTM 1650
-    // T3-family config (see boom_rig_lib.py) - only the jib axis (and
-    // whether one exists at all) varies per config, pulled from the real
-    // Nextcloud file listing at export time, not assumed from the name.
-    const RIG_BOOM_LENGTHS = ["16.6","22.4","28.2","33.9","39.7","45.3","51.0","52.0","53.0","54.0"];
-    // Jib configs (T3F/T3N/T3NY/T3YVEF and their H variants) dropped -
-    // main-boom-only from here on for this crane, and for every crane
-    // added to Boom Rig going forward: a jib sweep multiplies data size
-    // far more than it's worth (this one crane's jib datasets were
-    // ~390MB on their own, ~16x the size of its two boom-only datasets
-    // combined) against a growing list of other cranes this tool needs
-    // room for. The jib+boom combined-pose machinery (rigCombinedRotation
-    // etc.) is left in place since it's inert with no hasJib:true config
+    // and reads need no auth token.
+    //
+    // One crane at a time in the UI (a crane selector above the
+    // attachment-configuration one), but RIG_CONFIGS itself is flat and
+    // keyed "<craneKey>:<configName>" (e.g. "1650:T3") so every other
+    // function that indexes it by rigConfigKey needed no further change
+    // when a second crane was added - each entry just carries its own
+    // nextcloudBase/boomLengths instead of relying on shared module-level
+    // constants the way the single-crane version did.
+    //
+    // Jib configs (T3F/T3N/T3NY/T3YVEF and their H variants, LTM 1650)
+    // dropped - main-boom-only from here on for every crane in this tool:
+    // a jib sweep multiplies data size far more than it's worth (the LTM
+    // 1650's jib datasets alone were ~390MB, ~16x its two boom-only
+    // datasets combined) against a growing list of cranes this needs room
+    // for. The jib+boom combined-pose machinery (rigCombinedRotation etc.)
+    // is left in place since it's inert with no hasJib:true config left
     // to trigger it, not because a jib is expected back.
+    const RIG_CRANE_LABELS = { '1650': 'LTM 1650-8.1', '1300': 'LTM 1300-6.2' };
     const RIG_CONFIGS = {
-      T3:      { label: 'T3 (standard, no jib)', file: 't3_poses.json', hasJib: false },
-      T3Y:     { label: 'T3Y',     file: 't3y_poses.json',     hasJib: false }
+      '1650:T3': {
+        craneKey: '1650', label: 'T3 (standard, no jib)', file: 't3_poses.json', hasJib: false,
+        nextcloudBase: 'https://local.idull.au/public.php/dav/files/nrGXiwRDiYSKnq7/Myslewer/Cad_blocks/LTM1650/T3-ALL/rig-data/',
+        boomLengths: ["16.6","22.4","28.2","33.9","39.7","45.3","51.0","52.0","53.0","54.0"]
+      },
+      '1650:T3Y': {
+        craneKey: '1650', label: 'T3Y', file: 't3y_poses.json', hasJib: false,
+        nextcloudBase: 'https://local.idull.au/public.php/dav/files/nrGXiwRDiYSKnq7/Myslewer/Cad_blocks/LTM1650/T3-ALL/rig-data/',
+        boomLengths: ["16.6","22.4","28.2","33.9","39.7","45.3","51.0","52.0","53.0","54.0"]
+      },
+      '1300:T': {
+        craneKey: '1300', label: 'T (standard, no jib)', file: 't_poses.json', hasJib: false,
+        nextcloudBase: 'https://local.idull.au/public.php/dav/files/nrGXiwRDiYSKnq7/Myslewer/Cad_blocks/LTM1300/rig-data/',
+        boomLengths: ["14.7","19.6","24.4","29.3","34.2","39.0","43.9","48.7","53.6","58.5","63.3","68.2","73.1","77.2","78.0"],
+        colorsVerified: false
+      }
     };
 
     let rigConfigKey = null;
@@ -4224,12 +4241,23 @@
     let rigFetchToken = 0; // guards against a slow fetch resolving after the user picked a different config
 
     function initBoomRigTab() {
-      const sel = document.getElementById('rig-config');
-      if (sel.options.length === 0) {
-        buildSelect(sel, Object.keys(RIG_CONFIGS), (k) => RIG_CONFIGS[k].label, (k) => k);
-        sel.value = 'T3';
-        onRigConfigChange();
+      const craneSel = document.getElementById('rig-crane');
+      if (craneSel.options.length === 0) {
+        const craneKeys = [...new Set(Object.values(RIG_CONFIGS).map(c => c.craneKey))];
+        buildSelect(craneSel, craneKeys, (k) => RIG_CRANE_LABELS[k] || k, (k) => k);
+        craneSel.value = '1650';
+        onRigCraneChange();
       }
+    }
+
+    function onRigCraneChange() {
+      const craneKey = document.getElementById('rig-crane').value;
+      document.getElementById('rig-crane-title').textContent = (RIG_CRANE_LABELS[craneKey] || craneKey) + ' — Boom Rig';
+      const configKeys = Object.keys(RIG_CONFIGS).filter(k => RIG_CONFIGS[k].craneKey === craneKey);
+      const sel = document.getElementById('rig-config');
+      buildSelect(sel, configKeys, (k) => RIG_CONFIGS[k].label, (k) => k);
+      sel.value = configKeys[0];
+      onRigConfigChange();
     }
 
     function onRigConfigChange() {
@@ -4254,7 +4282,7 @@
         onRigDataReady(key, rigDataCache[key], myToken);
         return;
       }
-      fetch(BOOM_RIG_NEXTCLOUD_BASE + cfg.file)
+      fetch(cfg.nextcloudBase + cfg.file)
         .then(r => {
           if (!r.ok) throw new Error('HTTP ' + r.status);
           return r.json();
@@ -4276,7 +4304,7 @@
       document.getElementById('rig-controls').style.display = '';
       const cfg = RIG_CONFIGS[key];
       if (cfg.hasJib && !(key in rigJibReferenceCache)) {
-        rigJibReferenceCache[key] = rigComputeJibReference(data);
+        rigJibReferenceCache[key] = rigComputeJibReference(data, cfg.boomLengths);
         if (rigJibReferenceCache[key]) {
           rigStaticIndexCache[key] = rigBuildStaticPointIndex(data.boom);
         }
@@ -4323,7 +4351,7 @@
 
       const data = rigDataCache[rigConfigKey];
       const section = data[axis];
-      const lengths = axis === 'boom' ? RIG_BOOM_LENGTHS : Object.keys(section.lengths);
+      const lengths = axis === 'boom' ? cfg.boomLengths : Object.keys(section.lengths);
       const lengthSelect = document.getElementById('rig-length-select');
       buildSelect(lengthSelect, lengths, (L) => L + ' m', (L) => L);
       lengthSelect.value = lengths[0];
@@ -4336,8 +4364,8 @@
       angleSlider.value = angles[0];
 
       const noteEl = document.getElementById('rig-shape-note');
-      noteEl.textContent = axis === 'jib'
-        ? 'Jib colors were calibrated from this config\'s own reference plot and diff-matched across jib lengths.'
+      noteEl.textContent = cfg.colorsVerified === false
+        ? 'Colors here are AutoCAD\'s own assigned values, not yet pixel-checked against a reference plot for this crane - geometry is exact, but a shade may be slightly off until that\'s done.'
         : '';
 
       onRigLengthChange();
@@ -4447,7 +4475,7 @@
       return [pivotX + dx * cosD - dy * sinD, pivotY + dx * sinD + dy * cosD];
     }
 
-    function rigComputeJibReference(bundle) {
+    function rigComputeJibReference(bundle, boomLengths) {
       const boomSection = bundle.boom, jibSection = bundle.jib;
       if (!boomSection || !jibSection) return null;
       const jibLenKeys = Object.keys(jibSection.lengths);
@@ -4461,7 +4489,7 @@
       // Stage 1: angle. Structure within ~9-15m of the pivot is shared by
       // every boom length (only the outer telescoping sections differ),
       // so any catalog length works as the angle probe.
-      const nearLenData = rigDecodeLengthEntry(boomSection, RIG_BOOM_LENGTHS[0]);
+      const nearLenData = rigDecodeLengthEntry(boomSection, boomLengths[0]);
       const nearPts = rigExtractFramePoints(nearLenData, boomSection,
         (x, y) => x - pivotX > 9000 && Math.hypot(x - pivotX, y - pivotY) < 15000);
       if (!nearPts.length) return null;
@@ -4486,7 +4514,7 @@
       // telescoping-tip-specific, so only the true reference length's tip
       // will actually appear in the jib dataset's point cloud.
       let bestLen = null, bestLenScore = -1, secondLenScore = -1;
-      for (const cand of RIG_BOOM_LENGTHS) {
+      for (const cand of boomLengths) {
         const lenData = rigDecodeLengthEntry(boomSection, cand);
         const farPts = rigExtractFramePoints(lenData, boomSection, (x) => x - pivotX > 15000);
         if (!farPts.length) continue;
