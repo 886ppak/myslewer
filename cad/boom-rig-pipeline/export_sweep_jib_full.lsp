@@ -24,21 +24,31 @@
 ;; T3N, T3NY, T3F, T3YVEF; if the H variants ever do need their own real
 ;; data, copy one of the confirm-and-run-full lines near the bottom.
 ;;
+;; T3NY and T3YVEF (the guy-rigged jib variants) trimmed from the
+;; combined EXPORTSWEEP-ALL-JIB-FULL command too - T3N and T3F are the
+;; two that matter; EXPORTSWEEP-T3NY-FULL / EXPORTSWEEP-T3YVEF-FULL still
+;; exist standalone below if those are ever wanted later. Guy angle would
+;; hold at its reference value throughout if they are run (same
+;; convention as the original decoupled sweep) - it doesn't interact
+;; with boom/jib geometry, so it doesn't need its own axis here.
+;;
 ;; ############################################################
 ;; ##  POSE COUNT - READ THIS BEFORE RUNNING ANYTHING BELOW  ##
 ;; ############################################################
 ;;   For ONE config: (boom lengths) x (boom angles) x (jib lengths) x (jib angles)
-;;     Jib N configs (T3N, T3NY):  10 x 9 x 21 x 9 = 17,010 poses each
-;;     Jib F configs (T3F, T3YVEF): 10 x 9 x 17 x 9 = 13,770 poses each
-;;   All 4 jib configs, fully: (2 x 17,010) + (2 x 13,770) = 61,560 poses.
+;;     T3N (jib N): 10 x 9 x 21 x 9 = 17,010 poses
+;;     T3F (jib F): 10 x 9 x 17 x 9 = 13,770 poses
+;;   T3N + T3F together (EXPORTSWEEP-ALL-JIB-FULL): 30,780 poses.
 ;;   At roughly 2-3 seconds per pose (wblock + regen overhead, consistent
-;;   with the earlier sweeps), that's 35-50+ HOURS of AutoCAD run time
-;;   for everything - not realistic in one sitting, or several.
+;;   with the earlier sweeps) that's ~21-26 hours of AutoCAD run time.
+;;   Real pose files from this same pipeline average ~6.8MB each, so
+;;   that's also roughly 30,780 x 6.8MB =~ 210GB of DWGs, and up to ~400GB
+;;   peak if the later DXF conversion keeps both copies around at once.
 ;;
 ;;   *BOOM-ANGLES-SWEEP* and *LENGTHS* below are edit-before-you-run
 ;;   lists, same as every other script in this pipeline - trim them
-;;   first if the full count is too much. Two practical ways to cut it
-;;   down a lot without losing much real value:
+;;   further if even this is too much. Two practical ways to cut it down
+;;   without losing much real value:
 ;;     - Drop *BOOM-ANGLES-SWEEP* to a handful spread across the range
 ;;       (e.g. 0/40/80) instead of all 9 - this is really a spot-check
 ;;       against the rotation trick, not a real gap, so it doesn't need
@@ -47,11 +57,6 @@
 ;;       which) instead of all 10 in one sitting - lets you stop between
 ;;       lengths and pick up later without losing progress, and lets you
 ;;       ship boom lengths as they finish instead of waiting for all 10.
-;;
-;; Guy angle (T3NY/T3YVEF) is held at its reference value
-;; throughout, same as the original decoupled sweep - adding a 3-way guy
-;; axis on top of this would triple an already enormous export for very
-;; little real value (guy angle doesn't interact with boom/jib geometry).
 ;;
 ;; Standalone from the other scripts here - load on its own.
 ;;
@@ -75,10 +80,10 @@
 ;;                          one sitting (prints the pose count and asks
 ;;                          you to type YES before starting).
 ;;   EXPORTSWEEP-ALL-JIB-FULL
-;;                       -> commits to ALL 4 configs, all 10 boom lengths
+;;                       -> commits to T3N + T3F, all 10 boom lengths
 ;;                          each, back-to-back with ONE confirmation up
-;;                          front (~61,500 poses, ~35-50 hours - this is
-;;                          the "just run everything now" command).
+;;                          front (~30,780 poses, ~21-26 hours, ~210GB -
+;;                          this is the "just run it" command).
 
 ;; ===== OUTPUT FOLDER =====
 (setq *OUTDIR* (strcat (getenv "USERPROFILE") "/Documents/export/"))
@@ -365,23 +370,28 @@
 (defun c:EXPORTSWEEP-T3F-FULL ()     (confirm-and-run-full "T3F"     'F nil) )
 (defun c:EXPORTSWEEP-T3YVEF-FULL ()  (confirm-and-run-full "T3YVEF"  'F T) )
 
-;; ---------- all 4 remaining jib configs, one sitting, one confirmation ----------
-;; Same YES safeguard as confirm-and-run-full but totalled across all 4
+;; ---------- T3N + T3F, one sitting, one confirmation ----------
+;; T3NY and T3YVEF (the guy-rigged jib variants) dropped from this
+;; combined run - T3N and T3F cover the real gap; EXPORTSWEEP-T3NY-FULL
+;; and EXPORTSWEEP-T3YVEF-FULL above are still there standalone if those
+;; are ever wanted later.
+;;
+;; Same YES safeguard as confirm-and-run-full but totalled across both
 ;; configs up front, then runs each in sequence with no further prompts -
 ;; this is the "commit to everything now" command. Still writes and
 ;; verifies (findfile) every file as it goes and restores the drawing's
 ;; original property values after each config, same as every other path
 ;; through this script - an interruption partway through (Escape) just
-;; means the LATER configs weren't attempted, nothing already written is
-;; at risk.
+;; means T3F wasn't attempted if it was still on T3N, nothing already
+;; written is at risk.
 (defun c:EXPORTSWEEP-ALL-JIB-FULL ( / est-n est-f total ans all-lengths)
   (setq all-lengths (append '(0 1 2 3 4 5 6 7 8 9) nil))
   (setq est-n (* (length *LENGTHS*) (length *BOOM-ANGLES-SWEEP*)
                   (length *JIB-N-LENGTHS*) (length *JIB-ANGLES*)))
   (setq est-f (* (length *LENGTHS*) (length *BOOM-ANGLES-SWEEP*)
                   (length *JIB-F-LENGTHS*) (length *JIB-ANGLES*)))
-  (setq total (+ (* 2 est-n) (* 2 est-f))) ;; T3N+T3NY, T3F+T3YVEF
-  (princ (strcat "\nALL 4 configs (T3N, T3NY, T3F, T3YVEF), all 10 boom lengths each: "
+  (setq total (+ est-n est-f)) ;; T3N + T3F only
+  (princ (strcat "\nT3N + T3F, all 10 boom lengths each: "
                   "up to " (itoa total) " poses total."))
   (princ "\nAt ~2-3 sec/pose that's roughly ")
   (princ (rtos (/ (* total 2.5) 3600.0) 2 1))
@@ -393,13 +403,9 @@
     (progn
       (princ "\n\n########## STARTING: T3N ##########")
       (run-full-jib-sweep "T3N" 'N nil all-lengths)
-      (princ "\n\n########## STARTING: T3NY ##########")
-      (run-full-jib-sweep "T3NY" 'N T all-lengths)
       (princ "\n\n########## STARTING: T3F ##########")
       (run-full-jib-sweep "T3F" 'F nil all-lengths)
-      (princ "\n\n########## STARTING: T3YVEF ##########")
-      (run-full-jib-sweep "T3YVEF" 'F T all-lengths)
-      (princ "\n\n########## ALL 4 CONFIGS DONE ##########")
+      (princ "\n\n########## T3N + T3F DONE ##########")
     )
   )
   (princ)
@@ -439,7 +445,7 @@
 (princ "\n  RUN-ONE-LENGTH")
 (princ "\nOr all 10 boom lengths for one config in one sitting (asks to confirm first):")
 (princ "\n  EXPORTSWEEP-T3N-FULL  EXPORTSWEEP-T3NY-FULL  EXPORTSWEEP-T3F-FULL  EXPORTSWEEP-T3YVEF-FULL")
-(princ "\nOr commit to all 4 configs right now, one confirmation, back-to-back:")
+(princ "\nOr commit to T3N + T3F right now, one confirmation, back-to-back:")
 (princ "\n  EXPORTSWEEP-ALL-JIB-FULL")
 (princ "\n(H variants dropped - see top of file)")
 (princ "\nEdit *BOOM-ANGLES-SWEEP* near the top to trade off completeness vs. runtime first.")
