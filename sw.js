@@ -4,7 +4,7 @@
 // reeving diagrams (see CONTENT_CACHE below) — those persist across updates
 // so a crew doesn't lose offline access to plans they've already viewed just
 // because an app update shipped.
-const CACHE_VERSION = 'myslewer-v318';
+const CACHE_VERSION = 'myslewer-v319';
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 
 // Fetched-on-demand content (reeving diagrams, etc). Fixed name, never
@@ -132,7 +132,9 @@ const APP_SHELL = [
 // forces that same large re-download on every future deploy regardless
 // of what changed, which is exactly the mistake methodology.txt 115
 // found and fixed - see that entry before adding anything here again.
-const CONTENT_CACHE_INVALIDATE = [];
+const CONTENT_CACHE_INVALIDATE = [
+  './loadchart/ltm1150-T-fulldeploy.json'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
