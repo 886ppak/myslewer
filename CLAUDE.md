@@ -32,3 +32,42 @@ account-only changes with no feature/UI change attached — bump
 move every time regardless (that's what actually gets the change out to
 clients), but the visible version number next to the wordmark shouldn't
 climb just because someone's access changed.
+
+# Adding a new crane
+
+When the user gives you a new crane's source documents (OEM manual,
+load-chart manual, reeving-plan PDF, etc. — typically dropped in their
+Nextcloud crane folder) and asks for it to be added, build ALL of the
+following for it, not a subset — treat this as the default full scope
+unless the user explicitly narrows it (e.g. "skip the boom rig for
+now"). Each one is a separate data surface in `index.html`; check
+whether the crane's key is already present in each before assuming it's
+done:
+
+1. **CWT Combos** (Counterweight tab) — `COUNTERWEIGHT_DATA`
+2. **Driving w/ Equipment in Place** — `DRIVING_EQ_DATA`
+3. **Crane Layout**: 360° Slew Clearance (`SLEW_CLEARANCE_DATA`),
+   outrigger longitudinal/width dims + ground-marking layout
+   (`GROUND_LAYOUT_DATA`, `FOOTPRINTS`)
+4. **Reeving Plans** — `reeving/manifest.json` entry, `REEVE_CRANE_GROUPS`
+   entry, per-config SVGs under `reeving/svg/`
+5. **Load Chart Finder** — `LOAD_CHART_FILES` entry + a
+   `loadchart/<crane>.json`, extracted from the crane's separate
+   Load-chart/Tables manual (NOT the Operating Instructions manual —
+   see methodology.txt §14 for the extraction method: PyMuPDF
+   `find_tables()`, verified against rendered page images)
+6. **Minimum Hook Block Weights** — `cranesData`
+7. **Rope Retentioning** — `FLEET_BLOCK_SPEC`
+
+**Boom Rig** (interactive AutoCAD-derived boom/jib CAD viewer) is the
+one exception — it needs AutoCAD dynamic-block data the user prepares
+separately in Onshape (methodology.txt §11), so it's NOT part of the
+default set above. Only build it when the user separately hands over
+that CAD export.
+
+For each item, source real data from the documents provided — never
+fabricate a figure. If a document needed for one item (e.g. the
+load-chart manual) hasn't been provided yet, say so explicitly and ask
+for it, rather than silently skipping that item or shipping the rest
+and letting the gap go unmentioned. Log the work in methodology.txt as
+you go, same as every other entry there.

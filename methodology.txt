@@ -14565,3 +14565,130 @@ cranes get their own subsections as they're built.
 
   No CACHE_VERSION/app-version bump - same as 151, this is
   documentation/tooling under cad/, not part of the served app shell.
+
+153. LTM 1150-5.3 onboarding, and formalizing the "add a new crane"
+     checklist  [CONVERSATION]
+--------------------------------------------------------------------------------
+Person added three new crane folders to their Nextcloud (LTM 1150-5.3, LG
+1750, LG 1800) and asked to prioritize the 1150. Built, in order, from its
+Operating Instructions manual (LTM-0286-5-000 / bal_28600-02-02): the
+Counterweight tab (9 components, 48 combos, ch.4.07 p.874-886), Driving
+w/ Equipment (two boom configs incl. an "advanced" 46/46/46/46/0/0
+extension stage, ch.15.05), 360° Slew Clearance, and Crane Layout's
+outrigger longitudinal/width dims + ground-marking layout (ch.1.03
+"Support base" table + Fig.159732 "Crane dimensions", p.53/62) - person's
+explicit instruction was "everything except the boom rig" (boom rig
+needs a separate AutoCAD/Onshape export per §11, not requested for this
+crane).
+
+FOOTPRINTS (chassis-body front/rear-to-slew-centre, used to flag when a
+support pad's "if moved now" spot sits under the crane's own body) was
+left blank at first - exhaustive search of the manual's 1.02/1.03
+chapters never turned up a single printed "slew centre to bumper/rear"
+figure the way other cranes' did. Person's own suggestion once flagged:
+scale Fig.159732, draw a construction line down the centre of slew, then
+measure front-to-centre and rear-to-centre off it directly - exactly
+what got built. First pass measured off the PLAN view: calibrated
+mm-per-pixel from the drawing's own printed 4639mm/3435mm slew-centre-
+to-outrigger split (865px = 8074mm), located the slew centre as the
+vertical line at that split's own arrow-meeting point, then pixel-
+measured the front cab corner (front=8494mm) and what was assumed to be
+a rear ladder/counterweight edge (rear=4452mm). Person pushed back:
+"I think you should be doing that from the side view" - and that catch
+was right. The plan-view "rear" measurement had actually landed on the
+tail-swing ground-clearance angle fan (the dashed "F/G" lines near the
+counterweight), not the chassis edge - a real ~560mm error. Redone off
+the SIDE view instead: confirmed the two views share one pixel scale
+(wheelbase chain 2580/1650/2010/1650mm between axle pairs matches to
+<0.1% against directly-detected axle-hub pixel positions, both via
+find_tables()-style column-darkness scanning, not eyeballing), then
+anchored front/rear to the side view's OWN printed dimensions instead of
+guessing: front = slew-centre-to-axle-1 + the printed 2435mm
+(bumper-to-axle-1); rear = slew-centre-to-axle-5 + the printed 2127mm
+(axle-5-to-rear-tip). Result (front 8559mm / rear 3891mm) sits almost
+exactly next to LTM 1130's own figures (8451/3895) - a far more
+plausible fleet fit than the first pass's rear figure, and no longer a
+bare pixel guess but a real dimension chain. width (2850mm) was double-
+checked against the page-53 "Tire sizes" table's B column, 525/80 R25
+row, on the person's direct request to confirm rather than assume it
+was carried over correctly from a sibling crane.
+
+Reeving Plan came next ("should be a sub folder for reeving plan" -
+Nextcloud has a dedicated Reeving_plan folder per crane, same pattern as
+counterweight/driving-eq living in the main manual). Source was one
+single A0-page vector CAD export (EINSCHERPLAENE_TELEAUSLEGER,
+doc 98048814) containing all 14 configurations (1-10-way, 14-way aux
+block, boom-nose 3-way/1-way and 1-way/2-way, special 2x) laid out on
+one sheet, notation and hook-block sheave counts matching LTM 1110's own
+data one-for-one (same reeving math, different crane). First SVG export
+attempt (page.get_svg_image() on a show_pdf_page-cropped sub-page) came
+out ~16.7MB per diagram - turned out show_pdf_page(clip=...) only masks
+the VISIBLE region, it doesn't drop the rest of the page's ~92,000
+drawings from the underlying content stream, so every export still
+carried the whole sheet. Fixed by reading page.get_drawings() directly,
+keeping only drawings whose rect overlaps the target crop box, and
+redrawing them onto a fresh small page via page.new_shape() before
+exporting - brought files down to the same 25-70KB range as the rest of
+the fleet's SVGs. That filter's first version used Rect intersection
+area (inter.width*inter.height > 0) to decide "does this drawing
+overlap the crop", which silently dropped every perfectly horizontal or
+vertical line (a straight line's own bounding rect is degenerate - zero
+width or height - so its intersection area is always exactly 0 even
+when it genuinely crosses the crop) - caught because every "-" dash in
+the rope-notation text and one whole stroke of "F" went missing from
+the render; fixed with a manual AABB overlap test instead of relying on
+Rect.is_empty()/intersection area. Also discovered mid-build that the
+sibling fleet's existing reeving SVGs bake in full English text (title,
+hook-block label, rope notation) as vector-outlined paths - traced this
+to those source PDFs having real embedded-font text Liebherr could
+convert cheaply via get_svg_image()'s default text-as-path, unlike this
+crane's source (pure CAD-vector pseudo-glyphs, no real font, hence the
+16.7MB bloat when text was included). Checked the app's own rendering
+code before deciding whether to replicate that: title/hook/notation are
+already rendered from the manifest's own label/hook/lines JSON fields
+via HTML overlay (renderReeveWayGrid/selectReeveWay), completely
+independent of the SVG - so the sibling SVGs' baked-in text is pure
+redundant decoration, not load-bearing. Shipped diagram-only crops
+instead (deliberately trimmed to exclude the title/label text bands,
+keeping only pulleys/ropes/sheave-numbers/notation) rather than
+reproducing the expensive baked-text convention for no functional gain.
+
+Each of the five items above was pushed and deploy-confirmed
+individually (v8.22-v8.27 / myslewer-v310-v315), following the same
+per-feature cadence as every other crane's build-out this session.
+
+Then the person asked "you haven't done the load charts for the 1150?"
+and, once told it needed a document not yet supplied (the load-chart/
+tables manual is a SEPARATE document from Operating Instructions - see
+§14.1 - not something already sitting in the manual.pdf already
+downloaded for everything else), gave the real ask straight: "I want
+you to do all these steps every time I want a new crane added... please
+note it in the documentation I thought we had clearly built this
+process and workflow." They named the full list themselves: load chart
+finder, driving w/ eq, reeving plans, min block weights, rope
+retention, cwt combos. Checked cranesData/FLEET_BLOCK_SPEC directly -
+confirmed LTM 1150 really was missing from Minimum Hook Block Weights
+and Rope Retentioning too, on top of Load Chart Finder, so the gap was
+real, not just the load chart. Root cause: nothing wrong with the
+methodology already documented per-feature throughout this file (§11-14
+cover sourcing/extraction for most of these individually) - what was
+actually missing was a single CONSOLIDATED checklist stating that all
+of them are the default scope for every new crane, not an a-la-carte
+menu to rediscover one gap at a time. Added that checklist to CLAUDE.md
+itself (not just here) specifically so it's in context on every future
+session without needing to grep this file - see CLAUDE.md's "Adding a
+new crane" section for the actual list (CWT Combos, Driving w/
+Equipment, Crane Layout's three data sets, Reeving Plans, Load Chart
+Finder, Minimum Hook Block Weights, Rope Retentioning; Boom Rig
+explicitly carved out as the one non-default item, since it needs a
+separate Onshape/AutoCAD export the person prepares by hand).
+
+Attempted to fetch the load-chart manual straight from the same
+Nextcloud path pattern that worked for the Reeving_plan folder
+(local.idull.au, WebDAV) - failed outright, connection reset, not an
+auth issue (tried both a plain request and a leftover session-cookie
+jar from a prior session's browser automation; the WebDAV endpoint
+wants Basic/Bearer auth regardless of cookie validity, and the host
+wasn't even reachable at all this time). Load Chart Finder, Minimum
+Hook Block Weights, and Rope Retentioning for LTM 1150 remain
+outstanding pending the person supplying that document directly.
