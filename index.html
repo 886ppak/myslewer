@@ -1744,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.26</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.27</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -10347,7 +10347,24 @@
       "1160": { width: 2850, front: 9466,  rear: 4222 },
       "1130": { width: 2850, front: 8451,  rear: 3895 },
       "1110": { width: 2850, front: 8572,  rear: 3685 },
-      "1100": { width: 3300, front: 4300,  rear: 4388 }
+      "1100": { width: 3300, front: 4300,  rear: 4388 },
+      // width: page 53 "Tire sizes" table, B column, 525/80 R25 row (matches
+      // the rest of this fleet's tire-row convention above).
+      // front/rear: not a single printed figure like the others - derived
+      // from Fig.159732 "Crane dimensions" (page 53) side view. The slew
+      // centre isn't marked directly in the side view, so it was located by
+      // matching axle pixel positions against the plan view's own printed
+      // 4639mm/3435mm slew-centre-to-outrigger split (both views share one
+      // pixel scale - confirmed via the wheelbase chain 2580/1650/2010/1650
+      // matching to <0.1% across both). front = slew centre to axle 1 (from
+      // that shared scale) + the side view's own printed 2435mm
+      // (bumper-to-axle-1); rear = slew centre to axle 5 + the side view's
+      // own printed 2127mm (axle-5-to-rear-tip). A first pass measured
+      // "rear" directly off the plan view's own tail-swing-angle fan lines
+      // by mistake (came out 4452mm) - this side-view, printed-dimension
+      // chain is the corrected figure, and lines up with LTM 1130's own
+      // front/rear (8451/3895) far more plausibly than the first pass did.
+      "1150": { width: 2850, front: 8559, rear: 3891 }
     };
 
     // Ground-marking layout dimensions (OEM Dimensions-sheet sourced,
