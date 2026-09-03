@@ -14692,3 +14692,75 @@ wants Basic/Bearer auth regardless of cookie validity, and the host
 wasn't even reachable at all this time). Load Chart Finder, Minimum
 Hook Block Weights, and Rope Retentioning for LTM 1150 remain
 outstanding pending the person supplying that document directly.
+
+154. LTM 1150-5.3: Minimum Hook Block Weights, Rope Retentioning, and
+Load Chart Finder [CONVERSATION]
+
+Closed out the three remaining items from #153's checklist, once the
+person supplied Nextcloud access directly (an app password, since the
+WebDAV connection attempted in #153 needed real credentials, not a
+browser session cookie - curl --netrc-file rather than a raw password
+on the command line, which the sandbox's classifier flags). Downloaded
+the Load chart manual's fully-deployed T-boom variant
+(tlt-G_en_000490770104.001_20211108_T286.001_T, "001_T.pdf" among 8
+sibling PDFs in the folder - the others are reduced/variable support-
+base variants, out of scope per this app's established convention).
+
+Minimum Hook Block Weights: cranesData['LTM 1150-5.3'] built straight
+from the manual's own chapter 40.35.10 table (8 blocks: 125t DS/DM,
+100t DM, 63t EM/DM, 32t EM/DM, 10t single load hook), same G=L×M×n×F
+formula every other crane already uses.
+
+Rope Retentioning: FLEET_BLOCK_SPEC['1150'] needed winch drum rope
+length/pull force/max boom length, none of which are in the Load chart
+or Operator manuals - the person pointed out ("so where did you find
+the other rope lengths then?") that every sibling crane's own w1/w2/
+p1/p2/boom figures actually came from a DIFFERENT document entirely:
+Liebherr's public "Technical Data" PDF (product-page spec sheet, not
+either OEM manual - see §12.1). Fetched LTM 1150-5.3's own copy
+(assets-cdn.liebherr.com), page 5 "Krandaten" gave 250m/91.6kN each
+winch (rounded to 9.2t to match the hook-block table's own 92kN/9.2t
+basis) and 66m max boom - cross-checked against that same page's
+"Hakenflasche" table, which matches chapter 40.35.10's figures exactly.
+Also had to add the missing <option value="1150"> to the #r-model
+select itself - the FLEET_BLOCK_SPEC entry alone doesn't reach the UI,
+same trap as HOOK_BOOM_LENGTHS below.
+
+Load Chart Finder: same table-extraction pipeline as every prior crane
+(PyMuPDF find_tables() + reference-y merged-cell splitting, methodology
+§14.2) - 001_T.pdf, T-boom/8.10x7.87m/360°/mode=T only, 192 cwt×wind
+combos, 36,585 columns, ~10 minutes. Verified against page 176's
+rendered PNG before shipping (boom 12.3m/r=3.0m -> 86.0t, plus both
+16.4m columns' extension-row pinned markers) - exact match. Wired into
+LOAD_CHART_FILES, LOAD_CHART_CRANE_LABELS, and derived
+HOOK_BOOM_LENGTHS['LTM 1150-5.3'] from the JSON's own boom lengths
+(24 values, 12.3-66.0m) so Minimum Hook Block Weights' boom dropdown
+stops showing "no chart data for this crane" - that dropdown is keyed
+off the full display label, a separate map from LOAD_CHART_FILES'
+short numeric keys, easy to forget as its own step.
+
+Caught one real bug via Playwright testing before shipping: the
+extractor stored 'wind' as a Python float, but the frontend's combo-key
+lookup does `${cwt.toFixed(1)}|${loadChartWind}` with loadChartWind
+used AS-IS (no .toFixed() applied to it - only cwt gets that treatment,
+per the comment already in renderLoadChartResults() from a past
+session's identical bug on the cwt side). A float wind of exactly 9.0
+round-trips through JS's default Number->String coercion as "9", not
+"9.0", silently breaking every whole-number wind bracket's lookup - the
+default (lowest) bracket for this crane happened to be exactly 9.0, so
+it broke on the very first thing a user would try. Every other page-
+windMode crane's own extractor (e.g. ltm1250's) already avoided this by
+keeping wind a string throughout, never letting it become a float -
+this crane's script just hadn't followed that convention. Fixed both
+extract_full.py (for any future re-run) and the already-generated JSON
+in place (converted the 'wind' field + combo keys to the string format,
+no need to re-run the ~10-minute extraction). Re-verified via Playwright
+after the fix: default wind bracket now correctly returns capacity
+results (86.00t at 3m/12.3m boom, matching the manual page exactly),
+90% derate math checks out (86 × 0.9 = 77.40), and "find minimum
+counterweight" mode correctly returns 2.7t for a case 0t can't clear.
+Lesson: always exercise a NEW crane's Load Chart Finder against at
+least one whole-number wind/cwt value specifically, not just the
+values that happened to come up in earlier verification - a bug that
+only bites on trailing-.0 numbers is exactly the kind that survives a
+spot-check built on non-round test values.
