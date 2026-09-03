@@ -1744,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.28</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.29</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -1848,6 +1848,7 @@
               <option value="1100">LRT 1100-2.1</option>
               <option value="1110">LTM 1110-5.1</option>
               <option value="1130">LTM 1130-5.1</option>
+              <option value="1150">LTM 1150-5.3</option>
               <option value="1160">LTM 1160-5.2</option>
               <option value="1220">LTR 1220</option>
               <option value="1250">LTM 1250-5.1</option>
@@ -9399,6 +9400,65 @@
           ]},
           { id: 'b63', name: "63t 3-Sheave DM Block", weight: 0.70, aux: [{ name: "No auxiliary ballast allowed", add: 0.00 }] },
           { id: 'b30', name: "30t 1-Sheave EM Block", weight: 0.65, aux: [{ name: "No auxiliary ballast allowed", add: 0.00 }] }
+        ]
+      },
+      // Source: Liebherr's public "Technical Data" sheet for LTM 1150-5.3
+      // (Krandaten/Crane data page) - w1/w2 (250m), p1/p2 (91.6kN, rounded
+      // to 9.2t to match the Load chart manual's own F=92kN figure used for
+      // the hook block table below), and boom (66m) all read directly off
+      // that page. Hook block figures cross-checked against the same
+      // page's own "Hakenflasche" table (116.9t/7-sheave/1.240t,
+      // 86.0t/5-sheave/950-750kg, 61.6t/3-sheave/700-500kg,
+      // 27.2t/1-sheave/450kg, 9.2t/0-sheave/350kg) - matches the Load chart
+      // manual chapter 40.35.10 figures already used for Minimum Hook
+      // Block Weights exactly. Auxiliary weights are 100kg plates, always
+      // fitted in pairs (chapter 40.35.10's own "Auxiliary weights" table).
+      '1150': {
+        w1: 250, p1: 9.2, w2: 250, p2: 9.2, boom: 66,
+        blocks: [
+          { id: 'b125ds', name: "125t 7-Sheave DS Block", weight: 1.240, aux: [{ name: "No auxiliary ballast allowed", add: 0.00 }] },
+          { id: 'b125dm', name: "125t 7-Sheave DM Block", weight: 1.240, aux: [{ name: "No auxiliary ballast allowed", add: 0.00 }] },
+          { id: 'b100dm', name: "100t 5-Sheave DM Block", weight: 0.750, aux: [
+            { name: "None (Base Net Weight - 0.75 t)", add: 0.00 },
+            { name: "2 Auxiliary Weights (+0.20 t) -> Total: 0.95 t", add: 0.20 },
+            { name: "4 Auxiliary Weights (+0.40 t) -> Total: 1.15 t", add: 0.40 },
+            { name: "6 Auxiliary Weights (+0.60 t) -> Total: 1.35 t", add: 0.60 },
+            { name: "8 Auxiliary Weights (+0.80 t) -> Total: 1.55 t", add: 0.80 },
+            { name: "10 Auxiliary Weights (+1.00 t) -> Total: 1.75 t", add: 1.00 }
+          ]},
+          { id: 'b63em', name: "63t 3-Sheave EM Block", weight: 0.500, aux: [
+            { name: "None (Base Net Weight - 0.50 t)", add: 0.00 },
+            { name: "2 Auxiliary Weights (+0.20 t) -> Total: 0.70 t", add: 0.20 },
+            { name: "4 Auxiliary Weights (+0.40 t) -> Total: 0.90 t", add: 0.40 },
+            { name: "6 Auxiliary Weights (+0.60 t) -> Total: 1.10 t", add: 0.60 },
+            { name: "8 Auxiliary Weights (+0.80 t) -> Total: 1.30 t", add: 0.80 },
+            { name: "10 Auxiliary Weights (+1.00 t) -> Total: 1.50 t", add: 1.00 }
+          ]},
+          { id: 'b63dm', name: "63t 3-Sheave DM Block", weight: 0.500, aux: [
+            { name: "None (Base Net Weight - 0.50 t)", add: 0.00 },
+            { name: "2 Auxiliary Weights (+0.20 t) -> Total: 0.70 t", add: 0.20 },
+            { name: "4 Auxiliary Weights (+0.40 t) -> Total: 0.90 t", add: 0.40 },
+            { name: "6 Auxiliary Weights (+0.60 t) -> Total: 1.10 t", add: 0.60 },
+            { name: "8 Auxiliary Weights (+0.80 t) -> Total: 1.30 t", add: 0.80 },
+            { name: "10 Auxiliary Weights (+1.00 t) -> Total: 1.50 t", add: 1.00 }
+          ]},
+          { id: 'b32em', name: "32t 1-Sheave EM Block", weight: 0.450, aux: [
+            { name: "None (Base Net Weight - 0.45 t)", add: 0.00 },
+            { name: "2 Auxiliary Weights (+0.20 t) -> Total: 0.65 t", add: 0.20 },
+            { name: "4 Auxiliary Weights (+0.40 t) -> Total: 0.85 t", add: 0.40 },
+            { name: "6 Auxiliary Weights (+0.60 t) -> Total: 1.05 t", add: 0.60 },
+            { name: "8 Auxiliary Weights (+0.80 t) -> Total: 1.25 t", add: 0.80 },
+            { name: "10 Auxiliary Weights (+1.00 t) -> Total: 1.45 t", add: 1.00 }
+          ]},
+          { id: 'b32dm', name: "32t 1-Sheave DM Block", weight: 0.450, aux: [
+            { name: "None (Base Net Weight - 0.45 t)", add: 0.00 },
+            { name: "2 Auxiliary Weights (+0.20 t) -> Total: 0.65 t", add: 0.20 },
+            { name: "4 Auxiliary Weights (+0.40 t) -> Total: 0.85 t", add: 0.40 },
+            { name: "6 Auxiliary Weights (+0.60 t) -> Total: 1.05 t", add: 0.60 },
+            { name: "8 Auxiliary Weights (+0.80 t) -> Total: 1.25 t", add: 0.80 },
+            { name: "10 Auxiliary Weights (+1.00 t) -> Total: 1.45 t", add: 1.00 }
+          ]},
+          { id: 'lh10e', name: "10t Single Load Hook", weight: 0.350, aux: [{ name: "No auxiliary ballast allowed", add: 0.00 }] }
         ]
       },
       '1130': {
