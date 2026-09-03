@@ -1744,7 +1744,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v8.27</span></h1>
+    <h1>MYSLEWER <span class="app-version">v8.28</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -9573,6 +9573,24 @@
         { name: "Hook block 63 DM", sheaves: 3, maxReeving: 7, baseWeight: 700, maxWeight: 700 },
         { name: "Hook block 100 DM", sheaves: 5, maxReeving: 11, baseWeight: 900, maxWeight: 2500 },
         { name: "Hook block 125 DS", sheaves: 7, maxReeving: 14, baseWeight: 1240, maxWeight: 1240 }
+      ]},
+      // Source: Liebherr LTM 1150-5.3 Load chart manual, chapter 40.35.10
+      // "Hook blocks for single operation" (crane operation with 1 hoist
+      // rope, F=92kN/d=21mm) - baseWeight/maxWeight span the printed
+      // "0 auxiliary weights" to "10 auxiliary weights" range (100kg per
+      // weight, always fitted in pairs -> minPlateIncrement 200, same
+      // convention as LTM 1110's own 200kg-per-pair figure). Load hook 10 E
+      // and the 125 DS/DM blocks have no auxiliary-weight option listed in
+      // the source, so base=max for those.
+      "LTM 1150-5.3": { ropeDia: 21, minPlateIncrement: 200, blocks: [
+        { name: "Load hook 10 E", sheaves: 0, maxReeving: 1, baseWeight: 350, maxWeight: 350 },
+        { name: "Hook block 32 EM", sheaves: 1, maxReeving: 3, baseWeight: 450, maxWeight: 1450 },
+        { name: "Hook block 32 DM", sheaves: 1, maxReeving: 3, baseWeight: 450, maxWeight: 1450 },
+        { name: "Hook block 63 EM", sheaves: 3, maxReeving: 7, baseWeight: 500, maxWeight: 1500 },
+        { name: "Hook block 63 DM", sheaves: 3, maxReeving: 7, baseWeight: 500, maxWeight: 1500 },
+        { name: "Hook block 100 DM", sheaves: 5, maxReeving: 10, baseWeight: 750, maxWeight: 1750 },
+        { name: "Hook block 125 DS", sheaves: 7, maxReeving: 14, baseWeight: 1240, maxWeight: 1240 },
+        { name: "Hook block 125 DM", sheaves: 7, maxReeving: 14, baseWeight: 1240, maxWeight: 1240 }
       ]},
       "LTM 1160-5.2": { ropeDia: 21, minPlateIncrement: 400, blocks: [
         { name: "Load hook 10 E", sheaves: 0, maxReeving: 1, baseWeight: 350, maxWeight: 350 },
