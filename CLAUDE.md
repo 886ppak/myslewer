@@ -59,7 +59,8 @@ done:
 6. **Minimum Hook Block Weights** — `cranesData`
 7. **Rope Retentioning** — `FLEET_BLOCK_SPEC`
 
-**Boom Rig** (interactive AutoCAD-derived boom/jib CAD viewer) is the
+**Boom Clearance** (interactive AutoCAD-derived boom/jib CAD viewer,
+tab formerly labeled "Boom Rig") is the
 one exception — it needs AutoCAD dynamic-block data the user prepares
 separately in Onshape (methodology.txt §11), so it's NOT part of the
 default set above. Only build it when the user separately hands over
