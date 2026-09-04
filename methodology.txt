@@ -14764,3 +14764,81 @@ least one whole-number wind/cwt value specifically, not just the
 values that happened to come up in earlier verification - a bug that
 only bites on trailing-.0 numbers is exactly the kind that survives a
 spot-check built on non-round test values.
+
+155. Renamed "Boom Rig" to "Boom Clearance"; Lift Library and Support Pad
+     Placement converted to opt-in admin-controlled tabs
+
+  Two small, unrelated UI/admin requests handled together.
+
+  Rename: "Boom Rig" -> "Boom Clearance" (person's own naming choice,
+  landed on it after a few rounds of brainstorming - wanted something in
+  the same two-word register as "Slew Clearance" without "Rig" reading
+  as rigging/lifting-gear to a crew). User-facing label only - internal
+  identifiers (RIG_CONFIGS, rig-crane, cad-subtab-rig, etc.) untouched,
+  same "don't rename working code for a copy change" reasoning as
+  always. Updated CLAUDE.md's own reference too, so a future session's
+  "add a new crane" checklist doesn't cite a name that no longer exists
+  in the UI.
+
+  Admin toggles: "add lift library as an option for admin dashboard
+  on/off, maybe I'll turn on by default in the future" plus "make
+  support pad placement [hidden] by default... until I turn it per
+  user." Both tabs already existed and were fully live/visible to
+  everyone - liftlibrary already had a TAB_RESTRICTION_TARGETS deny-
+  list key (visible-by-default, hide-per-user), but nothing in
+  ADMIN_TAB_TOGGLES ever exposed a control for it; cad_pads (Support
+  Pad Placement) was the same story, explicitly documented as one of
+  "the four cad_*/loadchart_* sub-tab keys" the admin dropdown wasn't
+  built to cover.
+
+  "Maybe I'll turn on by default in the future" is the tell that deny-
+  list (visible-by-default, which is what both already were) isn't
+  what's wanted here - the person wants it OFF for everyone right now
+  by default, admin grants access per-person, with the option to later
+  flip a global default to on. That's the existing opt-in mechanism
+  (Service Fill/Assembly Plans/Lift Logger/X%H's own pattern), not deny-
+  list. New flags: liftLibraryAccess, supportPadAccess - both boolean on
+  userAccess/{uid}, both start false (tab hidden via style="display:
+  none" added to each button, matching the other opt-in tabs exactly),
+  both added to ADMIN_TAB_TOGGLES as kind:'optin'. Support Pad Placement
+  needed no second condition (unlike X%H's LTM-1650-only gate), so
+  applyFeatureAccess toggles its button directly - no
+  window.__updateXxxVisibility export needed for this one.
+
+  Real consequence flagged to the person before shipping: Lift Library
+  goes from "everyone sees it" to "nobody sees it until granted" the
+  moment this deploys - a genuine behavior change for every existing
+  user, not just an additive feature. Confirmed as the intended
+  tradeoff (they said as much - "off by default for now").
+
+  Deliberately did NOT remove liftlibrary/cad_pads from
+  TAB_RESTRICTION_TARGETS - both keys still drive their own personal
+  Customize-Tabs declutter entry for whoever DOES have real access,
+  same as before this change. The new optin keys and the old deny-list
+  keys point at the same visual button under two different Firestore
+  field names, which sounds like it should conflict but doesn't: the
+  optin flag gates whether the tab exists for someone at all, the deny-
+  list key (unchanged) still lets a person who has access personally
+  hide/reveal it on their own device. One side effect carried over from
+  X%H's own precedent: the admin dashboard's three-state HIDDEN cycle
+  writes startHidden.liftLibraryAccess / startHidden.supportPadAccess,
+  but the personal-declutter seeding logic only ever reads startHidden
+  keyed by the TAB_RESTRICTION_TARGETS key (liftlibrary/cad_pads) - so
+  HIDDEN behaves identically to ON for these two flags, same known,
+  accepted limitation X%H already shipped with, documented in the same
+  comment block so a future session doesn't try to "fix" it in only one
+  place.
+
+  Verified via Playwright (both new buttons computed display:none on a
+  fresh, signed-out load; ADMIN_TAB_TOGGLES carries both new entries
+  with the right labels/kind; adminTabState returns off/on/hidden
+  correctly for fake off/on/startHidden user objects; a full
+  adminRefreshUsers()->adminRenderUserToggles() round trip through a
+  mocked window.__adminListUsers renders both toggle buttons with the
+  correct initial state) - no console errors. firestore.rules already
+  allows arbitrary fields on an admin's userAccess write (no hasOnly
+  restriction), so no rules change needed.
+
+  CACHE_VERSION v320->v321, app version v9.1->v9.2 (rename shipped
+  earlier in the same session as v320 already, no separate bump for it
+  alone).

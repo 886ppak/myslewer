@@ -971,6 +971,18 @@
           const ceBtn = document.getElementById('cabentry-tab-btn');
           if (ceBtn) ceBtn.style.display = '';
         }
+        if (data.liftLibraryAccess === true) {
+          const llBtn = document.getElementById('liftlibrary-tab-btn');
+          if (llBtn) llBtn.style.display = '';
+        }
+        // Support Pad Placement (Crane Positioning sub-tab) is opt-in same
+        // as the plain tabs above, but unlike X%H below it has no second
+        // (crane-model) condition, so this one-shot check at sign-in is
+        // enough - no window.__updateXxxVisibility export needed.
+        if (data.supportPadAccess === true) {
+          const spBtn = document.getElementById('cad-subtab-pads');
+          if (spBtn) spBtn.style.display = '';
+        }
         // X%H (Crane Positioning sub-tab) is opt-in same as the three
         // above, but it's a SUB-tab gated on a second condition too (only
         // relevant for the LTM 1650) rather than a plain show/hide - see
@@ -1219,6 +1231,8 @@
                 assemblyPlansAccess: access.assemblyPlansAccess === true,
                 cabEntryAccess: access.cabEntryAccess === true,
                 xPctHAccess: access.xPctHAccess === true,
+                liftLibraryAccess: access.liftLibraryAccess === true,
+                supportPadAccess: access.supportPadAccess === true,
                 hidden: access.hidden || {},
                 startHidden: access.startHidden || {}
               });
@@ -1744,7 +1758,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v9.1</span></h1>
+    <h1>MYSLEWER <span class="app-version">v9.2</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -1828,7 +1842,7 @@
     <button class="tab-btn" data-tabkey="hook" onclick="switchTab('hook-tab', event)">Minimum Hook Block Weights</button>
     <button class="tab-btn" data-tabkey="chain" onclick="switchTab('chain-tab', event)">Chain Shortening</button>
     <button class="tab-btn" data-tabkey="rope" onclick="switchTab('rope-tab', event)">Rope Retentioning</button>
-    <button class="tab-btn" data-tabkey="liftlibrary" onclick="switchTab('liftlibrary-tab', event)">Lift Library</button>
+    <button class="tab-btn" id="liftlibrary-tab-btn" data-tabkey="liftlibrary" onclick="switchTab('liftlibrary-tab', event)" style="display:none;">Lift Library</button>
     <button class="tab-btn" id="servicefill-tab-btn" data-tabkey="servicefill" onclick="switchTab('servicefill-tab', event)" style="display:none;">Service Fill</button>
     <button class="tab-btn" id="assembly-tab-btn" data-tabkey="assembly" onclick="switchTab('assembly-tab', event)" style="display:none;">Assembly Plans</button>
     <button class="tab-btn" id="cabentry-tab-btn" data-tabkey="cabentry" onclick="switchTab('cabentry-tab', event)" style="display:none;">Lift Logger</button>
@@ -2268,7 +2282,11 @@
     <div id="cad-tab" class="tab-content">
       <div class="mode-toggle" id="cad-subtab-toggle" style="margin-bottom:14px;">
         <button class="mode-btn active" id="cad-subtab-layout" onclick="setCadSubTab('layout')">Crane Layout</button>
-        <button class="mode-btn" id="cad-subtab-pads" onclick="setCadSubTab('pads')">Support Pad Placement</button>
+        <!-- Opt-in (supportPadAccess) - hidden by default, shown by
+             applyFeatureAccess once granted. Unlike X%H below, no second
+             (crane-model) condition, so a plain one-shot check at sign-in
+             is enough - no window.__updateXxxVisibility needed. -->
+        <button class="mode-btn" id="cad-subtab-pads" onclick="setCadSubTab('pads')" style="display:none;">Support Pad Placement</button>
         <!-- Opt-in (xPctHAccess) AND LTM 1650-only - hidden by default,
              shown only by window.__updateX650TabVisibility. See that
              function (below) for both conditions. -->
@@ -12323,16 +12341,26 @@
     // top-level tabs only, not the four cad_*/loadchart_* sub-tab keys or
     // the per-crane-model hidden.crane_XXXX flags, which are a separate,
     // finer-grained restriction this dropdown isn't meant to cover.
-    // xPctHAccess is the one deliberate exception - it also targets a
-    // sub-tab (Crane Positioning's X%H), but unlike cad_pads/cad_layout
-    // it's opt-in (hidden unless granted, not deny-list) and genuinely
-    // needs an admin control to hand out per-person - see
-    // window.__updateX650TabVisibility for the second, non-Firestore
-    // condition (LTM 1650 selected) layered on top of this flag. Its
-    // 'hidden' cycle state (see adminTabState below) behaves the same as
-    // 'on' for this one flag - there's no personal declutter-menu entry
-    // for a sub-tab to seed into, so startHidden.xPctHAccess is never
-    // actually read anywhere.
+    // xPctHAccess/liftLibraryAccess/supportPadAccess are the deliberate
+    // exceptions - genuinely opt-in (hidden unless granted, not deny-
+    // list) tabs that need an admin control to hand out per-person, even
+    // though liftlibrary and cad_pads ALSO still exist as plain deny-
+    // list keys in TAB_RESTRICTION_TARGETS (unchanged, still driving
+    // those two's own personal-declutter entry in Customize Tabs for
+    // whoever has real access - the two mechanisms coexist on the same
+    // visual tab under two different keys, not a conflict). X%H alone
+    // additionally needs window.__updateX650TabVisibility for its second,
+    // non-Firestore condition (LTM 1650 selected) layered on top - the
+    // other two have no such second condition, so applyFeatureAccess
+    // toggles them directly, same one-shot pattern as the three plain
+    // opt-in tabs above. Their 'hidden' cycle state (see adminTabState
+    // below) behaves the same as 'on' for all three optin sub-tab/tab
+    // flags here, same reasoning as X%H originally - startHidden keyed by
+    // the ADMIN_TAB_TOGGLES key (e.g. startHidden.liftLibraryAccess)
+    // never matches a personal-declutter entry keyed by the OTHER
+    // (TAB_RESTRICTION_TARGETS) key for the same tab, so it's never read.
+    // Whoever's granted access still keeps their own independent
+    // Customize Tabs control via that separate key, same as always.
     const ADMIN_TAB_TOGGLES = [
       { key: 'reeve', label: 'Reeving Plans', kind: 'denylist' },
       { key: 'cwt', label: 'CWT Combinations', kind: 'denylist' },
@@ -12345,7 +12373,9 @@
       { key: 'serviceFillAccess', label: 'Service Fill', kind: 'optin' },
       { key: 'assemblyPlansAccess', label: 'Assembly Plans', kind: 'optin' },
       { key: 'cabEntryAccess', label: 'Lift Logger', kind: 'optin' },
-      { key: 'xPctHAccess', label: 'Crane Positioning ▸ X%H', kind: 'optin' }
+      { key: 'xPctHAccess', label: 'Crane Positioning ▸ X%H', kind: 'optin' },
+      { key: 'liftLibraryAccess', label: 'Lift Library', kind: 'optin' },
+      { key: 'supportPadAccess', label: 'Crane Positioning ▸ Support Pad Placement', kind: 'optin' }
     ];
 
     // Three states per tab, cycled off -> hidden -> on -> off by a
