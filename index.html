@@ -1864,7 +1864,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v9.3</span></h1>
+    <h1>MYSLEWER <span class="app-version">v9.4</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -4342,7 +4342,7 @@
     const RIG_CRANE_LABELS = { '1650': 'LTM 1650-8.1', '1300': 'LTM 1300-6.2' };
     const RIG_CONFIGS = {
       '1650:T3': {
-        craneKey: '1650', label: 'T3 (standard, no jib)', file: 't3_poses.json', hasJib: false,
+        craneKey: '1650', label: 'T3', file: 't3_poses.json', hasJib: false,
         nextcloudBase: 'https://local.idull.au/public.php/dav/files/nrGXiwRDiYSKnq7/Myslewer/Cad_blocks/LTM1650/T3-ALL/rig-data/',
         boomLengths: ["16.6","22.4","28.2","33.9","39.7","45.3","51.0","52.0","53.0","54.0"]
       },
@@ -4352,7 +4352,7 @@
         boomLengths: ["16.6","22.4","28.2","33.9","39.7","45.3","51.0","52.0","53.0","54.0"]
       },
       '1300:T': {
-        craneKey: '1300', label: 'T (standard, no jib)', file: 't_poses.json', hasJib: false,
+        craneKey: '1300', label: 'T', file: 't_poses.json', hasJib: false,
         nextcloudBase: 'https://local.idull.au/public.php/dav/files/nrGXiwRDiYSKnq7/Myslewer/Cad_blocks/LTM1300/rig-data/',
         boomLengths: ["14.7","19.6","24.4","29.3","34.2","39.0","43.9","48.7","53.6","58.5","63.3","68.2","73.1","77.2","78.0"],
         // A real reference plot confirmed the export's own colors are
