@@ -15011,3 +15011,59 @@ spot-check built on non-round test values.
   next step once the person wants to take it further.
 
   CACHE_VERSION v323->v324, app version v9.4->v9.5.
+
+159. LTM1110-3D: a real boom-length slider, without per-section stroke data
+
+  Direct follow-on to 158, same session: asked for the extend/retract
+  slider next. Went looking for it properly instead of asking the
+  person to redo Onshape work - checked every unassigned part number
+  against the ~8m gap between where section 5's measured geometry ends
+  (Z~52.9) and the tip-hardware cluster the person's "section 6" list
+  actually turned out to be (see 158) - nothing in the file fills it.
+  Real finding, not a shrug: this GLB's own geometry doesn't contain a
+  distinct 6th telescoping box as a separately named part at all -
+  "section 6"'s ~28 part numbers and the head sub-assembly are both
+  tightly clustered right at the tip (well under 1m combined), so
+  there's no way to derive real per-section stroke lengths from this
+  export no matter how it's sliced.
+
+  Rather than block on that (a second Onshape export, retracted this
+  time, would settle it properly but wasn't asked for), used what IS
+  real: this crane's OEM catalog boom lengths already shipped in the
+  app (HOOK_BOOM_LENGTHS["LTM 1110-5.1"], 11.5m to 60.0m, 26 real
+  values) combined with the model's own verified geometry. RIG_CONFIGS'
+  sections.base/luffCylinderInner/luffCylinderOuter/pivotPins already
+  identify which parts never move relative to the boom foot; every
+  other named part (sections 1-6 + head) gets reparented at load time
+  into one THREE.Group anchored at the base's own leading edge
+  (buildLengthRig() in vendor/boomrig3d.js), which is then scaled along
+  the boom axis only (group.scale.set(1,1,factor)) to hit a selected
+  real catalog length. The model's own total modeled length was already
+  confirmed (158) to sit within a few percent of this crane's real 60m
+  max - that match is what makes reading the model's own Z units as
+  real metres reasonable, rather than an invented conversion factor.
+
+  This is explicitly NOT a real per-section telescoping animation - it
+  visibly scales each section's own physical length along with its
+  position, which a real telescoping section doesn't do (it slides,
+  doesn't stretch). Said so directly in the UI (a disclaimer under the
+  new length dropdown) rather than let it pass as more accurate than it
+  is - same "never fabricate a figure" principle as everywhere else in
+  this app, just applied to disclosing an approximation instead of
+  inventing a number. A future real retracted-pose export would let
+  this be redone as genuine section-by-section sliding without
+  touching the OEM-length data or the UI at all.
+
+  New: window.__boomRig3DSetLength(configKey, lengthMeters) in
+  vendor/boomrig3d.js; #rig-3d-length-select populated from
+  HOOK_BOOM_LENGTHS keyed via RIG_CRANE_LABELS (already the same string
+  HOOK_BOOM_LENGTHS uses, no new mapping needed); defaults to the
+  crane's max length on activation. BOOMRIG3D_VERSION 1->2. Verified via
+  Playwright: real catalog values populate the dropdown, default is the
+  max length, the control hides correctly switching back to a 2D
+  config, and changing it throws no console errors - the GLB fetch
+  itself still can't be exercised end-to-end from this session's own
+  sandboxed browser (same pre-existing network limitation as 158), so
+  the actual on-screen scaling result hasn't been eyeballed yet.
+
+  CACHE_VERSION v324->v325, app version v9.5->v9.6.

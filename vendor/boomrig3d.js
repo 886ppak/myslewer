@@ -52,6 +52,8 @@ let renderer = null, scene = null, camera = null, controls = null;
 let currentWrapId = null;
 let animating = false;
 const modelCache = {}; // configKey -> THREE.Group (the cleaned, real-copy-only scene)
+const rigCache = {}; // configKey -> { group, pivotZ, baseFixedLength, reachAtModeledPose } - see buildLengthRig()
+const pendingLength = {}; // configKey -> length (m), when __boomRig3DSetLength is called before load finishes
 
 function ensureRenderer(wrapId) {
   const wrap = document.getElementById(wrapId);
@@ -126,6 +128,65 @@ function pickRealCopyOnly(root) {
   return kept;
 }
 
+// Real-length slider, worked out WITHOUT any per-section stroke data (none
+// exists - the person only ever exported one static pose, essentially at
+// full extension). Rather than fabricate a per-section overlap figure, this
+// takes the one thing that IS real and verified - the model's own geometry,
+// and this crane's already-shipped OEM catalog lengths (HOOK_BOOM_LENGTHS,
+// index.html) - and uniformly scales everything beyond the fixed base
+// section along the boom axis (world Z) to hit the real target length.
+//
+// This is a deliberate simplification, not a guess: the base section
+// (config.sections.base) plus the luffing cylinder and its pivot pins never
+// move relative to the boom foot, so they're left alone; every other named
+// part (telescoping sections 1-6 + the head sub-assembly) gets reparented
+// into one THREE.Group anchored at the base's own leading edge (pivotZ),
+// which is then scaled along Z only. The model's own total modeled length
+// was independently confirmed to match this crane's real ~60m max boom
+// length to within 4cm (see RIG_CONFIGS['1110:3D']'s own comment) - that
+// match is what makes treating the model's Z units as real metres, and
+// therefore this whole approach, legitimate rather than invented. What it
+// does NOT do is animate individual sections sliding past each other with
+// the right overlap - that needs real per-section stroke data (an OEM
+// figure, or a second retracted-pose export) this session doesn't have.
+function buildLengthRig(root, config) {
+  const fixedNames = new Set();
+  (config.sections && config.sections.base || []).forEach((n) => fixedNames.add(`Part ${n}`));
+  if (config.luffCylinderInner != null) fixedNames.add(`Part ${config.luffCylinderInner}`);
+  if (config.luffCylinderOuter != null) fixedNames.add(`Part ${config.luffCylinderOuter}`);
+  (config.pivotPins || []).forEach((n) => fixedNames.add(`Part ${n}`));
+
+  const fixedMeshes = [];
+  const movingMeshes = [];
+  root.traverse((obj) => {
+    if (!obj.isMesh || obj.visible === false) return;
+    const name = obj.name || (obj.parent && obj.parent.name) || '';
+    (fixedNames.has(name) ? fixedMeshes : movingMeshes).push(obj);
+  });
+  if (!fixedMeshes.length || !movingMeshes.length) return null;
+
+  const fixedBox = new THREE.Box3();
+  fixedMeshes.forEach((m) => fixedBox.expandByObject(m));
+  const movingBox = new THREE.Box3();
+  movingMeshes.forEach((m) => movingBox.expandByObject(m));
+
+  const pivotZ = fixedBox.max.z;
+  const baseFixedLength = fixedBox.max.z - fixedBox.min.z;
+  const reachAtModeledPose = movingBox.max.z - pivotZ;
+  if (reachAtModeledPose <= 0) return null;
+
+  const group = new THREE.Group();
+  group.position.set(0, 0, pivotZ);
+  root.add(group);
+  // attach() (not add()) reparents while preserving each mesh's current
+  // world transform, so this doesn't move anything - it only changes whose
+  // local space each mesh's position is expressed in, which is what makes
+  // group.scale.z below scale the right things around the right point.
+  movingMeshes.forEach((m) => group.attach(m));
+
+  return { group, pivotZ, baseFixedLength, reachAtModeledPose };
+}
+
 function frameCameraOn(objects) {
   const box = new THREE.Box3();
   objects.forEach((o) => box.expandByObject(o));
@@ -157,6 +218,7 @@ window.__boomRig3DLoad = function (wrapId, labelId, configKey, config) {
     if (labelEl) labelEl.textContent = '';
     scene.add(modelCache[configKey]);
     frameCameraOn([modelCache[configKey]]);
+    if (configKey in pendingLength) applyLength(configKey, pendingLength[configKey]);
     return;
   }
 
@@ -168,9 +230,11 @@ window.__boomRig3DLoad = function (wrapId, labelId, configKey, config) {
     (gltf) => {
       const kept = pickRealCopyOnly(gltf.scene);
       modelCache[configKey] = gltf.scene;
+      rigCache[configKey] = buildLengthRig(gltf.scene, config);
       scene.add(gltf.scene);
       frameCameraOn(kept.length ? kept : [gltf.scene]);
       if (labelEl) labelEl.textContent = '';
+      if (configKey in pendingLength) applyLength(configKey, pendingLength[configKey]);
     },
     undefined,
     (err) => {
@@ -178,6 +242,23 @@ window.__boomRig3DLoad = function (wrapId, labelId, configKey, config) {
       console.error('boomrig3d load error', err);
     }
   );
+};
+
+function applyLength(configKey, lengthMeters) {
+  const rig = rigCache[configKey];
+  if (!rig) { pendingLength[configKey] = lengthMeters; return; }
+  delete pendingLength[configKey];
+  const factor = Math.max(0.02, (lengthMeters - rig.baseFixedLength) / rig.reachAtModeledPose);
+  rig.group.scale.set(1, 1, factor);
+  const root = modelCache[configKey];
+  if (root && scene && root.parent === scene) frameCameraOn([root]);
+}
+
+// lengthMeters: a real OEM catalog boom length (HOOK_BOOM_LENGTHS in
+// index.html), not an arbitrary number - see buildLengthRig()'s comment for
+// exactly what this does and doesn't model.
+window.__boomRig3DSetLength = function (configKey, lengthMeters) {
+  applyLength(configKey, lengthMeters);
 };
 
 window.__boomRig3DResize = function (wrapId) { resizeRenderer(wrapId); };

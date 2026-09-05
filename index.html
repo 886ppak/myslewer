@@ -1864,7 +1864,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v9.5</span></h1>
+    <h1>MYSLEWER <span class="app-version">v9.6</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2729,6 +2729,18 @@
           </button>
         </div>
         <div class="cwt-zoom-hint" id="rig-3d-hint" style="display:none;">Drag to rotate, scroll or pinch to zoom.</div>
+        <div id="rig-3d-length-group" class="form-group" style="display:none; margin-top:10px;">
+          <label>Boom length</label>
+          <select id="rig-3d-length-select" onchange="onRig3DLengthChange()"></select>
+          <div class="disclaimer" style="margin-top:6px;">
+            Approximate: the source model only has real geometry at one boom
+            length, so shorter lengths are shown as a uniform scale of the
+            telescoping sections rather than each section sliding
+            independently - the boom's overall reach at each length is the
+            real catalog figure, but the individual section overlaps you'd
+            see on the real crane aren't modeled yet.
+          </div>
+        </div>
         <div id="rig-controls" style="display:none; margin-top:14px;">
           <div class="form-group">
             <label id="rig-length-label">Boom length</label>
@@ -4471,16 +4483,41 @@
       document.getElementById('rig-loading').style.display = 'none';
       document.getElementById('rig-stage-wrap').style.display = 'none';
       document.getElementById('rig-controls').style.display = 'none';
-      document.getElementById('rig-shape-note').textContent = 'Live 3D preview of the real exported carrier + boom model - static view only for now, no extend/retract or luffing-angle slider yet.';
+      document.getElementById('rig-shape-note').textContent = 'Live 3D preview of the real exported carrier + boom model - luffing-angle slider not built yet.';
       document.getElementById('rig-3d-wrap').style.display = '';
       document.getElementById('rig-3d-hint').style.display = '';
-      const activate = () => window.__boomRig3DLoad('rig-3d-canvas-wrap', 'rig-3d-label', key, cfg);
+
+      // Real OEM catalog lengths already shipped for this crane (see
+      // HOOK_BOOM_LENGTHS below) - not fabricated here, just reused.
+      // RIG_CRANE_LABELS maps '1110' -> 'LTM 1110-5.1' which is exactly
+      // HOOK_BOOM_LENGTHS' own key for this crane.
+      const lengthGroup = document.getElementById('rig-3d-length-group');
+      const lengths = HOOK_BOOM_LENGTHS[RIG_CRANE_LABELS[cfg.craneKey]];
+      if (lengths && lengths.length) {
+        const lengthSel = document.getElementById('rig-3d-length-select');
+        buildSelect(lengthSel, lengths, (L) => L + ' m', (L) => L);
+        lengthSel.value = lengths[lengths.length - 1];
+        lengthGroup.style.display = '';
+      } else {
+        lengthGroup.style.display = 'none';
+      }
+
+      const activate = () => {
+        window.__boomRig3DLoad('rig-3d-canvas-wrap', 'rig-3d-label', key, cfg);
+        if (lengths && lengths.length) window.__boomRig3DSetLength(key, lengths[lengths.length - 1]);
+      };
       // Same lazy-import reasoning as cwt3d.js above: Three.js + this module
       // are never fetched until a 3D rig config is actually selected, and
       // BOOMRIG3D_VERSION busts vendor/boomrig3d.js's cache in sw.js's
       // CONTENT_CACHE the same way CWT3D_VERSION does for cwt3d.js.
       if (window.__boomRig3DLoad) activate();
       else import(`./vendor/boomrig3d.js?v=${BOOMRIG3D_VERSION}`).then(activate);
+    }
+
+    function onRig3DLengthChange() {
+      if (!window.__boomRig3DSetLength) return;
+      const val = parseFloat(document.getElementById('rig-3d-length-select').value);
+      window.__boomRig3DSetLength(rigConfigKey, val);
     }
 
     function onRigConfigChange() {
@@ -4494,6 +4531,7 @@
       }
       document.getElementById('rig-3d-wrap').style.display = 'none';
       document.getElementById('rig-3d-hint').style.display = 'none';
+      document.getElementById('rig-3d-length-group').style.display = 'none';
       document.getElementById('rig-axis-toggle').style.display = '';
 
       const jibBtn = document.getElementById('rig-axis-jib');
@@ -6732,7 +6770,7 @@
     // Single source of truth for vendor/boomrig3d.js's cache-busting query
     // (Boom Clearance's "LTM1110-3D" live model preview), same reasoning as
     // CWT3D_VERSION above.
-    const BOOMRIG3D_VERSION = 1;
+    const BOOMRIG3D_VERSION = 2;
 
     // Which cranes have a 3D carrier (chassis) model available. Keyed the
     // same as cadFleetData/COUNTERWEIGHT_DATA. See methodology.txt 10.76
