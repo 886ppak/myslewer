@@ -43,7 +43,13 @@ service cloud.firestore {
       allow get: if request.auth != null
                   && request.auth.token.email != null
                   && request.auth.token.email.lower() == email;
-      allow list: if false;
+      // Admin list access added alongside pendingUserAccess below - an
+      // admin needs to see who's been invited but hasn't signed in yet
+      // (no uid exists for them until they do, so userEmails/userAccess
+      // can't show them) in order to pre-configure their tab access.
+      // Still `if false` for everyone else - the "no-browse discipline"
+      // this file's own header describes stays intact for non-admins.
+      allow list: if request.auth != null && isAdmin();
       // Self-service grant via a redeemed invite token (see
       // inviteTokens/{token} below) - NOT yet exposed anywhere in the
       // app's UI (the "Invite a Colleague" generator only lives in the
@@ -130,7 +136,54 @@ service cloud.firestore {
     match /userAccess/{uid} {
       allow get: if request.auth != null && (request.auth.uid == uid || isAdmin());
       allow list: if request.auth != null && isAdmin();
-      allow write: if request.auth != null && isAdmin();
+      // Split write into create/update - update stays admin-only exactly
+      // as before, but create also allows one specific self-service path:
+      // a brand-new user, on their own uid, whose OWN first write here is
+      // an EXACT copy of whatever an admin already pre-approved for their
+      // email in pendingUserAccess (see that collection's own comment).
+      // "Exact copy" (a whole-document equality check, not per-field) is
+      // what keeps this safe - a person can never grant themselves
+      // anything beyond precisely what was already sitting there waiting
+      // for them, and the check only ever runs against a doc an admin
+      // wrote, never one the person themselves could reach. Once this
+      // doc exists, only isAdmin() can ever touch it again - update never
+      // allows this self-service path, so this is genuinely one-shot.
+      allow create: if request.auth != null
+                     && (
+                          isAdmin()
+                          || (
+                               request.auth.uid == uid
+                               && request.auth.token.email != null
+                               && exists(/databases/$(database)/documents/pendingUserAccess/$(request.auth.token.email.lower()))
+                               && request.resource.data == get(/databases/$(database)/documents/pendingUserAccess/$(request.auth.token.email.lower())).data
+                             )
+                        );
+      allow update: if request.auth != null && isAdmin();
+    }
+
+    // Staging area for tab-access settings on someone an admin has
+    // invited (see googleAllowlist above) but who hasn't signed in yet -
+    // no uid exists for them until they do, so userAccess/{uid} above has
+    // nowhere to live in the meantime. Keyed by lowercased email, same as
+    // googleAllowlist. Admin-only to read/write/list (so the Admin
+    // Dashboard can show "invited, not yet signed in" and pre-configure
+    // their access exactly like a real user's toggles), plus a narrow
+    // self-get so that person's OWN first sign-in can read what was
+    // pre-approved for them - see userAccess's own create rule above for
+    // how that self-get actually gets used (a one-shot, exact-copy self-
+    // create, never a blank check to grant themselves anything new).
+    // Deliberately never auto-deleted after that migration happens - a
+    // leftover doc here is harmless (the Admin Dashboard's "invited, not
+    // signed in" list is built by diffing against userEmails, so someone
+    // who's since signed in simply stops appearing there regardless of
+    // whether this doc still exists) and keeps a paper trail of what was
+    // originally pre-approved, same reasoning as googleAllowlist's own
+    // revoke-don't-delete convention.
+    match /pendingUserAccess/{email} {
+      allow get: if request.auth != null
+                  && request.auth.token.email != null
+                  && request.auth.token.email.lower() == email;
+      allow list, write: if request.auth != null && isAdmin();
     }
 
     // Admin-only email lookup - separate from the public displayName
