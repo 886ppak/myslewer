@@ -15229,3 +15229,28 @@ spot-check built on non-round test values.
   once a cleaner Onshape export exists, without re-deriving any of it.
 
   CACHE_VERSION v327->v328, app version v9.8->v9.9.
+
+163. LTM 1250 boom-rig export: fixed dump_dynamic_properties.lsp
+     auto-grabbing the wrong dynamic block
+
+  Person starting the boom-rig pipeline (151/152) on the LTM 1250 ran
+  DUMPDYNPROPS and got back a dump full of "Тип крюка" (hook type) and
+  "Гусек" (jib) selector properties, no boom length/angle property
+  anywhere. Root cause: `find-crane-obj` used `(ssget "_X" '((0 .
+  "INSERT")))` - grabs the FIRST dynamic block anywhere in the drawing,
+  in whatever order AutoCAD's database returns entities. Worked fine on
+  the LTM 1650/1300 files (apparently one dynamic block each, or the
+  boom happened to sort first) but the LTM 1250 file has several
+  dynamic blocks (hook-type and jib selectors are their own separate
+  dynamic blocks, not properties nested inside the boom's own one), and
+  this one grabbed a hook/jib sub-block instead.
+
+  Fixed by having the person click the boom directly (`entsel`) instead
+  of auto-picking - loops on a bad pick (non-block, non-dynamic-block)
+  rather than silently dumping the wrong thing again. Documented in the
+  script's own header, including the fallback if the boom is nested
+  inside an outer whole-crane assembly block (EXPLODE a copy of the
+  outer block first so the boom becomes independently clickable).
+
+  No CACHE_VERSION/app-version bump - cad/boom-rig-pipeline/ tooling,
+  not part of the served app shell, same as 151/152.
