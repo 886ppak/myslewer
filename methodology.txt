@@ -14842,3 +14842,172 @@ spot-check built on non-round test values.
   CACHE_VERSION v320->v321, app version v9.1->v9.2 (rename shipped
   earlier in the same session as v320 already, no separate bump for it
   alone).
+
+156. Admin Dashboard: collapsible tab/sub-tab tree, and a real
+     "invite before sign-in" system
+
+  Two asks bundled into one Admin Dashboard rebuild. First: "how come
+  I can't see keithmb in my admin board" - traced to userEmails/{uid}
+  only ever getting written on a person's real first Google sign-in,
+  so someone added to googleAllowlist (Firestore, see entry ~130-ish
+  for why it lives there and not a code constant) simply doesn't exist
+  anywhere the dashboard can list them until they've actually signed
+  in once. keithmb@gmail.com was added to googleAllowlist directly via
+  an Admin SDK script in the meantime, but that's a stopgap, not a fix
+  for the underlying gap - the person explicitly wanted a way to
+  configure a person's tabs BEFORE they ever sign in, not just find out
+  who's missing.
+
+  Second, separately requested: turn the admin dashboard's per-user tab
+  toggles from a flat list into an actual tab/sub-tab tree in a
+  dropdown, "to keep the page clean" - the flat ADMIN_TAB_TOGGLES grid
+  had grown to cover every top-level tab AND every cad_*/loadchart_*
+  sub-tab as equal flat rows, which had stopped being readable.
+
+  Built both together since the second directly enables the first:
+  ADMIN_TAB_TOGGLES (flat array) rewritten to ADMIN_TAB_TREE (nested,
+  each top-level entry carrying a children array for its sub-tabs -
+  cad_rig/Boom Clearance added here too, closing a gap that predated
+  this rebuild), rendered as collapsible <details>/<summary> rows
+  (admin-tab-row/-head/-chevron/-children/-child-row CSS) instead of
+  the old flat grid.
+
+  New Firestore collection pendingUserAccess/{email}: an admin writes
+  the exact tab-access doc they want a not-yet-signed-in person to get,
+  keyed by lowercased email. On that person's real first sign-in,
+  applyPendingAccessIfAny() reads pendingUserAccess/{email} and copies
+  it verbatim into userAccess/{uid} via setDoc (create only) - matched
+  by a new firestore.rules split on userAccess/{uid}: create is now
+  allowed either by an admin OR by the signing-in user themselves IF
+  request.resource.data == the pendingUserAccess doc for their own
+  email exactly (byte-for-byte equality check in the rule itself, not
+  just "a doc exists") - update stays admin-only as before. googleAllow
+  list also gained `allow list: if isAdmin()` (was `if false`) so the
+  admin UI can actually enumerate it. All three rule changes verified
+  against 22 hand-written cases on the local Firestore emulator
+  (@firebase/rules-unit-testing) before touching the live ruleset -
+  deployed via firebase-admin's getSecurityRules().createRuleset() +
+  releaseFirestoreRuleset() rather than requiring an interactive
+  `firebase login` from this environment.
+
+  Admin UI: adminUserKey()/adminFindUser() unify real (uid-keyed) users
+  and pending (email-keyed) invites behind one lookup so the rest of
+  the rendering code doesn't need to know which kind of row it's
+  looking at. __adminListInvited() lists pendingUserAccess; the user
+  picker got two <optgroup>s ("Signed in" / "Invited, not yet signed
+  in"); the toggle click handler branches on u.isPending to call
+  __adminSetPendingAccess/__adminSetPendingTabHidden/
+  __adminSetPendingStartHidden instead of the real-user equivalents.
+
+  Caught and fixed mid-build: a parent toggle <button> living inside a
+  <summary> was triggering the native <details> open/close on click as
+  well as the intended toggle action - needed an explicit
+  ev.preventDefault() in the click handler.
+
+  Verified via Playwright against a mocked window.__adminListUsers/
+  __adminListInvited/__poolsList (real ones need live Firebase auth) -
+  had to switchTab('admin-tab') rather than call adminRefreshUsers()
+  directly, since the tab's content only actually renders once
+  .active is applied the normal way.
+
+  CACHE_VERSION v321->v322, app version v9.2->v9.3.
+
+157. Boom Clearance config labels: drop the "(standard, no jib)" suffix
+
+  Small UI-only request: the LTM 1650/1300 config dropdown on Boom
+  Clearance listed "T3 (standard, no jib)" / "T (standard, no jib)" -
+  shortened to plain "T3" / "T" (RIG_CONFIGS['1650:T3'].label,
+  ['1300:T'].label). Internal keys ('1650:T3' etc.) untouched, label
+  string only.
+
+  CACHE_VERSION v322->v323, app version v9.3->v9.4.
+
+158. Boom Clearance: live 3D "LTM1110-3D" preview from a real Onshape
+     carrier+boom export
+
+  Follow-on to the earlier Boom Clearance work (150/151/152, the
+  AutoCAD dynamic-block frame-grid approach) but a different data
+  source entirely: the person exported a complete carrier+boom GLB for
+  the LTM 1110-5.1 out of Onshape (LTM1110COMP.glb, 55.7MB) and wanted
+  it tried as a live 3D dynamic-block-style boom-down clearance view,
+  same underlying idea as the "Live Crane Configurator" concept
+  discussed separately. Landed as a new config inside the EXISTING
+  Boom Clearance tab/dropdown (RIG_CONFIGS['1110:3D'], label
+  "LTM1110-3D") rather than a new tab, per explicit instruction - a
+  static preview only for now (load + display + frame the camera
+  correctly), no extend/retract or luffing-angle slider yet.
+
+  Two real data-quality problems in the export had to be diagnosed
+  before any of the section/part mapping the person supplied (boom
+  sections 1-6 + base + head, luff cylinder inner/outer, pivot pins,
+  all by part number) could be trusted, both found by comparing
+  results computed two different ways rather than by assumption:
+
+  - Every "occurrence of Part N" wrapper node in this particular export
+    carries a near-identical transform regardless of which real part it
+    wraps (confirmed directly: Part 58 at the base and Part 47 at the
+    boom tip, ~25m apart in reality, reported the exact same wrapper
+    translation) - the real per-part world position turned out to be
+    baked into each mesh's own POSITION vertex data instead. Found via
+    a Node.js gltf-transform pass reading raw vertex bounding-box
+    centers and comparing against the wrapper matrices directly, not by
+    trusting either source alone.
+  - Separately, every part in the boom+head sub-assembly exists as TWO
+    real, valid, spatially-distinct mesh instances several METRES to
+    tens-of-metres apart (not the wrapper-matrix issue above - both
+    copies have genuinely different vertex data) - a real duplicate
+    sitting in the source Onshape document, not a manufacturing twin
+    (a true pair, like the pivot pins, differs by centimetres, not
+    metres). Instance array index (0 vs 1) isn't a reliable "which
+    copy is real" flag on its own - resolved by picking, per part,
+    whichever instance has the larger world-space Z, cross-checked
+    against this crane's own already-shipped ~60m max boom length
+    (HOOK_BOOM_LENGTHS) and confirmed by the resulting section
+    centroids climbing monotonically with under 5 degrees of axis
+    deviation between any two consecutive sections - the wrong
+    selection produced 8-24 degrees and a non-monotonic progression.
+    Two small corrections to the person's own part list came out of
+    this cross-check and were confirmed by them directly: "head.step"
+    in section 6 is the head sub-assembly reimported via STEP (Onshape
+    silently drops Composite Parts from an assembly-level GLB export -
+    same precedent as other cranes' composite-part handling), and
+    section 5's listed "10" was a typo for "20" (Part 10 only belongs
+    in section 1).
+
+  vendor/boomrig3d.js applies both fixes at load time
+  (pickRealCopyOnly() groups meshes by name, keeps the one with the
+  larger world-space Z Box3 center, hides the rest) and otherwise
+  follows this app's established 3D-module conventions exactly
+  (ensureRenderer/resizeRenderer/onFrame loop, GLTFLoader+DRACOLoader,
+  OrbitControls, dynamic import() gated behind a window.__boomRig3DLoad
+  check, own BOOMRIG3D_VERSION cache-busting constant same reasoning as
+  CWT3D_VERSION/ARMEASURE_VERSION - this file stays in sw.js's
+  CONTENT_CACHE rather than APP_SHELL, so the version query string is
+  what actually forces a refetch on a future edit). Load failures
+  (a 55MB fetch over a real network can fail) are handled the same way
+  __cwt3dActivate handles them - caught internally, a plain-language
+  message written into a #rig-3d-label overlay, console.error for
+  diagnosis - rather than left as an unhandled promise for the caller,
+  which is what the first draft of this file did before being corrected.
+
+  onRigConfigChange() branches on cfg.renderMode === '3d' before its
+  existing rigDataCache/fetch path (this config has no poses.json to
+  fetch at all): hides the 2D SVG stage/controls/axis-toggle, shows the
+  new #rig-3d-wrap (mirrors #carrier-3d-wrap's structure/fullscreen
+  button), and hands off to __boomRig3DLoad.
+
+  Verified via Playwright: selecting the LTM 1110-5.1 crane on Boom
+  Clearance auto-selects this config, the 3D wrap becomes visible with
+  a live <canvas>, and the 2D-path elements correctly stay hidden - no
+  console errors from the app itself. The actual GLB fetch/render
+  couldn't be exercised end-to-end from this session's own sandboxed
+  browser process (blocked at the network level for ANY external host,
+  confirmed by an unrelated pre-existing 2D config's poses.json fetch
+  failing the identical way) - the GLB's own reachability, correct
+  content-type/length, and CORS headers for this app's origin were
+  already confirmed directly via curl before this file was written.
+  Stroke lengths per section, the luffing-ram pivot geometry, and
+  slider interactivity generally are explicitly not part of this pass -
+  next step once the person wants to take it further.
+
+  CACHE_VERSION v323->v324, app version v9.4->v9.5.
