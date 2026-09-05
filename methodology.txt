@@ -15173,3 +15173,59 @@ spot-check built on non-round test values.
 
   BOOMRIG3D_VERSION 3->5 (angle slider + the name-resolution fix).
   CACHE_VERSION v326->v327, app version v9.7->v9.8.
+
+162. Pulled LTM1110-3D off Boom Clearance entirely
+
+  161's fix made both sliders genuinely move, but seeing it live for the
+  first time showed the real problem 158-161 never actually caught:
+  the rendered model is a scattered heap of disconnected fragments, not
+  a recognizable crane.
+
+  Root-caused properly before touching anything else, since the person
+  had already been told twice this was fixed. It isn't a selection-
+  logic bug - tested the obvious fix (prefer whichever of a part's two
+  occurrences has more geometry, instead of picking by world-Z) and it
+  makes things categorically worse: boom section centroids stop
+  progressing monotonically at all (some sections land behind earlier
+  ones, total modeled span collapses from ~60m to ~9.5m). The existing
+  world-Z rule is the one that's actually positionally correct -
+  reconfirmed, not assumed.
+
+  Found the real structure instead: the export has a genuine modeling
+  defect, not per-part duplication - an entire nested sub-assembly
+  ("98054343_000 <1>", 159 occurrences) sits INSIDE the main assembly
+  ("98054342_000"'s own children), as if the whole document got
+  inserted into itself by mistake. This isn't a clean "throw away the
+  nested copy" fix either - the head sub-assembly (id5__$ etc.) exists
+  ONLY inside that nested copy, nowhere else, so the two branches carry
+  genuinely different content, not just spatial duplicates. For the
+  ~56 numbered parts this tool actually uses, checked systematically
+  (not sampled): 42 of 56 have a >3x vertex-count mismatch between
+  their two occurrences, split roughly evenly between which side (the
+  nested duplicate vs the main tree) carries the detailed one - no
+  single rule recovers both correct position and full detail across
+  this file.
+
+  Told the person plainly rather than proposing another heuristic:
+  this needs a corrected Onshape export (removing whatever accidentally
+  nested the whole assembly into itself), not more downstream code.
+  Asked whether to leave the sparse-but-positioned preview live or pull
+  it - person said pull it, and was blunt that this should have been
+  caught before being told twice it worked.
+
+  Removed cleanly rather than just hiding it: RIG_CONFIGS['1110:3D']
+  and RIG_CRANE_LABELS['1110'] deleted (LTM 1110-5.1 no longer appears
+  in the Boom Clearance crane dropdown at all - back to 1650/1300
+  only), the #rig-3d-* HTML block and activateRig3D/onRig3DLengthChange/
+  onRig3DAngleInput removed from index.html, vendor/boomrig3d.js
+  deleted outright, BOOMRIG3D_VERSION removed. Verified via Playwright:
+  crane dropdown now lists exactly 1650/1300, the remaining 2D configs
+  populate correctly, no console errors.
+
+  The underlying geometry findings (the nested-duplicate structure, the
+  per-part detail/position mismatch, the pivot-pin axis, the boom-
+  length/angle math) aren't lost - they're logged here and in 158-161
+  in enough detail that a future session can pick this back up directly
+  once a cleaner Onshape export exists, without re-deriving any of it.
+
+  CACHE_VERSION v327->v328, app version v9.8->v9.9.

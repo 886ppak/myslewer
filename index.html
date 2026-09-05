@@ -1864,7 +1864,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v9.8</span></h1>
+    <h1>MYSLEWER <span class="app-version">v9.9</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2719,38 +2719,6 @@
             <svg class="fs-icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
             <svg class="fs-icon-compress" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg>
           </button>
-        </div>
-        <div id="rig-3d-wrap" style="display:none; position:relative; width:100%; height:420px; border-radius:8px; overflow:hidden; background:#0f172a; margin-top:10px;">
-          <div id="rig-3d-canvas-wrap" style="position:absolute; inset:0;"></div>
-          <div id="rig-3d-label" style="position:absolute; top:10px; left:10px; color:#f8fafc; background:rgba(15,23,42,0.85); padding:8px 12px; border-radius:8px; font-size:12px; max-width:70%; pointer-events:none;"></div>
-          <button type="button" class="carrier3d-fullscreen-btn" data-wrap="rig-3d-wrap" onclick="toggleWrapFullscreen('rig-3d-wrap')" title="Fullscreen" aria-label="Fullscreen">
-            <svg class="fs-icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-            <svg class="fs-icon-compress" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg>
-          </button>
-        </div>
-        <div class="cwt-zoom-hint" id="rig-3d-hint" style="display:none;">Drag to rotate, scroll or pinch to zoom.</div>
-        <div id="rig-3d-length-group" class="form-group" style="display:none; margin-top:10px;">
-          <label>Boom length</label>
-          <select id="rig-3d-length-select" onchange="onRig3DLengthChange()"></select>
-          <div class="disclaimer" style="margin-top:6px;">
-            Approximate: the source model only has real geometry at one boom
-            length, so shorter lengths are shown as a uniform scale of the
-            telescoping sections rather than each section sliding
-            independently - the boom's overall reach at each length is the
-            real catalog figure, but the individual section overlaps you'd
-            see on the real crane aren't modeled yet.
-          </div>
-        </div>
-        <div id="rig-3d-angle-group" class="form-group" style="display:none; margin-top:10px;">
-          <label>Luffing angle: <span id="rig-3d-angle-badge">0°</span> (relative to exported pose)</label>
-          <input type="range" id="rig-3d-angle-slider" min="-60" max="60" step="1" value="0" oninput="onRig3DAngleInput()">
-          <div class="disclaimer" style="margin-top:6px;">
-            Rotates around the real boom pivot pin, measured from the model
-            itself - but no real elevation angle was recorded for the
-            exported pose, so this is an offset from it (0° = as exported),
-            not an absolute reading. The luffing cylinder doesn't track this
-            yet, so it will visually stay put while the boom rotates.
-          </div>
         </div>
         <div id="rig-controls" style="display:none; margin-top:14px;">
           <div class="form-group">
@@ -4371,7 +4339,7 @@
     // for. The jib+boom combined-pose machinery (rigCombinedRotation etc.)
     // is left in place since it's inert with no hasJib:true config left
     // to trigger it, not because a jib is expected back.
-    const RIG_CRANE_LABELS = { '1650': 'LTM 1650-8.1', '1300': 'LTM 1300-6.2', '1110': 'LTM 1110-5.1' };
+    const RIG_CRANE_LABELS = { '1650': 'LTM 1650-8.1', '1300': 'LTM 1300-6.2' };
     const RIG_CONFIGS = {
       '1650:T3': {
         craneKey: '1650', label: 'T3', file: 't3_poses.json', hasJib: false,
@@ -4392,82 +4360,6 @@
         // hatch painted over everything else in this near-black tone. See
         // suppressFillColor in buildRigElementsForLength.
         suppressFillColor: '#212830'
-      },
-      // First live-3D config (renderMode:'3d') - every other RIG_CONFIGS
-      // entry is the 2D AutoCAD-sweep-derived SVG pipeline (rig_template's
-      // own poses.json decode); this one instead loads a real GLB (see
-      // vendor/boomrig3d.js) and reads section/pivot geometry straight
-      // from the mesh data. See "Live Crane Configurator" design notes
-      // for why: reuse ONE model with runtime transforms rather than a
-      // baked pose per boom length, same core decision already proven
-      // for the outrigger 50%-span toggle (methodology.txt 107).
-      //
-      // glbUrl is a Nextcloud PUBLIC share link (created explicitly by
-      // the person, not the authenticated WebDAV path used to fetch/
-      // inspect the file during development - see that conversation for
-      // why the two are treated differently) - public.php/dav/files
-      // form, confirmed CORS-open to this app's own origin already.
-      //
-      // Sections/pivot data below is Onshape "Part N" numbers, verified
-      // against real mesh geometry (not the wrapper node's own matrix -
-      // see boomrig3d.js's own comment on why that's unreliable in this
-      // export) before being locked in here: section centroids climb
-      // cleanly and monotonically base->6 with <5° axis deviation
-      // between any two consecutive sections, and the boom's overall
-      // modeled span (~52m centroid-to-centroid, base to head) matches
-      // this crane's own already-shipped ~60m max boom length
-      // (HOOK_BOOM_LENGTHS) closely enough to confirm this pose is close
-      // to fully extended, not retracted.
-      //
-      // Separate, real limitation found while building the length/angle
-      // sliders: several parts (mostly base/luff-cylinder/pivot-pin ones -
-      // 58, 51, 85, 2, 47 confirmed so far) have TWO occurrences that are
-      // NOT equal-quality duplicates like the rest of this file - one is a
-      // full, detailed mesh sitting at a nonsensical position (near the
-      // model's origin), the other a much simpler/thinner mesh sitting at
-      // the correct real position. Picking by world-Z (this file's own
-      // rule, see boomrig3d.js) keeps the CORRECTLY POSITIONED one, which
-      // matters more for a clearance tool than surface detail - but it
-      // does mean some of those parts render visually thin/sparse rather
-      // than fully modeled. Confirmed via gltf-transform against the raw
-      // file, not a rendering bug - the real fix is on the Onshape side
-      // (an extra representation/configuration likely got included by
-      // mistake for these parts specifically).
-      '1110:3D': {
-        craneKey: '1110', label: 'LTM1110-3D', renderMode: '3d',
-        glbUrl: 'https://local.idull.au/public.php/dav/files/7qbNW6nYFz7g6AG',
-        // Every part number below has exactly 2 mesh instances in the
-        // export (a real, as-yet-unexplained duplicate of the whole boom
-        // sub-assembly sitting in the Onshape document, tens of metres
-        // apart - NOT a genuine left/right twin, confirmed by checking
-        // the file-wide instance-count distribution). boomrig3d.js picks
-        // whichever instance has the larger world Z at load time and
-        // discards the other - this is a real limitation until the
-        // person confirms/removes the duplicate on the Onshape side; if
-        // a future re-export removes it, this same code keeps working
-        // (falls back to whichever single instance exists).
-        sections: {
-          base: [58, 51, 61, 57, 54, 143, 50],
-          1: [8, 9, 10],
-          2: [11, 12],
-          3: [14, 15, 13],
-          4: [154, 17, 16, 18],
-          5: [20, 144, 151, 19, 21],
-          6: [6, 38, 31, 22, 48, 36, 32, 34, 28, 44, 26, 42, 24, 40, 37, 30, 35, 33, 29, 45, 27, 43, 155, 25, 41, 23, 39, 47]
-        },
-        // The boom head/tip - a Composite Part in Onshape (silently
-        // dropped by the assembly GLB exporter, same known gap as the
-        // CWT composite-plate fix) reimported from STEP as its own sub-
-        // assembly "head <1>", so its children carry Onshape's generic
-        // auto-names rather than "Part N".
-        headParts: ['id5__$', 'id2__$', 'id14__$', 'id17__$', 'id20__$', 'id11__$', 'id8__$'],
-        // Rod (inner) vs barrel (outer) - see the person's own
-        // confirmation these are genuinely separate parts, the one hard
-        // requirement for computing ram length from geometry rather than
-        // animating it by feel.
-        luffCylinderInner: 1,
-        luffCylinderOuter: 2,
-        pivotPins: [3, 4]
       }
     };
 
@@ -4499,81 +4391,10 @@
       onRigConfigChange();
     }
 
-    // Live 3D config branch (currently just "LTM1110-3D"): a real exported
-    // carrier+boom GLB, not the AutoCAD dynamic-block frame grid the rest of
-    // this tab uses, so it skips rigDataCache/onRigDataReady/setRigAxis
-    // entirely and hands straight off to vendor/boomrig3d.js. Static preview
-    // only for now - no length/angle sliders on this path yet.
-    function activateRig3D(key, cfg) {
-      document.getElementById('rig-axis-toggle').style.display = 'none';
-      document.getElementById('rig-loading').style.display = 'none';
-      document.getElementById('rig-stage-wrap').style.display = 'none';
-      document.getElementById('rig-controls').style.display = 'none';
-      document.getElementById('rig-shape-note').textContent = 'Live 3D preview of the real exported carrier + boom model - luffing-angle slider not built yet.';
-      document.getElementById('rig-3d-wrap').style.display = '';
-      document.getElementById('rig-3d-hint').style.display = '';
-
-      // Real OEM catalog lengths already shipped for this crane (see
-      // HOOK_BOOM_LENGTHS below) - not fabricated here, just reused.
-      // RIG_CRANE_LABELS maps '1110' -> 'LTM 1110-5.1' which is exactly
-      // HOOK_BOOM_LENGTHS' own key for this crane.
-      const lengthGroup = document.getElementById('rig-3d-length-group');
-      const lengths = HOOK_BOOM_LENGTHS[RIG_CRANE_LABELS[cfg.craneKey]];
-      if (lengths && lengths.length) {
-        const lengthSel = document.getElementById('rig-3d-length-select');
-        buildSelect(lengthSel, lengths, (L) => L + ' m', (L) => L);
-        lengthSel.value = lengths[lengths.length - 1];
-        lengthGroup.style.display = '';
-      } else {
-        lengthGroup.style.display = 'none';
-      }
-
-      const angleGroup = document.getElementById('rig-3d-angle-group');
-      const angleSlider = document.getElementById('rig-3d-angle-slider');
-      angleSlider.value = 0;
-      document.getElementById('rig-3d-angle-badge').textContent = '0°';
-      angleGroup.style.display = '';
-
-      const activate = () => {
-        window.__boomRig3DLoad('rig-3d-canvas-wrap', 'rig-3d-label', key, cfg);
-        if (lengths && lengths.length) window.__boomRig3DSetLength(key, lengths[lengths.length - 1]);
-        window.__boomRig3DSetAngle(key, 0);
-      };
-      // Same lazy-import reasoning as cwt3d.js above: Three.js + this module
-      // are never fetched until a 3D rig config is actually selected, and
-      // BOOMRIG3D_VERSION busts vendor/boomrig3d.js's cache in sw.js's
-      // CONTENT_CACHE the same way CWT3D_VERSION does for cwt3d.js.
-      if (window.__boomRig3DLoad) activate();
-      else import(`./vendor/boomrig3d.js?v=${BOOMRIG3D_VERSION}`).then(activate);
-    }
-
-    function onRig3DLengthChange() {
-      if (!window.__boomRig3DSetLength) return;
-      const val = parseFloat(document.getElementById('rig-3d-length-select').value);
-      window.__boomRig3DSetLength(rigConfigKey, val);
-    }
-
-    function onRig3DAngleInput() {
-      const val = parseFloat(document.getElementById('rig-3d-angle-slider').value);
-      document.getElementById('rig-3d-angle-badge').textContent = val.toFixed(0) + '°';
-      if (!window.__boomRig3DSetAngle) return;
-      window.__boomRig3DSetAngle(rigConfigKey, val);
-    }
-
     function onRigConfigChange() {
       const key = document.getElementById('rig-config').value;
       rigConfigKey = key;
       const cfg = RIG_CONFIGS[key];
-
-      if (cfg.renderMode === '3d') {
-        activateRig3D(key, cfg);
-        return;
-      }
-      document.getElementById('rig-3d-wrap').style.display = 'none';
-      document.getElementById('rig-3d-hint').style.display = 'none';
-      document.getElementById('rig-3d-length-group').style.display = 'none';
-      document.getElementById('rig-3d-angle-group').style.display = 'none';
-      document.getElementById('rig-axis-toggle').style.display = '';
 
       const jibBtn = document.getElementById('rig-axis-jib');
       jibBtn.style.display = cfg.hasJib ? '' : 'none';
@@ -6807,11 +6628,6 @@
     // (Chain Shortening's "Mark Cut Point in AR"), same reasoning as
     // CWT3D_VERSION above.
     const ARMEASURE_VERSION = 1;
-
-    // Single source of truth for vendor/boomrig3d.js's cache-busting query
-    // (Boom Clearance's "LTM1110-3D" live model preview), same reasoning as
-    // CWT3D_VERSION above.
-    const BOOMRIG3D_VERSION = 5;
 
     // Which cranes have a 3D carrier (chassis) model available. Keyed the
     // same as cadFleetData/COUNTERWEIGHT_DATA. See methodology.txt 10.76
