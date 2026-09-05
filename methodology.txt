@@ -15254,3 +15254,35 @@ spot-check built on non-round test values.
 
   No CACHE_VERSION/app-version bump - cad/boom-rig-pipeline/ tooling,
   not part of the served app shell, same as 151/152.
+
+164. LTM 1250 boom-rig export: built export_sweep_ltm1250.lsp (T
+     config, boom-only) from a correct DUMPDYNPROPS run
+
+  Follow-on to 163 - person re-ran DUMPDYNPROPS after the click-to-
+  select fix, this time actually hitting the boom block. Real property
+  names for this crane, none assumed from another crane's block:
+  - "Состав стрелы" (config selector) - T / T+H / TNZK / TVNZK / TS /
+    TNZF, same family shape as the LTM 1650/1300's T3/T3F-style variant
+    switch. Only "T" (boom-only, no jib/hook attachment) wired up so
+    far - the other 5 are jib/attachment configs for later, once T is
+    confirmed working, same staged approach as every other crane here.
+  - "Стрела T" (boom length) - 15 real catalog lengths, 13.05-60.00 m,
+    allowed-value strings use a period decimal and a Cyrillic "м" suffix
+    ("13.05 м") - different formatting from the LTM 1300's comma-
+    decimal ("14,7 м"), confirming these can't be assumed to match
+    across cranes even within the same Liebherr family.
+  - "Наклон стрелы T" (boom angle) - continuous/radians, no discrete
+    list, same convention as every other crane's boom angle property.
+
+  export_sweep_ltm1250.lsp built directly off export_sweep_ltm1300.lsp's
+  proven engine (direct `command` calls rather than through
+  vl-catch-all-apply - the actual root cause of a much earlier "sweep
+  reports success but no files land on disk" bug, see that file's own
+  comment) - but using the click-to-select find-crane-obj from 163
+  instead of the older ssget "_X" auto-grab, since this crane's file is
+  exactly the case that breaks: multiple dynamic blocks in one drawing.
+  TESTSWEEP-LTM1250 (4 poses) / EXPORTSWEEP-LTM1250 (135 poses, 15
+  lengths x 9 angles) - not yet run by the person, so not yet verified
+  end-to-end the way 151/152's LTM 1650 sweep was.
+
+  No CACHE_VERSION/app-version bump - same as 163.
