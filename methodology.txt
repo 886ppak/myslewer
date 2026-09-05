@@ -15085,3 +15085,91 @@ spot-check built on non-round test values.
 
   BOOMRIG3D_VERSION 2->3. CACHE_VERSION v325->v326, app version
   v9.6->v9.7.
+
+161. Fix: length slider STILL doing nothing after 160, plus the promised
+     luffing-angle slider, plus a real name-resolution bug in
+     pickRealCopyOnly itself
+
+  Reported again after 160 shipped ("nothing was moving... fully
+  retracted did nothing") and asked where the boom-angle slider was
+  (promised two rounds earlier, never actually built). Both handled
+  together, and both required going well past "add the feature" - the
+  length slider's silent failure turned out to be a real, previously
+  undiscovered bug in this file's core duplicate-picking logic, present
+  since 158.
+
+  Building the angle slider first required real 3D pivot geometry
+  (not just the Z-only data 158/159 used): pulled full XYZ centers for
+  the pivot pins (Part 3/4) via gltf-transform - center=[2.0,-0.397,
+  1.71] and [2.0,0.397,1.71], same X and Z, opposite Y, exactly what a
+  real pin's own axis looks like. Cross-checked by computing atan2(dx,
+  dz) from that pivot to four points spread across ~8m of the boom
+  (section 5 through the tip and head) - all four agreed to within 1
+  degree, confirming both the axis (world Y) and the pivot point are
+  real, not assumed. What ISN'T known is what real elevation angle the
+  exported pose itself represents (no OEM angle came with this export),
+  so the slider is an offset FROM that pose (0 = as-exported), not an
+  absolute reading - said so directly in the UI.
+
+  Root cause of the length slider still failing: verified by building a
+  REAL browser-based test this time instead of trusting Node.js
+  analysis alone - a small synthetic .glb built from real measured
+  geometry (to isolate the transform logic), then the actual 55MB
+  Onshape export copied in and served locally (this sandbox can reach
+  localhost even though it can't reach the real Nextcloud host), both
+  run through the actual unmodified production code in a real Chromium
+  instance. This is what should have been done from 158 onward instead
+  of trusting gltf-transform's raw JSON view alone - it caught a real
+  bug gltf-transform could never have shown:
+
+  THREE.GLTFLoader does not name meshes the way boomrig3d.js assumed.
+  The real parsed hierarchy for every part is
+  occurrence_of_Part_58 > Part_58 > (one or more auto-named mesh
+  primitives, e.g. "mesh6_mesh", "mesh6_mesh_1"...) - and two things
+  about that broke the existing obj.name || parent.name check: (1)
+  those auto-generated leaf names are never empty, so the `||` fallback
+  never actually reached the parent at all; (2) GLTFLoader also turns
+  the glTF node's own "Part 58" (space) into "Part_58" (underscore) -
+  confirmed against the real file, not assumed. A genuine second
+  occurrence gets a GLTFLoader-appended "_N" suffix at THIS ancestor
+  level ("Part_58_1", or "id5__$_1" for head parts). Net effect: almost
+  nothing was ever grouped as a real duplicate pair by name, meaning
+  pickRealCopyOnly (which this whole file has relied on since 158) had
+  never actually been hiding any of the file's real duplicate-assembly
+  copies in the browser - it happened to look acceptable in the very
+  first static-preview screenshot only because nothing else about that
+  view called attention to it. Fixed with a shared realPartName()
+  helper that walks UP a mesh's ancestor chain to find the real
+  Part_N/id_N__$ identity and strips the GLTFLoader-appended
+  disambiguation suffix - used by pickRealCopyOnly, buildLengthRig, and
+  buildAngleRig alike.
+
+  Verifying THAT fix surfaced a second, separate, genuine data problem
+  in the source export itself (not a code bug): for several parts -
+  confirmed on 58, 51, 85, 2, 47 - the two occurrences are not
+  equal-quality duplicates. One is a full, detailed mesh sitting at a
+  nonsensical position (near the model's local origin); the other is a
+  much simpler/thinner mesh sitting at the real, correct position.
+  Checked directly against gltf-transform's raw reading of the actual
+  file (not a THREE-vs-gltf-transform discrepancy) - Part 51's two
+  occurrences are 48 vertices at the real position vs 26,832 vertices
+  sitting at the origin, for example. This file's existing "pick larger
+  world-Z" rule keeps the correctly-positioned one, which matters more
+  for a clearance tool than surface detail - but means those specific
+  parts render visually thinner than they should. Documented directly
+  in RIG_CONFIGS['1110:3D']'s own comment rather than silently accepted
+  - the real fix is on the Onshape side (an extra representation or
+  configuration most likely got included by mistake for these parts
+  specifically); this session can't correct source data it doesn't
+  control.
+
+  Verified end-to-end against the real 55MB file (served locally, not
+  over the blocked external network): loads with no console errors or
+  "rig failed to build" warnings, and before/after screenshots for a
+  length change and for angle changes in both directions are all
+  pixel-different from each other, confirming both sliders now have a
+  real, visible effect - the exact thing that was reported as silently
+  failing twice in a row before this.
+
+  BOOMRIG3D_VERSION 3->5 (angle slider + the name-resolution fix).
+  CACHE_VERSION v326->v327, app version v9.7->v9.8.

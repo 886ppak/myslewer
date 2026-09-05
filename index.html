@@ -1864,7 +1864,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v9.7</span></h1>
+    <h1>MYSLEWER <span class="app-version">v9.8</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -2739,6 +2739,17 @@
             independently - the boom's overall reach at each length is the
             real catalog figure, but the individual section overlaps you'd
             see on the real crane aren't modeled yet.
+          </div>
+        </div>
+        <div id="rig-3d-angle-group" class="form-group" style="display:none; margin-top:10px;">
+          <label>Luffing angle: <span id="rig-3d-angle-badge">0°</span> (relative to exported pose)</label>
+          <input type="range" id="rig-3d-angle-slider" min="-60" max="60" step="1" value="0" oninput="onRig3DAngleInput()">
+          <div class="disclaimer" style="margin-top:6px;">
+            Rotates around the real boom pivot pin, measured from the model
+            itself - but no real elevation angle was recorded for the
+            exported pose, so this is an offset from it (0° = as exported),
+            not an absolute reading. The luffing cylinder doesn't track this
+            yet, so it will visually stay put while the boom rotates.
           </div>
         </div>
         <div id="rig-controls" style="display:none; margin-top:14px;">
@@ -4407,6 +4418,21 @@
       // this crane's own already-shipped ~60m max boom length
       // (HOOK_BOOM_LENGTHS) closely enough to confirm this pose is close
       // to fully extended, not retracted.
+      //
+      // Separate, real limitation found while building the length/angle
+      // sliders: several parts (mostly base/luff-cylinder/pivot-pin ones -
+      // 58, 51, 85, 2, 47 confirmed so far) have TWO occurrences that are
+      // NOT equal-quality duplicates like the rest of this file - one is a
+      // full, detailed mesh sitting at a nonsensical position (near the
+      // model's origin), the other a much simpler/thinner mesh sitting at
+      // the correct real position. Picking by world-Z (this file's own
+      // rule, see boomrig3d.js) keeps the CORRECTLY POSITIONED one, which
+      // matters more for a clearance tool than surface detail - but it
+      // does mean some of those parts render visually thin/sparse rather
+      // than fully modeled. Confirmed via gltf-transform against the raw
+      // file, not a rendering bug - the real fix is on the Onshape side
+      // (an extra representation/configuration likely got included by
+      // mistake for these parts specifically).
       '1110:3D': {
         craneKey: '1110', label: 'LTM1110-3D', renderMode: '3d',
         glbUrl: 'https://local.idull.au/public.php/dav/files/7qbNW6nYFz7g6AG',
@@ -4502,9 +4528,16 @@
         lengthGroup.style.display = 'none';
       }
 
+      const angleGroup = document.getElementById('rig-3d-angle-group');
+      const angleSlider = document.getElementById('rig-3d-angle-slider');
+      angleSlider.value = 0;
+      document.getElementById('rig-3d-angle-badge').textContent = '0°';
+      angleGroup.style.display = '';
+
       const activate = () => {
         window.__boomRig3DLoad('rig-3d-canvas-wrap', 'rig-3d-label', key, cfg);
         if (lengths && lengths.length) window.__boomRig3DSetLength(key, lengths[lengths.length - 1]);
+        window.__boomRig3DSetAngle(key, 0);
       };
       // Same lazy-import reasoning as cwt3d.js above: Three.js + this module
       // are never fetched until a 3D rig config is actually selected, and
@@ -4520,6 +4553,13 @@
       window.__boomRig3DSetLength(rigConfigKey, val);
     }
 
+    function onRig3DAngleInput() {
+      const val = parseFloat(document.getElementById('rig-3d-angle-slider').value);
+      document.getElementById('rig-3d-angle-badge').textContent = val.toFixed(0) + '°';
+      if (!window.__boomRig3DSetAngle) return;
+      window.__boomRig3DSetAngle(rigConfigKey, val);
+    }
+
     function onRigConfigChange() {
       const key = document.getElementById('rig-config').value;
       rigConfigKey = key;
@@ -4532,6 +4572,7 @@
       document.getElementById('rig-3d-wrap').style.display = 'none';
       document.getElementById('rig-3d-hint').style.display = 'none';
       document.getElementById('rig-3d-length-group').style.display = 'none';
+      document.getElementById('rig-3d-angle-group').style.display = 'none';
       document.getElementById('rig-axis-toggle').style.display = '';
 
       const jibBtn = document.getElementById('rig-axis-jib');
@@ -6770,7 +6811,7 @@
     // Single source of truth for vendor/boomrig3d.js's cache-busting query
     // (Boom Clearance's "LTM1110-3D" live model preview), same reasoning as
     // CWT3D_VERSION above.
-    const BOOMRIG3D_VERSION = 3;
+    const BOOMRIG3D_VERSION = 5;
 
     // Which cranes have a 3D carrier (chassis) model available. Keyed the
     // same as cadFleetData/COUNTERWEIGHT_DATA. See methodology.txt 10.76

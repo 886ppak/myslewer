@@ -1,10 +1,12 @@
 // Live 3D Boom Clearance viewer - first entry, LTM 1110-5.1 ("LTM1110-3D"
-// config in RIG_CONFIGS). Static preview only for now: loads the real GLB,
-// picks the correct copy of every duplicated part, and frames the camera
-// on it. No extend/retract or luffing-angle sliders yet - see the "Live
-// Crane Configurator" design conversation for the full planned scope
-// (boom telescoping, luffing ram driven by pivot geometry, outriggers,
-// CWT stack); this ships the one piece that's actually verified so far.
+// config in RIG_CONFIGS). Loads the real GLB, picks the correct copy of
+// every duplicated part, frames the camera, and drives a length slider
+// (buildLengthRig/applyLength) and a luffing-angle slider (buildAngleRig/
+// applyAngle) - see each function's own comment for exactly what real data
+// each one is and isn't grounded in. Not yet built: the luffing ram itself
+// tracking the angle slider (it's currently fixed - see buildAngleRig's
+// comment), outriggers, CWT stack - see the "Live Crane Configurator"
+// design conversation for the full planned scope.
 //
 // Loaded as a <script type="module">, same reasoning as carrier3d.js/
 // cwt3d.js: can't see the main app's classic-script bindings, talks back
@@ -53,7 +55,9 @@ let currentWrapId = null;
 let animating = false;
 const modelCache = {}; // configKey -> THREE.Group (the cleaned, real-copy-only scene)
 const rigCache = {}; // configKey -> { group, pivotZ, baseFixedLength, reachAtModeledPose } - see buildLengthRig()
+const angleRigCache = {}; // configKey -> { group, pivot } - see buildAngleRig()
 const pendingLength = {}; // configKey -> length (m), when __boomRig3DSetLength is called before load finishes
+const pendingAngle = {}; // configKey -> degrees, when __boomRig3DSetAngle is called before load finishes
 
 function ensureRenderer(wrapId) {
   const wrap = document.getElementById(wrapId);
@@ -99,18 +103,54 @@ function onFrame() {
   renderer.render(scene, camera);
 }
 
+// Real part identity for a mesh, found by walking UP its ancestor chain -
+// NOT by checking the mesh's own name or its immediate parent, which is
+// what this file originally did and which turned out to be wrong for this
+// export. Confirmed directly by dumping THREE.GLTFLoader's actual parsed
+// scene graph (not gltf-transform's raw JSON, which is what every earlier
+// verification in this file used): the real hierarchy for every part is
+// occurrence_of_Part_58 > Part_58 > (one or more auto-named mesh
+// primitives, e.g. "mesh6_mesh", "mesh6_mesh_1"...). Two problems this
+// causes for a naive "obj.name || parent.name" check: (1) those
+// auto-generated leaf mesh names are never empty, so the `||` fallback
+// never actually reaches the parent at all; (2) GLTFLoader also silently
+// turns the glTF node's own "Part 58" (space) into "Part_58" (underscore)
+// - confirmed against the real file, not assumed. A genuine second
+// occurrence of the same part gets a GLTFLoader-appended "_N" suffix at
+// THIS ancestor level ("Part_58_1", or "id5__$_1" for the head parts,
+// which keep their exact literal name otherwise). This function walks up
+// past the auto-named mesh leaf to find that real identity and strips the
+// disambiguation suffix, so "Part_58" and "Part_58_1" both resolve to the
+// same "Part 58" - which is what every other function in this file needs
+// to correctly group the two real duplicate instances together.
+function realPartName(mesh) {
+  let node = mesh;
+  while (node) {
+    const name = node.name || '';
+    let m = /^Part[ _](\d+)(?:_\d+)?$/.exec(name);
+    if (m) return `Part ${m[1]}`;
+    m = /^(id\d+__\$)(?:_\d+)?$/.exec(name);
+    if (m) return m[1];
+    node = node.parent;
+  }
+  return mesh.name || '';
+}
+
 // Every "Part N" / headPart name appears as TWO real, valid mesh nodes in
 // this export (see file header). Walk the whole loaded scene, group nodes
-// by base name, and for any name with more than one mesh-bearing node,
-// keep only the one with the larger world-space Z center - discard/hide
-// the rest. Uses THREE's own world matrix (via Box3().setFromObject),
-// deliberately NOT the raw wrapper-node matrix from the export - that's
-// the exact thing that turned out unreliable here.
+// by real part identity (realPartName - NOT obj.name, which is an
+// auto-generated per-primitive string, unique per mesh even for two
+// meshes belonging to the same real part), and for any identity with more
+// than one mesh-bearing node, keep only the one with the larger
+// world-space Z center - discard/hide the rest. Uses THREE's own world
+// matrix (via Box3().setFromObject), deliberately NOT the raw wrapper-node
+// matrix from the export - that's the exact thing that turned out
+// unreliable here.
 function pickRealCopyOnly(root) {
   const byName = {};
   root.traverse((obj) => {
     if (!obj.isMesh) return;
-    const name = obj.name || (obj.parent && obj.parent.name) || '';
+    const name = realPartName(obj);
     (byName[name] = byName[name] || []).push(obj);
   });
   const kept = [];
@@ -160,7 +200,7 @@ function buildLengthRig(root, config) {
   const movingMeshes = [];
   root.traverse((obj) => {
     if (!obj.isMesh || obj.visible === false) return;
-    const name = obj.name || (obj.parent && obj.parent.name) || '';
+    const name = realPartName(obj);
     (fixedNames.has(name) ? fixedMeshes : movingMeshes).push(obj);
   });
   if (!fixedMeshes.length || !movingMeshes.length) return null;
@@ -185,6 +225,56 @@ function buildLengthRig(root, config) {
   movingMeshes.forEach((m) => group.attach(m));
 
   return { group, pivotZ, baseFixedLength, reachAtModeledPose };
+}
+
+// Luffing-angle slider. Unlike the length slider, this one has a real,
+// verified physical anchor to rotate around: config.pivotPins (Part 3/
+// Part 4 for the 1110) are a matched pair sitting at the same X and Z but
+// opposite Y (measured directly - centers [2.0,-0.397,1.71] and
+// [2.0,0.397,1.71]) - exactly what a real pin's own axis looks like, so
+// the pin's own axis (world Y here) is the real rotation axis, and its
+// midpoint is the real pivot point, not an assumption.
+//
+// Checked this against four points spread across ~8m of the boom (section
+// 5 through the tip and head) using atan2 of each one's offset from the
+// pivot in the X-Z plane - all four agreed to within 1 degree, which is
+// exactly what a straight rigid boom pivoting on a real pin should do, and
+// confirms both the axis and the pivot point are right. What ISN'T known
+// is what real-world elevation angle the exported pose itself represents
+// (no OEM angle was given with this export) - so this slider is offset
+// FROM that pose (0 = as-exported), not an absolute "degrees from
+// horizontal" reading. Rotates the base + pivot pins + the whole length-
+// rig group together (everything that tips with the boom); the luffing
+// cylinder is deliberately left out - its outer end is turret-fixed and
+// this pass doesn't compute ram kinematics (see luffCylinderInner/Outer's
+// own comment in RIG_CONFIGS).
+function buildAngleRig(root, config, lengthRig) {
+  if (!lengthRig) return null;
+  const pinNames = (config.pivotPins || []).map((n) => `Part ${n}`);
+  const baseNames = new Set((config.sections && config.sections.base || []).map((n) => `Part ${n}`));
+
+  const pinMeshes = [];
+  const baseMeshes = [];
+  root.traverse((obj) => {
+    if (!obj.isMesh || obj.visible === false) return;
+    const name = realPartName(obj);
+    if (pinNames.includes(name)) pinMeshes.push(obj);
+    else if (baseNames.has(name)) baseMeshes.push(obj);
+  });
+  if (pinMeshes.length < 2 || !baseMeshes.length) return null;
+
+  const pinBox = new THREE.Box3();
+  pinMeshes.forEach((m) => pinBox.expandByObject(m));
+  const pivot = pinBox.getCenter(new THREE.Vector3());
+
+  const group = new THREE.Group();
+  group.position.copy(pivot);
+  root.add(group);
+  baseMeshes.forEach((m) => group.attach(m));
+  pinMeshes.forEach((m) => group.attach(m));
+  group.attach(lengthRig.group);
+
+  return { group, pivot };
 }
 
 function frameCameraOn(objects) {
@@ -218,6 +308,7 @@ window.__boomRig3DLoad = function (wrapId, labelId, configKey, config) {
     if (labelEl) labelEl.textContent = '';
     scene.add(modelCache[configKey]);
     if (configKey in pendingLength) applyLength(configKey, pendingLength[configKey]);
+    if (configKey in pendingAngle) applyAngle(configKey, pendingAngle[configKey]);
     frameCameraOn([modelCache[configKey]]);
     return;
   }
@@ -230,10 +321,20 @@ window.__boomRig3DLoad = function (wrapId, labelId, configKey, config) {
     (gltf) => {
       const kept = pickRealCopyOnly(gltf.scene);
       modelCache[configKey] = gltf.scene;
-      rigCache[configKey] = buildLengthRig(gltf.scene, config);
+      const lengthRig = buildLengthRig(gltf.scene, config);
+      rigCache[configKey] = lengthRig;
+      angleRigCache[configKey] = buildAngleRig(gltf.scene, config, lengthRig);
       scene.add(gltf.scene);
       if (configKey in pendingLength) applyLength(configKey, pendingLength[configKey]);
+      if (configKey in pendingAngle) applyAngle(configKey, pendingAngle[configKey]);
       frameCameraOn(kept.length ? kept : [gltf.scene]);
+      // Sliders silently doing nothing (rather than erroring) is exactly
+      // the bug this is guarding against - if the part-name matching this
+      // relies on ever breaks (a re-export, a naming change), surface it
+      // instead of leaving someone moving a control that's quietly a
+      // no-op.
+      if (!lengthRig) console.warn('boomrig3d: length rig failed to build for', configKey, '- length slider will have no effect.');
+      if (!angleRigCache[configKey]) console.warn('boomrig3d: angle rig failed to build for', configKey, '- angle slider will have no effect.');
       if (labelEl) labelEl.textContent = '';
     },
     undefined,
@@ -262,6 +363,21 @@ function applyLength(configKey, lengthMeters) {
 // exactly what this does and doesn't model.
 window.__boomRig3DSetLength = function (configKey, lengthMeters) {
   applyLength(configKey, lengthMeters);
+};
+
+// Same "don't reframe" reasoning as applyLength above - rotating the boom
+// is the whole point of the slider, so the camera stays put.
+function applyAngle(configKey, angleDegrees) {
+  const rig = angleRigCache[configKey];
+  if (!rig) { pendingAngle[configKey] = angleDegrees; return; }
+  delete pendingAngle[configKey];
+  rig.group.rotation.y = THREE.MathUtils.degToRad(angleDegrees);
+}
+
+// angleDegrees: offset FROM the exported pose (0 = as-exported), not an
+// absolute elevation reading - see buildAngleRig()'s comment for why.
+window.__boomRig3DSetAngle = function (configKey, angleDegrees) {
+  applyAngle(configKey, angleDegrees);
 };
 
 window.__boomRig3DResize = function (wrapId) { resizeRenderer(wrapId); };
