@@ -217,8 +217,8 @@ window.__boomRig3DLoad = function (wrapId, labelId, configKey, config) {
   if (modelCache[configKey]) {
     if (labelEl) labelEl.textContent = '';
     scene.add(modelCache[configKey]);
-    frameCameraOn([modelCache[configKey]]);
     if (configKey in pendingLength) applyLength(configKey, pendingLength[configKey]);
+    frameCameraOn([modelCache[configKey]]);
     return;
   }
 
@@ -232,9 +232,9 @@ window.__boomRig3DLoad = function (wrapId, labelId, configKey, config) {
       modelCache[configKey] = gltf.scene;
       rigCache[configKey] = buildLengthRig(gltf.scene, config);
       scene.add(gltf.scene);
+      if (configKey in pendingLength) applyLength(configKey, pendingLength[configKey]);
       frameCameraOn(kept.length ? kept : [gltf.scene]);
       if (labelEl) labelEl.textContent = '';
-      if (configKey in pendingLength) applyLength(configKey, pendingLength[configKey]);
     },
     undefined,
     (err) => {
@@ -244,14 +244,17 @@ window.__boomRig3DLoad = function (wrapId, labelId, configKey, config) {
   );
 };
 
+// Deliberately does NOT reframe the camera - __boomRig3DLoad frames it once
+// (see above), and reframing again here would auto-zoom to fit the newly
+// scaled model, which visually cancels out the length change itself (the
+// exact bug: changing the length looked like nothing happened, because the
+// camera was quietly re-fitting to whatever size the model just became).
 function applyLength(configKey, lengthMeters) {
   const rig = rigCache[configKey];
   if (!rig) { pendingLength[configKey] = lengthMeters; return; }
   delete pendingLength[configKey];
   const factor = Math.max(0.02, (lengthMeters - rig.baseFixedLength) / rig.reachAtModeledPose);
   rig.group.scale.set(1, 1, factor);
-  const root = modelCache[configKey];
-  if (root && scene && root.parent === scene) frameCameraOn([root]);
 }
 
 // lengthMeters: a real OEM catalog boom length (HOOK_BOOM_LENGTHS in

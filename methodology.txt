@@ -15067,3 +15067,21 @@ spot-check built on non-round test values.
   the actual on-screen scaling result hasn't been eyeballed yet.
 
   CACHE_VERSION v324->v325, app version v9.5->v9.6.
+
+160. Fix: LTM1110-3D length slider visually doing nothing
+
+  Reported immediately after 159 shipped: changing the boom length
+  select had no visible effect. Cause was in applyLength()
+  (vendor/boomrig3d.js) - it scaled the boom group correctly, then
+  called frameCameraOn() on the whole (now differently-sized) model
+  straight after. frameCameraOn fits the camera to whatever bounding
+  box it's given, so it was auto-zooming to compensate for the exact
+  size change the slider had just made, cancelling it out visually
+  every time. Fix: frame the camera once, on initial load only (still
+  computed AFTER the default length is applied, so the first view is
+  correct) - __boomRig3DSetLength no longer reframes at all, so a
+  length change now visibly shrinks/grows the model within a fixed
+  view, which is the whole point of the control.
+
+  BOOMRIG3D_VERSION 2->3. CACHE_VERSION v325->v326, app version
+  v9.6->v9.7.
