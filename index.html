@@ -163,10 +163,23 @@
     .profile-invite-status.err { color: var(--danger); }
     #profile-create-pool-btn { width: 100%; margin-top: 4px; }
 
-    /* Stage 3 - Admin Dashboard tab. */
-    .admin-user-toggles { display: flex; flex-wrap: wrap; gap: 10px; }
-    .admin-tab-state-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 132px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; cursor: pointer; font-family: inherit; text-align: left; }
-    .admin-tab-state-btn span:last-child { font-size: 0.78rem; color: var(--text-muted); }
+    /* Stage 3 - Admin Dashboard tab. Collapsible tree, not a flat button
+       grid - a tab with sub-tabs renders as a native <details> row (its
+       own toggle in the summary, children indented underneath, collapsed
+       by default so the page stays scannable); a tab with none renders
+       as a single plain row. See adminRenderUserToggles/ADMIN_TAB_TREE. */
+    .admin-user-toggles { display: flex; flex-direction: column; gap: 6px; }
+    .admin-tab-row { border: 1px solid var(--border-color); border-radius: 8px; background: var(--input-bg); overflow: hidden; }
+    .admin-tab-row-head { display: flex; align-items: center; gap: 9px; padding: 9px 12px; }
+    summary.admin-tab-row-head { cursor: pointer; list-style: none; }
+    summary.admin-tab-row-head::-webkit-details-marker { display: none; }
+    .admin-tab-chevron { font-size: 0.6rem; color: var(--text-muted); width: 10px; flex-shrink: 0; display: inline-block; transition: transform 0.15s; }
+    details[open] > .admin-tab-row-head .admin-tab-chevron { transform: rotate(90deg); }
+    .admin-tab-row-label { flex: 1; font-size: 0.85rem; font-weight: 600; }
+    .admin-tab-children { display: flex; flex-direction: column; gap: 2px; padding: 2px 12px 10px 31px; border-top: 1px solid var(--border-color); margin-top: 2px; }
+    .admin-tab-child-row { display: flex; align-items: center; gap: 9px; padding: 7px 0; }
+    .admin-tab-child-label { flex: 1; font-size: 0.82rem; color: var(--text-muted); }
+    .admin-tab-state-btn { flex-shrink: 0; min-width: 68px; text-align: center; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 5px; padding: 4px 10px; cursor: pointer; font-family: inherit; }
     .admin-tab-state-btn:disabled { opacity: 0.5; cursor: default; }
     .admin-tab-state-label { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.5px; }
     .admin-tab-state-btn[data-state="off"] .admin-tab-state-label { color: var(--danger); }
@@ -857,6 +870,7 @@
         liftlibrary: '[data-tabkey="liftlibrary"]',
         cad_pads: '#cad-subtab-pads',
         cad_layout: '#cad-subtab-layout',
+        cad_rig: '#cad-subtab-rig',
         loadchart_find: '#lc-subtab-find',
         loadchart_compare: '#lc-subtab-compare'
       };
@@ -1031,7 +1045,7 @@
       // (bare data-tabkey, default-allow) plus the 3 opt-in Firestore
       // flag names (default-deny) - used below to work out, per key,
       // whether THIS load actually granted access, for the startHidden
-      // seeding step. Kept here rather than importing ADMIN_TAB_TOGGLES
+      // seeding step. Kept here rather than importing ADMIN_TAB_TREE
       // (that array lives in the classic script further down, out of
       // this module's scope) - this module only needs the key names and
       // which of the two access mechanisms each uses, not the label.
@@ -1247,6 +1261,54 @@
         return setDoc(doc(db, 'userAccess', uid), fields, { merge: true });
       };
 
+      // People who've been invited (a real, allowed:true googleAllowlist
+      // doc) but have never actually signed in - no uid exists for them
+      // yet, so they can't appear in __adminListUsers above (that reads
+      // userEmails, only ever written by a real sign-in). Diffed against
+      // the same userEmails collection here rather than trusting
+      // __adminListUsers' own cache, since this can be called on its
+      // own. Each result carries a null uid and isPending:true so the
+      // rest of the Admin Dashboard code (adminRenderUserToggles, the
+      // click handler) can tell a pending invite apart from a real user
+      // and route writes to pendingUserAccess/{email} instead of
+      // userAccess/{uid} - see window.__adminSetPendingAccess etc below.
+      window.__adminListInvited = function () {
+        return Promise.all([
+          getDocs(collection(db, 'googleAllowlist')),
+          getDocs(collection(db, 'userEmails')),
+          getDocs(collection(db, 'pendingUserAccess'))
+        ]).then(([allowSnap, emailSnap, pendingSnap]) => {
+          const signedInEmails = new Set(emailSnap.docs.map((d) => (d.data().email || '').toLowerCase()));
+          const pendingByEmail = {};
+          pendingSnap.docs.forEach((d) => { pendingByEmail[d.id] = d.data(); });
+          return allowSnap.docs
+            .filter((d) => d.data().allowed === true && !signedInEmails.has(d.id))
+            .map((d) => {
+              const access = pendingByEmail[d.id] || {};
+              return {
+                uid: null,
+                isPending: true,
+                email: d.id,
+                displayName: '',
+                serviceFillAccess: access.serviceFillAccess === true,
+                assemblyPlansAccess: access.assemblyPlansAccess === true,
+                cabEntryAccess: access.cabEntryAccess === true,
+                xPctHAccess: access.xPctHAccess === true,
+                liftLibraryAccess: access.liftLibraryAccess === true,
+                supportPadAccess: access.supportPadAccess === true,
+                hidden: access.hidden || {},
+                startHidden: access.startHidden || {}
+              };
+            });
+        });
+      };
+
+      window.__adminSetPendingAccess = function (email, flag, value) {
+        const fields = {};
+        fields[flag] = value;
+        return setDoc(doc(db, 'pendingUserAccess', email), fields, { merge: true });
+      };
+
       // Deny-list tabs (the ones visible by default - Reeving Plans, CWT
       // Combinations, etc) work opposite to the three opt-in flags above:
       // hidden.{key} === true means the tab is HIDDEN, not granted. This
@@ -1276,6 +1338,22 @@
         const startHidden = {};
         startHidden[tabKey] = startHiddenValue;
         return setDoc(doc(db, 'userAccess', uid), { startHidden: startHidden }, { merge: true });
+      };
+
+      // Same two functions as immediately above, targeting
+      // pendingUserAccess/{email} instead of userAccess/{uid} - kept as
+      // separate functions rather than parameterizing the ones above
+      // over a collection name, so neither path can accidentally cross-
+      // write the other's collection from a typo'd branch.
+      window.__adminSetPendingTabHidden = function (email, tabKey, hiddenValue) {
+        const hidden = {};
+        hidden[tabKey] = hiddenValue;
+        return setDoc(doc(db, 'pendingUserAccess', email), { hidden: hidden }, { merge: true });
+      };
+      window.__adminSetPendingStartHidden = function (email, tabKey, startHiddenValue) {
+        const startHidden = {};
+        startHidden[tabKey] = startHiddenValue;
+        return setDoc(doc(db, 'pendingUserAccess', email), { startHidden: startHidden }, { merge: true });
       };
 
       // Generates one 30-minute, single-use invite token (see
@@ -1522,10 +1600,38 @@
         const ref = doc(db, 'userEmails', user.uid);
         getDoc(ref).then((snap) => {
           if (snap.exists()) return;
-          setDoc(ref, { email: user.email.toLowerCase() }).catch((err) => {
-            console.error('Could not record email for admin lookup', err);
-          });
+          setDoc(ref, { email: user.email.toLowerCase() })
+            .then(() => applyPendingAccessIfAny(user))
+            .catch((err) => {
+              console.error('Could not record email for admin lookup', err);
+            });
         });
+      }
+
+      // Runs exactly once, on someone's genuine first-ever sign-in (see
+      // the snap.exists() guard above - this only fires right after the
+      // userEmails doc itself was just created for the first time). If
+      // an admin pre-configured this email's tab access before they ever
+      // signed in (Admin Dashboard's "Invited, not yet signed in" list -
+      // see window.__adminListInvited), pendingUserAccess/{email} holds
+      // it; copy it into their own real userAccess/{uid} doc now that
+      // uid finally exists. firestore.rules' userAccess create rule only
+      // allows this self-write when request.resource.data is an EXACT
+      // match for that same pendingUserAccess doc - copying snap.data()
+      // verbatim, adding nothing and dropping nothing, is what keeps
+      // this write matching that check. Best-effort: nobody without a
+      // pending doc hits the exists() check at all, and a failure here
+      // never blocks sign-in - falls back to the pre-this-feature
+      // behaviour (full default access, same as any user with no
+      // userAccess doc yet) rather than a hard error either way.
+      function applyPendingAccessIfAny(user) {
+        const email = user.email.toLowerCase();
+        return getDoc(doc(db, 'pendingUserAccess', email))
+          .then((snap) => {
+            if (!snap.exists()) return;
+            return setDoc(doc(db, 'userAccess', user.uid), snap.data());
+          })
+          .catch(() => {});
       }
 
       // Redeems a one-time invite token (see firestore.rules'
@@ -1758,7 +1864,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v9.2</span></h1>
+    <h1>MYSLEWER <span class="app-version">v9.3</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -12327,7 +12433,13 @@
     const adminPoolsEmpty = document.getElementById('adminPoolsEmpty');
     const adminPoolsList = document.getElementById('adminPoolsList');
 
-    // Every top-level tab, not just the three that happen to be opt-in.
+    // Every top-level tab AND its sub-tabs (a tab with sub-tabs carries
+    // them as `children` below) - rejigged from a single flat list into
+    // this tree specifically so sub-tab-level control fits without every
+    // sub-tab needing its own top-level row (a real problem once
+    // Load Chart Finder's two sub-tabs and Crane Positioning's four all
+    // joined the flat list that used to live here - see
+    // adminRenderUserToggles for how the tree becomes a collapsible UI).
     // Two different underlying shapes, unified into one "is this tab
     // visible to them" checkbox each: 'optin' tabs (hidden by default in
     // the HTML, start.style.display:none - Service Fill/Assembly Plans/
@@ -12337,45 +12449,55 @@
     // HIDDEN - but the checkbox itself still just means "visible",
     // inverted at render/write time so an admin never has to think about
     // which of the two mechanisms a given tab happens to use. Keys match
-    // TAB_RESTRICTION_TARGETS in the gate's own module script exactly -
-    // top-level tabs only, not the four cad_*/loadchart_* sub-tab keys or
-    // the per-crane-model hidden.crane_XXXX flags, which are a separate,
-    // finer-grained restriction this dropdown isn't meant to cover.
-    // xPctHAccess/liftLibraryAccess/supportPadAccess are the deliberate
-    // exceptions - genuinely opt-in (hidden unless granted, not deny-
-    // list) tabs that need an admin control to hand out per-person, even
-    // though liftlibrary and cad_pads ALSO still exist as plain deny-
-    // list keys in TAB_RESTRICTION_TARGETS (unchanged, still driving
-    // those two's own personal-declutter entry in Customize Tabs for
-    // whoever has real access - the two mechanisms coexist on the same
-    // visual tab under two different keys, not a conflict). X%H alone
-    // additionally needs window.__updateX650TabVisibility for its second,
+    // TAB_RESTRICTION_TARGETS in the gate's own module script exactly,
+    // EXCEPT the per-crane-model hidden.crane_XXXX flags, which are a
+    // separate, finer-grained restriction this tree isn't meant to
+    // cover. xPctHAccess/liftLibraryAccess/supportPadAccess are opt-in
+    // (hidden unless granted, not deny-list) - liftlibrary and cad_pads
+    // ALSO still exist as plain deny-list keys in TAB_RESTRICTION_TARGETS
+    // (unchanged, still driving those two's own personal-declutter entry
+    // in Customize Tabs for whoever has real access - the two mechanisms
+    // coexist on the same visual tab under two different keys, not a
+    // conflict). X%H alone additionally needs window.__updateX650TabVisibility for its second,
     // non-Firestore condition (LTM 1650 selected) layered on top - the
     // other two have no such second condition, so applyFeatureAccess
     // toggles them directly, same one-shot pattern as the three plain
     // opt-in tabs above. Their 'hidden' cycle state (see adminTabState
     // below) behaves the same as 'on' for all three optin sub-tab/tab
     // flags here, same reasoning as X%H originally - startHidden keyed by
-    // the ADMIN_TAB_TOGGLES key (e.g. startHidden.liftLibraryAccess)
+    // the ADMIN_TAB_TREE key (e.g. startHidden.liftLibraryAccess)
     // never matches a personal-declutter entry keyed by the OTHER
     // (TAB_RESTRICTION_TARGETS) key for the same tab, so it's never read.
     // Whoever's granted access still keeps their own independent
     // Customize Tabs control via that separate key, same as always.
-    const ADMIN_TAB_TOGGLES = [
+    // Tree, not a flat list - a tab with sub-tabs carries them as
+    // `children`, rendered as a collapsible row (adminRenderUserToggles)
+    // instead of every sub-tab getting its own top-level entry in what
+    // used to be one long flat button grid. cad_rig (Boom Clearance) is
+    // a new TAB_RESTRICTION_TARGETS key added alongside this rejig - it
+    // never had ANY admin-level control before, same gap cad_pads/
+    // loadchart_find/loadchart_compare had until now.
+    const ADMIN_TAB_TREE = [
       { key: 'reeve', label: 'Reeving Plans', kind: 'denylist' },
       { key: 'cwt', label: 'CWT Combinations', kind: 'denylist' },
-      { key: 'loadchart', label: 'Load Chart Finder', kind: 'denylist' },
-      { key: 'cad', label: 'Crane Positioning', kind: 'denylist' },
+      { key: 'loadchart', label: 'Load Chart Finder', kind: 'denylist', children: [
+        { key: 'loadchart_find', label: 'Find Boom Configuration', kind: 'denylist' },
+        { key: 'loadchart_compare', label: 'Compare Cranes', kind: 'denylist' }
+      ]},
+      { key: 'cad', label: 'Crane Positioning', kind: 'denylist', children: [
+        { key: 'cad_layout', label: 'Crane Layout', kind: 'denylist' },
+        { key: 'supportPadAccess', label: 'Support Pad Placement', kind: 'optin' },
+        { key: 'xPctHAccess', label: 'X%H', kind: 'optin' },
+        { key: 'cad_rig', label: 'Boom Clearance', kind: 'denylist' }
+      ]},
       { key: 'driveeq', label: 'Driving with Equipment in Place', kind: 'denylist' },
       { key: 'hook', label: 'Minimum Hook Block Weights', kind: 'denylist' },
       { key: 'chain', label: 'Chain Shortening', kind: 'denylist' },
       { key: 'rope', label: 'Rope Retentioning', kind: 'denylist' },
+      { key: 'liftLibraryAccess', label: 'Lift Library', kind: 'optin' },
       { key: 'serviceFillAccess', label: 'Service Fill', kind: 'optin' },
       { key: 'assemblyPlansAccess', label: 'Assembly Plans', kind: 'optin' },
-      { key: 'cabEntryAccess', label: 'Lift Logger', kind: 'optin' },
-      { key: 'xPctHAccess', label: 'Crane Positioning ▸ X%H', kind: 'optin' },
-      { key: 'liftLibraryAccess', label: 'Lift Library', kind: 'optin' },
-      { key: 'supportPadAccess', label: 'Crane Positioning ▸ Support Pad Placement', kind: 'optin' }
+      { key: 'cabEntryAccess', label: 'Lift Logger', kind: 'optin' }
     ];
 
     // Three states per tab, cycled off -> hidden -> on -> off by a
@@ -12404,71 +12526,144 @@
     // fetch on every selection change.
     let adminUsersCache = [];
 
-    function adminUserLabel(u) {
-      return u.displayName || u.email || u.uid;
+    // A real user's own uid IS their unique key already; a pending
+    // invite has no uid at all (that's the whole point - see
+    // window.__adminListInvited), so its email stands in for one,
+    // prefixed to keep the two key spaces from ever colliding.
+    function adminUserKey(u) {
+      return u.uid || ('pending:' + u.email);
+    }
+    function adminFindUser(key) {
+      return adminUsersCache.find((x) => adminUserKey(x) === key);
     }
 
-    function adminRenderUserToggles(uid) {
-      const u = adminUsersCache.find((x) => x.uid === uid);
+    function adminUserLabel(u) {
+      const name = u.displayName || u.email || u.uid;
+      return u.isPending ? name + ' (invited, not signed in)' : name;
+    }
+
+    function adminTabToggleButtonHtml(u, t) {
+      const state = adminTabState(u, t);
+      return `<button type="button" class="admin-tab-state-btn" data-target="${adminUserKey(u)}" data-key="${t.key}" data-kind="${t.kind}" data-state="${state}">
+        <span class="admin-tab-state-label">${state.toUpperCase()}</span>
+      </button>`;
+    }
+
+    function adminRenderUserToggles(key) {
+      const u = adminFindUser(key);
       if (!u) { adminUserToggles.innerHTML = ''; return; }
-      adminUserToggles.innerHTML = ADMIN_TAB_TOGGLES.map((t) => {
-        const state = adminTabState(u, t);
+      adminUserToggles.innerHTML = ADMIN_TAB_TREE.map((t) => {
+        if (!t.children || !t.children.length) {
+          return `
+          <div class="admin-tab-row">
+            <div class="admin-tab-row-head">
+              <span class="admin-tab-row-label">${t.label}</span>
+              ${adminTabToggleButtonHtml(u, t)}
+            </div>
+          </div>`;
+        }
+        const childrenHtml = t.children.map((c) => `
+          <div class="admin-tab-child-row">
+            <span class="admin-tab-child-label">${c.label}</span>
+            ${adminTabToggleButtonHtml(u, c)}
+          </div>`).join('');
         return `
-        <button type="button" class="admin-tab-state-btn" data-uid="${u.uid}" data-key="${t.key}" data-kind="${t.kind}" data-state="${state}">
-          <span class="admin-tab-state-label">${state.toUpperCase()}</span>
-          <span>${t.label}</span>
-        </button>`;
+        <details class="admin-tab-row">
+          <summary class="admin-tab-row-head">
+            <span class="admin-tab-chevron">&#9656;</span>
+            <span class="admin-tab-row-label">${t.label}</span>
+            ${adminTabToggleButtonHtml(u, t)}
+          </summary>
+          <div class="admin-tab-children">${childrenHtml}</div>
+        </details>`;
       }).join('');
     }
 
+    // Real signed-in users AND invited-but-not-yet-signed-in people share
+    // one dropdown - grouped into two <optgroup>s rather than mixed
+    // together, since "who's actually using the app" and "who's waiting
+    // to" are a genuinely different question an admin is asking each
+    // time they open this. Both lists are fetched every refresh; a
+    // failure in one no longer has to block the other (Promise.all on
+    // the whole pair would previously have shown "Could not load users"
+    // even if only the pending-invite half genuinely failed).
     function adminRefreshUsers() {
       adminUserSelect.innerHTML = '<option value="">Loading users…</option>';
       adminUserToggles.innerHTML = '';
-      window.__adminListUsers()
-        .then((users) => {
-          adminUsersCache = users;
-          if (!users.length) {
-            adminUserSelect.innerHTML = '<option value="">No signed-in users yet</option>';
-            return;
-          }
-          const previouslySelected = adminUserSelect.value;
-          adminUserSelect.innerHTML = '';
+      Promise.all([
+        window.__adminListUsers().catch(() => []),
+        window.__adminListInvited().catch(() => [])
+      ]).then(([users, invited]) => {
+        adminUsersCache = users.concat(invited);
+        if (!adminUsersCache.length) {
+          adminUserSelect.innerHTML = '<option value="">No signed-in or invited users yet</option>';
+          return;
+        }
+        const previouslySelected = adminUserSelect.value;
+        adminUserSelect.innerHTML = '';
+        if (users.length) {
+          const group = document.createElement('optgroup');
+          group.label = 'Signed in';
           users.forEach((u) => {
             const opt = document.createElement('option');
-            opt.value = u.uid;
+            opt.value = adminUserKey(u);
             opt.textContent = adminUserLabel(u);
-            adminUserSelect.appendChild(opt);
+            group.appendChild(opt);
           });
-          // Keep whichever user was already selected across a refresh
-          // (e.g. right after toggling one of their own flags) rather
-          // than always snapping back to the first user in the list.
-          if (users.some((u) => u.uid === previouslySelected)) adminUserSelect.value = previouslySelected;
-          adminRenderUserToggles(adminUserSelect.value);
-        })
-        .catch(() => { adminUserSelect.innerHTML = '<option value="">Could not load users</option>'; });
+          adminUserSelect.appendChild(group);
+        }
+        if (invited.length) {
+          const group = document.createElement('optgroup');
+          group.label = 'Invited, not yet signed in';
+          invited.forEach((u) => {
+            const opt = document.createElement('option');
+            opt.value = adminUserKey(u);
+            opt.textContent = adminUserLabel(u);
+            group.appendChild(opt);
+          });
+          adminUserSelect.appendChild(group);
+        }
+        // Keep whichever entry was already selected across a refresh
+        // (e.g. right after toggling one of their own flags) rather
+        // than always snapping back to the first entry in the list.
+        if (adminUsersCache.some((u) => adminUserKey(u) === previouslySelected)) adminUserSelect.value = previouslySelected;
+        adminRenderUserToggles(adminUserSelect.value);
+      });
     }
 
     adminUserSelect.addEventListener('change', () => adminRenderUserToggles(adminUserSelect.value));
 
     adminUserToggles.addEventListener('click', (ev) => {
-      const btn = ev.target.closest('button.admin-tab-state-btn[data-uid]');
+      const btn = ev.target.closest('button.admin-tab-state-btn[data-target]');
       if (!btn) return;
-      const uid = btn.dataset.uid, key = btn.dataset.key, kind = btn.dataset.kind;
+      // A parent tab's own toggle button now sits inside its <summary> -
+      // without this, clicking it would ALSO trigger the browser's native
+      // open/close toggle for the surrounding <details> as a side effect.
+      ev.preventDefault();
+      const target = btn.dataset.target, key = btn.dataset.key, kind = btn.dataset.kind;
+      const u = adminFindUser(target);
+      if (!u) return;
       const prevState = btn.dataset.state;
       const nextState = nextAdminTabState(prevState);
       btn.disabled = true;
+      // Same three writes either way, just aimed at userAccess/{uid} for
+      // a real user or pendingUserAccess/{email} for an invited one not
+      // yet signed in - see window.__adminListInvited's own comment for
+      // how that second path eventually reaches the real userAccess doc
+      // (a one-shot, exact-copy self-create on their first sign-in).
+      const id = u.isPending ? u.email : u.uid;
+      const setAccess = u.isPending ? window.__adminSetPendingAccess : window.__adminSetUserAccess;
+      const setTabHidden = u.isPending ? window.__adminSetPendingTabHidden : window.__adminSetTabHidden;
+      const setStartHidden = u.isPending ? window.__adminSetPendingStartHidden : window.__adminSetStartHidden;
       const accessWrite = kind === 'optin'
-        ? window.__adminSetUserAccess(uid, key, nextState !== 'off')
-        : window.__adminSetTabHidden(uid, key, nextState === 'off');
-      const hiddenWrite = window.__adminSetStartHidden(uid, key, nextState === 'hidden');
+        ? setAccess(id, key, nextState !== 'off')
+        : setTabHidden(id, key, nextState === 'off');
+      const hiddenWrite = setStartHidden(id, key, nextState === 'hidden');
       Promise.all([accessWrite, hiddenWrite])
         .then(() => {
-          const u = adminUsersCache.find((x) => x.uid === uid);
-          if (u) {
-            if (kind === 'optin') { u[key] = nextState !== 'off'; }
-            else { u.hidden = Object.assign({}, u.hidden, { [key]: nextState === 'off' }); }
-            u.startHidden = Object.assign({}, u.startHidden, { [key]: nextState === 'hidden' });
-          }
+          if (kind === 'optin') { u[key] = nextState !== 'off'; }
+          else { u.hidden = Object.assign({}, u.hidden, { [key]: nextState === 'off' }); }
+          u.startHidden = Object.assign({}, u.startHidden, { [key]: nextState === 'hidden' });
           btn.dataset.state = nextState;
           btn.querySelector('.admin-tab-state-label').textContent = nextState.toUpperCase();
         })
@@ -12636,7 +12831,7 @@
     }
     // The 3 opt-in tabs' userAccess flag names (serviceFillAccess etc.)
     // don't match their own data-tabkey (servicefill etc.) - see
-    // ADMIN_TAB_TOGGLES/adminTabState below for the same split. Deny-
+    // ADMIN_TAB_TREE/adminTabState below for the same split. Deny-
     // list keys need no translation - TAB_RESTRICTION_TARGETS already
     // confirms those ARE the data-tabkey directly.
     const OPTIN_KEY_TO_TABKEY = { serviceFillAccess: 'servicefill', assemblyPlansAccess: 'assembly', cabEntryAccess: 'cabentry' };
