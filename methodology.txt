@@ -15395,3 +15395,37 @@ spot-check built on non-round test values.
   lengths x 9 angles) - not yet run.
 
   No CACHE_VERSION/app-version bump - same as 163-166.
+
+168. export_sweep_ltm1160.lsp built - fifth crane, and a genuine
+     Cyrillic-vs-Latin ambiguity flagged rather than guessed through
+
+  Fifth unlabeled dump in a row - confirmed LTM 1160-5.2 (the other
+  remaining backlog crane, LRT 1100-2.1, was the other option offered).
+  Property names: "Состав стрелы"/"Visibility1" (config, same pairing
+  as the 1250), "Стрела T" (length, same name as three other cranes but
+  its own 12-length catalog, 13.1-62.0 m - 62.0m max, distinct from the
+  60.0m several others share), "Наклон стрелы T" (angle).
+
+  Real, new problem this dump surfaced: the boom-only config's own
+  value displays as "Т" - which may be the Cyrillic letter (U+0422),
+  not Latin "T" (U+0054). They render identically in this dump's plain
+  text and can't be told apart by eye, but the crane's OTHER allowed
+  values for the same property (TK, TNZK, TVNZK) clearly use Latin
+  letters - meaning the alphabet isn't even consistent within one
+  property's own value list, so guessing "it's probably Latin like the
+  others" isn't safe either. Copied the character verbatim from the
+  dump into the script rather than retyped (retyping risks silently
+  normalizing it to whichever alphabet a keyboard/editor defaults to).
+  Pulled the value into its own *BOOM-ONLY-CONFIG* constant at the top
+  of the file with a comment explaining exactly how to fix it (copy the
+  one character straight out of dyn_props_dump.txt) if TESTSWEEP-
+  LTM1160 reports every pose skipping on Состав стрелы - safe-put
+  already fails loud (SKIP + reason) rather than silently corrupting
+  anything if the guess is wrong, so this is a real but low-risk,
+  self-diagnosing uncertainty, not a silent gap.
+
+  TESTSWEEP-LTM1160 (4 poses) / EXPORTSWEEP-LTM1160 (108 poses, 12
+  lengths x 9 angles) - not yet run, and specifically not yet confirmed
+  whether the Т/T guess above was even right.
+
+  No CACHE_VERSION/app-version bump - same as 163-167.
