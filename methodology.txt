@@ -15286,3 +15286,42 @@ spot-check built on non-round test values.
   end-to-end the way 151/152's LTM 1650 sweep was.
 
   No CACHE_VERSION/app-version bump - same as 163.
+
+165. LTM 1250 EXPORTSWEEP-LTM1250 run confirmed (135/135 poses), and
+     export_sweep_ltr1220.lsp built for a second crane in parallel
+
+  Person ran export_sweep_ltm1250.lsp's full sweep - confirmed via
+  direct Nextcloud WebDAV listing (PWA/Myslewer/Cad_blocks/LTM1250/
+  export_ltm1250/): exactly 135 .dwg files present, matching 15 lengths
+  x 9 angles with none missing. Also has a reference plot
+  (PDF/Drawing1-Model.pdf) for the later color-calibration step. Still
+  needs DWG->DXF conversion (ODA File Converter, person's own machine -
+  no equivalent tool available in this session's Linux sandbox, checked
+  and confirmed absent, same "run by the person" boundary as always for
+  this pipeline) before extract_all_poses.py can run.
+
+  Simultaneously, person ran DUMPDYNPROPS (163's click-to-select fix)
+  against the LTR 1220's boom block and got a real, correct dump on the
+  first try. Built export_sweep_ltr1220.lsp the same way as 164's LTM
+  1250 script, from this crane's own real property names/values, none
+  assumed from either the 1250 or the Liebherr LTM family generally:
+  - "Состав стрелы" (config selector) - boom-only value is the FULL
+    string "Стрела T" here (not the bare "T" the 1250 uses) - confirmed
+    from this crane's own AllowedValues list, not assumed.
+  - "Состав" - a second property with the identical allowed-value list
+    to "Состав стрелы" on this crane specifically (no equivalent on the
+    1250's dump) - unclear if it's a synced mirror or needs setting
+    independently, so the script sets both defensively.
+  - "Стрела T" (boom length property NAME - confusingly the same text
+    as the config selector's VALUE above, two unrelated things sharing
+    a string) - 12 real catalog lengths, 13.3-60.0 m, AllowedValues
+    strings include a "Стрела " prefix ("Стрела 13.3 м") - yet another
+    different formatting convention from the 1250's bare "13.05 м".
+  - "Наклон основной стрелы" (boom angle) - continuous/radians, same
+    convention as every other crane - this exact property name also
+    happens to match the original LTM 1650 script's, coincidentally.
+
+  TESTSWEEP-LTR1220 (4 poses) / EXPORTSWEEP-LTR1220 (108 poses, 12
+  lengths x 9 angles) - not yet run, so not yet verified end-to-end.
+
+  No CACHE_VERSION/app-version bump - same as 163/164.
