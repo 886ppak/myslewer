@@ -1864,7 +1864,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v9.14</span></h1>
+    <h1>MYSLEWER <span class="app-version">v9.15</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -13870,6 +13870,12 @@
     // when it decides something's already cached, so this now asks the
     // exact question that matters ("is this URL cached anywhere") instead
     // of first guessing where to look. See methodology.txt 10.62.
+    // True only for the duration of an actual cacheAllOfflineContent()
+    // download run - lets checkOfflineContentStatus() below know not to
+    // fight the "Downloading…" label the click handler sets while a
+    // fetch loop is in flight.
+    let cachingInProgress = false;
+
     async function checkOfflineContentStatus() {
       // Sync every card's checkbox to the stored setting - covers first
       // load, tab switches, and the cache-panel re-opening, not just the
@@ -13894,9 +13900,28 @@
           ? '<span style="color:var(--success);">✓ Downloaded</span>'
           : `<span style="color:var(--danger);">✗ Not fully downloaded${missing.length ? ` (${missing.length} missing)` : ''}</span>`;
       });
+
+      // The button's own label used to be a one-time snapshot set only by
+      // cacheAllOfflineContent() itself when a run finished, so it never
+      // noticed when the requirement grew afterward (ticking the Boom
+      // Clearance opt-in, or a future crane added to RIG_CONFIGS) - a
+      // person could tick the box, see the status line above correctly
+      // flag "8 missing", and still see a leftover "All Offline Content
+      // Cached ✓" telling them there was nothing left to fetch. Deriving
+      // the label from this SAME live check instead - the one already
+      // proven correct by methodology.txt 10.62 - keeps both in
+      // permanent agreement. Skipped mid-download so this doesn't
+      // overwrite the "Downloading…" label the click handler sets.
+      if (!cachingInProgress) {
+        document.querySelectorAll('.cache-all-btn').forEach(b => {
+          b.disabled = false;
+          b.textContent = complete ? 'All Offline Content Cached ✓' : 'Cache All Offline Content';
+        });
+      }
     }
 
     async function cacheAllOfflineContent() {
+      cachingInProgress = true;
       const btns = document.querySelectorAll('.cache-all-btn');
       const wraps = document.querySelectorAll('.cache-all-progress-wrap');
       const bars = document.querySelectorAll('.cache-all-progress-bar');
@@ -13941,11 +13966,18 @@
       }
       await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
-      const label = failed ? `Retry Failed Downloads (${failed} remaining)` : 'All Offline Content Cached ✓';
-      btns.forEach(b => { b.disabled = false; b.textContent = label; });
+      // Button label is no longer set here directly - cachingInProgress
+      // clearing below lets checkOfflineContentStatus() take over and
+      // derive it from the same live cache check the status line already
+      // uses, rather than this run's own failed-count snapshot (which
+      // can't tell "genuinely complete" from "0 fetch failures, but a
+      // fire-and-forget cache.put() write is still straggling" - exactly
+      // what the trailing re-check below exists to catch a beat later).
+      btns.forEach(b => { b.disabled = false; b.textContent = 'Checking…'; });
       if (!failed) {
         setTimeout(() => { wraps.forEach(w => { w.style.display = 'none'; }); }, 3000);
       }
+      cachingInProgress = false;
       // The service worker's fetch handler writes each response into
       // CONTENT_CACHE as a fire-and-forget cache.put() - it isn't awaited
       // by the fetch() promise this loop just finished, so the very last

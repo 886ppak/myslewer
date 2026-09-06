@@ -15955,3 +15955,59 @@ spot-check built on non-round test values.
   on the first real run.
 
   CACHE_VERSION v332->v333, app version v9.13->v9.14.
+
+176. Offline Content: "Cache All" button lied about being fully cached
+     after ticking the Boom Clearance opt-in
+
+  Person's real-device screenshot: status line correctly read "✗ Not
+  fully downloaded (8 missing)" right after ticking 175's new checkbox,
+  but the button right below it still said "All Offline Content Cached
+  ✓" - visibly contradictory, and their reasonable question was why
+  ticking the box didn't fetch the remaining 8.
+
+  Root cause: the button's own label was a ONE-TIME snapshot, set only
+  once by cacheAllOfflineContent() itself right when a download run
+  finished, based purely on that run's own fetch-failure count. It had
+  no way to notice the requirement growing again afterward - ticking
+  the opt-in checkbox (or, in principle, a future crane added to
+  RIG_CONFIGS between visits) correctly changed what
+  checkOfflineContentStatus() considers "required" and updated the
+  status line, but nothing ever told the BUTTON to re-derive its own
+  label from that same check - it just kept showing whatever it said
+  after the last click. The button was still clickable (not actually
+  broken/stuck), but its own text told the person there was nothing
+  left to do, which is exactly what stopped them from re-clicking it -
+  the real bug was the misleading label, not a fetch that mysteriously
+  wouldn't fire when asked.
+
+  Fixed by making checkOfflineContentStatus() itself own the button's
+  label too, derived from the exact same live required/missing check
+  the status line already uses (rather than two independent sources of
+  truth that could drift apart) - "All Offline Content Cached ✓" only
+  when genuinely complete, "Cache All Offline Content" otherwise,
+  correctly inviting another click. Added a `cachingInProgress` flag so
+  this doesn't fight the "Downloading…" label a run sets on itself
+  while a fetch loop is actually in flight - checkOfflineContentStatus()
+  skips touching the button while that's true. cacheAllOfflineContent()
+  no longer sets a final label directly at all (dropped the old
+  failed-count-based "Retry Failed Downloads (N)" wording along with
+  it - a strict simplification, since 0 reported fetch failures was
+  already known to not guarantee "genuinely complete" here, per the
+  fire-and-forget cache.put() race this same function already retries
+  checkOfflineContentStatus() a second time to catch).
+
+  Verified with Playwright against a local server, reproducing the
+  exact reported sequence: full download with the toggle off ->
+  "Cached ✓"; tick the toggle WITHOUT re-clicking -> status flags 8
+  missing AND the button now correctly reads "Cache All Offline
+  Content" instead of the stale "Cached ✓" (this exact assertion is
+  what would have failed before this fix); manually evicted a same-
+  origin file from CONTENT_CACHE to independently confirm the general
+  evict-detect-refetch-recomplete cycle still round-trips correctly in
+  both directions. Confirming an actual live re-download of the cross-
+  origin rig-data itself hit the same sandbox limitation noted in 174
+  (Playwright's page.route() can't intercept a service worker's own
+  internal fetch()) - not something this specific fix touches, and
+  already covered by 174's own verification of the allowlist itself.
+
+  CACHE_VERSION v333->v334, app version v9.14->v9.15.
