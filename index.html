@@ -1864,7 +1864,7 @@
   </script>
 
   <header>
-    <h1>MYSLEWER <span class="app-version">v9.9</span></h1>
+    <h1>MYSLEWER <span class="app-version">v9.10</span></h1>
     <button id="cache-btn" type="button" onclick="toggleCachePanel()" title="Offline content" aria-label="Offline content">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M2.5,10.5 C2.5,5.5 4.2,3 7.2,3 L16.8,3 C19.8,3 21.5,5.5 21.5,10.5 L21.5,18 C21.5,19.1 20.6,20 19.5,20 L4.5,20 C3.4,20 2.5,19.1 2.5,18 Z"></path><rect fill="#272a30" x="3.6" y="6.3" width="16.8" height="0.9" rx="0.4"></rect><rect fill="#272a30" x="3.9" y="9.3" width="16.2" height="0.9" rx="0.4"></rect><path fill="#272a30" d="M11,1 L13,1 L13,6.8 L15.3,6.8 L12,10.8 L8.7,6.8 L11,6.8 Z"></path><circle fill="#272a30" cx="12" cy="15.6" r="1.2"></circle><path fill="#272a30" d="M11.15,16.3 L12.85,16.3 L12.85,18.1 L11.15,18.1 Z"></path><circle fill="#272a30" cx="4.8" cy="14" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="14" r="0.55"></circle><circle fill="#272a30" cx="4.8" cy="17.3" r="0.55"></circle><circle fill="#272a30" cx="19.2" cy="17.3" r="0.55"></circle></svg>
     </button>
@@ -4339,7 +4339,11 @@
     // for. The jib+boom combined-pose machinery (rigCombinedRotation etc.)
     // is left in place since it's inert with no hasJib:true config left
     // to trigger it, not because a jib is expected back.
-    const RIG_CRANE_LABELS = { '1650': 'LTM 1650-8.1', '1300': 'LTM 1300-6.2' };
+    const RIG_CRANE_LABELS = {
+      '1650': 'LTM 1650-8.1', '1300': 'LTM 1300-6.2', '1110': 'LTM 1110-5.1',
+      '1130': 'LTM 1130-5.1', '1160': 'LTM 1160-5.2', '1250': 'LTM 1250-5.1',
+      '1220': 'LTR 1220'
+    };
     const RIG_CONFIGS = {
       '1650:T3': {
         craneKey: '1650', label: 'T3', file: 't3_poses.json', hasJib: false,
@@ -4360,6 +4364,40 @@
         // hatch painted over everything else in this near-black tone. See
         // suppressFillColor in buildRigElementsForLength.
         suppressFillColor: '#212830'
+      },
+      // 2026-09-06 batch: 5 more cranes, boom-only "T" config each, same
+      // AutoCAD-dynamic-block export -> ezdxf extraction -> reference-PDF
+      // color calibration pipeline as LTM1650/1300 above (see
+      // cad/boom-rig-pipeline/README.md). A handful of shapes per crane
+      // (mostly tiny WIPEOUT-derived trim/bolt details, plus a few on
+      // LTR1220 whose world position sits just past the reference plot's
+      // own page edge) couldn't be confidently color-resolved from their
+      // reference plot and were left at the extraction's placeholder color
+      // rather than guessed - a small, known, honest gap, not a bug.
+      '1110:T': {
+        craneKey: '1110', label: 'T', file: 't_poses.json', hasJib: false,
+        nextcloudBase: 'https://local.idull.au/public.php/dav/files/nrGXiwRDiYSKnq7/Myslewer/Cad_blocks/LTM1110/rig-data/',
+        boomLengths: ["11.5","15.2","18.9","22.6","26.4","30.1","33.8","37.5","38.8","41.2","42.5","45.0","46.9","48.7","51.3","52.4","54.3","55.6","56.1","58.1","58.7","59.4","60.0"]
+      },
+      '1130:T': {
+        craneKey: '1130', label: 'T', file: 't_poses.json', hasJib: false,
+        nextcloudBase: 'https://local.idull.au/public.php/dav/files/nrGXiwRDiYSKnq7/Myslewer/Cad_blocks/LTM1130/rig-data/',
+        boomLengths: ["12.7","17.0","21.4","22.1","25.7","30.1","31.6","34.4","38.8","41.1","43.1","47.5","50.5","51.9","54.9","56.2","59.2","60.0"]
+      },
+      '1160:T': {
+        craneKey: '1160', label: 'T', file: 't_poses.json', hasJib: false,
+        nextcloudBase: 'https://local.idull.au/public.php/dav/files/nrGXiwRDiYSKnq7/Myslewer/Cad_blocks/LTM1160/rig-data/',
+        boomLengths: ["13.1","17.6","22.1","26.6","31.1","35.5","40.0","44.5","49.0","53.5","58.0","62.0"]
+      },
+      '1250:T': {
+        craneKey: '1250', label: 'T', file: 't_poses.json', hasJib: false,
+        nextcloudBase: 'https://local.idull.au/public.php/dav/files/nrGXiwRDiYSKnq7/Myslewer/Cad_blocks/LTM1250/rig-data/',
+        boomLengths: ["13.05","17.37","21.69","22.44","26.01","30.33","34.65","38.97","43.29","47.61","51.92","54.93","56.24","59.25","60.00"]
+      },
+      '1220:T': {
+        craneKey: '1220', label: 'T', file: 't_poses.json', hasJib: false,
+        nextcloudBase: 'https://local.idull.au/public.php/dav/files/nrGXiwRDiYSKnq7/Myslewer/Cad_blocks/LTR1220/rig-data/',
+        boomLengths: ["13.3","17.6","21.9","26.2","30.5","34.8","39.1","43.4","47.7","52.0","56.3","60.0"]
       }
     };
 

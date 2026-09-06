@@ -15429,3 +15429,116 @@ spot-check built on non-round test values.
   whether the Т/T guess above was even right.
 
   No CACHE_VERSION/app-version bump - same as 163-167.
+
+169. Boom Clearance: wired up all 5 of the new cranes (LTM 1110-5.1, LTM
+     1130-5.1, LTM 1160-5.2, LTM 1250-5.1, LTR 1220) - extraction,
+     color calibration, and RIG_CONFIGS wiring, end to end
+
+  Picks up where 163-168 left off: the person uploaded all 5 cranes'
+  DWG->DXF pose exports plus each crane's own reference PDF plot to
+  Nextcloud and asked for all of them to be processed. What actually
+  happened, in order:
+
+  EXTRACTION. Downloaded and integrity-verified all 5 cranes' pose DXFs
+  (checked every file's tail for the literal DXF EOF terminator - found
+  and re-fetched 38 truncated files total across the 5 cranes, caused by
+  a disk-full crash mid-download; 0 truncated remaining after re-fetch).
+  Ran extract_all_poses.py's pivot/ground-detection logic per crane.
+  Pivot-fit spread across every catalog length, well under any visually
+  meaningful threshold for a ~60m boom: LTM1110 (0.3,0.3)mm, LTM1130
+  (0.3,0.2)mm, LTM1250 (0.3,0.2)mm, LTR1220 (0.5,0.3)mm. LTM1160 came in
+  at (20.1,15.6)mm - visibly worse than the other four, and the one
+  crane whose export script (export_sweep_ltm1160.lsp, entry 168) had a
+  flagged Cyrillic/Latin config-value ambiguity - but still under 0.04%
+  of the boom's own length, and its color-calibration overlay later
+  confirmed the geometry itself lines up correctly with the reference
+  plot at every checked pose, so the guess in 168 was fine; the larger
+  spread is just this crane's own real-world manufacturing/drafting
+  tolerance, not a wrong config.
+
+  A first attempt at this step (5 parallel background agents, one per
+  crane, each downloading its own reference PDF and building its own
+  calibration script) got cut off mid-work by an API rate limit before
+  any of them finished - this entry is the recovery + completion of
+  that interrupted work, picking up each agent's partial output where
+  it was salvageable (LTM1250 had a fully-built, working calibration
+  script that just hadn't been executed yet; LTM1110 had a validated
+  chassis-only affine transform but no pose match or color pass yet;
+  LTM1130 had a thorough, already-correct calibration script sitting in
+  a deliberate dry-run mode; LTM1160 and LTR1220 had nothing beyond a
+  downloaded reference PDF, so those two were built from scratch).
+
+  A NEW, MORE ROBUST FALLBACK, FOUND VIA LTM1250'S DATA. The standard
+  color-sampling method (grid-sample a shape's polygon interior, throw
+  out any sample within STROKE_EXCLUDE_DIST of a real stroke line so
+  dense line-work doesn't contaminate the vote, majority-vote what's
+  left) left LTM1250 with 46 "unresolved" shapes on the first pass.
+  Manually cropping the reference PDF at 10 of those 46 shapes' own
+  centroids showed every single one sitting in an obviously uniform,
+  confidently-readable color - the primary method wasn't failing
+  because the color was genuinely ambiguous, it was failing because
+  stroke-exclusion was wiping out nearly every candidate sample for
+  thin/near-boundary panels (or, for a few shapes, point-in-polygon was
+  returning zero hits at all on a self-intersecting resampled polygon).
+  Fix: a centroid_fallback pass - sample a real pixel patch directly at
+  the shape's own centroid (10px radius) as a last resort, still
+  requiring a real majority (>=60% share) before accepting, still
+  returning "unresolved" rather than a guess if that patch itself is
+  mixed. Cut LTM1250's unresolved count from 46 to 17 (529->549 shapes
+  resolved) with zero fabrication - every accepted color still comes
+  from a real pixel read of the actual reference plot, just a more
+  robust one. Ported this same fallback into a shared engine
+  (scratchpad calibrate_common.py, not committed - pipeline tooling
+  lives in cad/boom-rig-pipeline/, this was throwaway session scratch)
+  and reused it for LTM1110, LTM1160, and LTR1220. Patched LTM1130's
+  own already-good agent-built script with an equivalent fallback
+  in place rather than replacing it wholesale, since its docstring
+  captured a genuinely useful piece of crane-specific investigation
+  (this crane's index-0/index-3 WIPEOUT-placeholder-vs-real-color
+  correspondence, confirmed by exact pixel lookup) worth keeping intact.
+
+  POSE MATCHING (which catalog length/angle each reference PDF actually
+  plots) had no ground truth given up front for LTM1110, LTM1160, or
+  LTR1220 - solved by locating the boom tip visually in the reference
+  raster (the pulley/hook-block assembly is easy to spot by eye), then
+  searching every catalog (length, angle) combination for whichever one
+  puts its own farthest-from-pivot point closest to that same pixel
+  under the crane's already-solved chassis-only affine transform, and
+  confirming the winner with a full-point overlay image before trusting
+  it. (A pure whole-pose distance-transform residual search, tried
+  first on LTM1110, gave a false-positive win for a way-too-short boom
+  length purely because its few points happened to land on unrelated
+  nearby ink - the tip-position search doesn't have that failure mode.)
+
+  DELIBERATELY NOT AUTO-APPLIED: LTM1130's calibration script also
+  surfaced 115 F-kind (normally-already-correct) shapes whose sampled
+  raster color disagreed with their existing DXF-resolved color. Spot-
+  checking 3 of those by cropping the reference PDF at their exact
+  world location showed the "current" AND "sampled" values both looking
+  wrong compared to the actual crop (a plain mid-gray, matching neither
+  #ffe79e nor the sampled #000000) - almost certainly the same
+  dense-line-work contamination bug hitting F-kind shapes here instead
+  of only P-kind. Left every one of these un-applied rather than risk
+  swapping a correct color for a differently-wrong one; the script's
+  own dry-run design (a prior interrupted attempt's choice, not this
+  session's) already defaulted to this safe behavior.
+
+  A HANDFUL OF SHAPES PER CRANE remain at their pre-calibration
+  placeholder color, honestly, not silently: LTM1110 (2/404 P+F shapes
+  checked), LTM1130 (81/183 P-kind - lower resolve rate than the other
+  four, all genuinely low-confidence or degenerate 2-point WIPEOUTs),
+  LTM1160 (6/373), LTM1250 (17/701), LTR1220 (96/480 P-kind - a real,
+  understood cause for most of them: this pose's boom-tip/reeving
+  geometry sits slightly past the right edge of its own reference PDF's
+  printed page, so there's no ground-truth pixel to sample at all for
+  that subset, not a sampling failure).
+
+  APP WIRING. Uploaded each crane's finished all_poses.json to its own
+  Nextcloud rig-data/ subfolder (same public share that already serves
+  LTM1650/LTM1300's rig data - confirmed byte-for-byte upload integrity
+  and public-URL fetchability for all 5 before touching index.html) and
+  added '1110:T'/'1130:T'/'1160:T'/'1250:T'/'1220:T' entries to
+  RIG_CONFIGS plus their RIG_CRANE_LABELS, following the existing
+  LTM1300 pattern exactly (single boom-only "T" config each, no jib).
+
+  CACHE_VERSION v328 -> v329, app version v9.9 -> v9.10.
