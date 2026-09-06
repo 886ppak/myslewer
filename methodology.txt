@@ -15325,3 +15325,41 @@ spot-check built on non-round test values.
   lengths x 9 angles) - not yet run, so not yet verified end-to-end.
 
   No CACHE_VERSION/app-version bump - same as 163/164.
+
+166. export_sweep_ltm1110.lsp built - a third crane in the same batch,
+     and a real data discrepancy flagged rather than silently resolved
+
+  Person sent a DUMPDYNPROPS dump with no crane name attached - the
+  boom length catalog (11.5-60.0 m) looked like a close match to this
+  crane's own already-shipped HOOK_BOOM_LENGTHS, but not an exact one
+  (23 values in the dump vs 26 already in index.html, missing 35.1/
+  43.2/51.9 m), so asked directly rather than assume - confirmed LTM
+  1110-5.1.
+
+  Built export_sweep_ltm1110.lsp the same way as 164/165's scripts, this
+  crane's own real property names:
+  - "Состав стрелы" (config selector) - boom-only value is bare "T"
+    here, matching the LTM 1250's convention, not the LTR 1220's full-
+    string "Стрела T" - a third distinct spelling convention across
+    three cranes checked so far, none guessable from another's.
+  - "видимость" (lowercase - "visibility") - a second property mirroring
+    "Состав стрелы"'s allowed-value list, same "set both defensively"
+    treatment as the LTR 1220's "Состав".
+  - "Стрела T" (boom length) - bare "11.5 м" format (number + м, no
+    prefix), matching the 1250's style, not the 1220's "Стрела 11.5 м"
+    style.
+  - "Наклон стрелы T" (boom angle) - continuous/radians, same name text
+    as the 1250's own angle property, coincidentally.
+
+  Deliberately did NOT try to reconcile the 23-vs-26-length discrepancy
+  with the app's existing HOOK_BOOM_LENGTHS one way or the other - noted
+  it plainly in the script's own header instead. The AutoCAD block only
+  supports what it supports regardless of what the app already lists;
+  if the 3 missing lengths matter, that's a separate question for the
+  person to resolve (a different/older block revision than whatever the
+  original OEM load-chart hook-length table came from, most likely).
+
+  TESTSWEEP-LTM1110 (4 poses) / EXPORTSWEEP-LTM1110 (207 poses, 23
+  lengths x 9 angles) - not yet run.
+
+  No CACHE_VERSION/app-version bump - same as 163-165.
