@@ -15646,3 +15646,108 @@ spot-check built on non-round test values.
 
   No CACHE_VERSION/app-version bump - Nextcloud data fix only, nothing
   in index.html or sw.js changed.
+
+172. Boom Clearance colors: real fix found for 4 of the 5 new cranes
+     (arc-length resampling was wrecking detailed boom panels) - LTR
+     1220's own boom is still broken and needs more than this pipeline
+     can currently give it
+
+  The person reported LTR 1220's boom rendering with zero color, and
+  that "all the rest look quite bad" too - a much harder complaint than
+  170's wrong-crane bug, since this time the geometry was genuinely
+  right and only the FILL colors were off. Checked all 5 systematically
+  (many sample points across each boom's silhouette against the
+  reference plot, not just eyeballing one) before touching anything:
+  LTM1250 and LTM1130 came back clean, LTM1160 and LTM1110 had real
+  gaps, LTR1220 was worst.
+
+  ROOT CAUSE 1 (real, fixed): extract_all_poses.py's MAX_POINTS_PER_PATH
+  (20) forces ANY path whose natural point count exceeds it into
+  arc-length resampling, even when all 9 angle frames already agree on
+  count. Fine for simple outlines; wrong for a boom-body panel whose
+  real edge carries a lot of detail baked into the same closed path
+  (rivet lines, bolt tabs, notches - LTR1220's own main boom section
+  needs 216 points to trace its true outline, confirmed by comparing
+  extract_pose_raw's natural-point output directly against the packed
+  20-point version). Arc-length resampling picks points evenly spaced
+  by DISTANCE along the perimeter, not by shape - collapsing 216 points
+  to 20 scatters them almost arbitrarily and can produce a polygon
+  whose enclosed area barely resembles the original panel, even though
+  it stays technically non-self-intersecting (checked this directly -
+  it wasn't self-intersection, that theory was disproven along the
+  way). Symptom: that panel's real DXF color sampled correctly against
+  the RAW 216-point geometry, but every calibration pass sampling the
+  STORED (resampled) 20-point version confidently read background/
+  white instead, because the simplified polygon's true footprint had
+  drifted off the real panel. Checked natural point counts directly
+  across all 5 cranes (not the packed output) and found up to ~800;
+  raised the cap to 1000 in cad/boom-rig-pipeline/extract_all_poses.py
+  (committed) and re-ran full extraction for all 5. Bonus, unplanned
+  confirmation this was real and not a coincidence: LTM1160's pivot-fit
+  spread (flagged as suspiciously large back in 169, (20.1,15.6)mm
+  vs every other crane's sub-millimeter fits) dropped to (0.2,0.1)mm
+  on the same re-extraction - the pivot-fit's own "farthest-moving
+  point" was itself a victim of this same resampling distortion, not
+  the Cyrillic/Latin config-value guess from export_sweep_ltm1160.lsp
+  (168) after all.
+
+  ROOT CAUSE 2 (real, fixed): calibrate_common.py's F-kind handling
+  trusted a "corrected" color (existing DXF color disagrees with a
+  freshly-sampled one) even when that fresh sample came from a
+  fallback pass (centroid-patch or dense-interior), not a clean
+  primary read. Found by tracing LTR1220's own worst-offending shape
+  end to end: its RAW extracted color was genuinely correct (#ffda6b,
+  confirmed by resampling that exact raw 216-point polygon against the
+  reference plot before any calibration touched it), but a fallback
+  sample landed somewhere unrepresentative and got trusted enough to
+  overwrite the correct color with white. F-kind's existing color is
+  normal DXF resolution and is usually already right (unlike P-kind/
+  WIPEOUT, whose existing color is a KNOWN-wrong placeholder) - a
+  fallback result says something about how hard THIS shape was to
+  re-sample, not about whether its existing color is wrong. Fixed:
+  F-kind now only accepts a fallback-sourced disagreement as
+  "unresolved" (leaves the existing, presumably-correct color alone)
+  rather than as a correction; only a confident PRIMARY sample can
+  overwrite an F-kind color now.
+
+  Both fixes together took LTM1250, LTM1130, and LTM1160 to visually
+  clean (full boom-length verification render matches the reference,
+  spot-checked, not just palette stats) and LTM1110 to nearly clean
+  (one narrow band mid-boom still resolves to the wrong color - a
+  smaller, same-family issue not yet root-caused, low priority given
+  the rest of that crane's boom is correct). Re-uploaded all 4 to
+  Nextcloud (same filenames as 170), verified byte-for-byte and public
+  fetchability.
+
+  LTR1220 remains genuinely broken - its main boom-body panel(s) still
+  render blank even with both fixes applied and the correct raw color
+  confirmed present at extraction. Traced this as far as this pipeline
+  currently can: picked a world-space point directly confirmed amber
+  in the reference plot's own pixels, and searched EXHAUSTIVELY for
+  anything that fills it -
+    - ezdxf's own Frontend rendering (extract_pose_raw, the same
+      HATCH-to-fill conversion the whole pipeline depends on): nothing
+      covers it.
+    - Every HATCH entity's own raw boundary, recursively flattened
+      through every nested INSERT (354 hatches total) - checked BOTH
+      polyline-style boundaries (45) and edge-style boundaries (401,
+      flattened via ezdxf's own curve-flattening) - nothing covers it.
+    - Wide/constant-width LWPOLYLINE (a common non-HATCH way to fake a
+      filled band) - none found near this point.
+    - SOLID/TRACE/3DFACE entities - none exist in this file at all.
+    - Unusually dense line-work standing in for a hatch pattern (would
+      show as an S-kind stroke cluster) - checked, stroke density here
+      is completely ordinary, no such cluster.
+  Whatever actually produces this panel's amber fill in AutoCAD's own
+  PDF plot isn't reaching ezdxf's object model in any form this
+  pipeline knows how to read. This is a real, deeper limitation - not
+  a calibration-tunable problem - and needs either real AutoCAD access
+  to inspect the entity directly, a different DXF-reading library, or
+  someone more familiar with ezdxf's HATCH internals than this
+  session's own trial-and-error got. Left as-is (not re-uploaded -
+  no worse than what was already live, and re-uploading a "same
+  brokenness" file for the one crane that still needs real work would
+  have muddied this entry's own record of what's actually fixed).
+
+  No CACHE_VERSION/app-version bump - Nextcloud data + pipeline-script
+  fix only, index.html/sw.js untouched this round.
