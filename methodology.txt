@@ -15363,3 +15363,35 @@ spot-check built on non-round test values.
   lengths x 9 angles) - not yet run.
 
   No CACHE_VERSION/app-version bump - same as 163-165.
+
+167. export_sweep_ltm1130.lsp built - a fourth crane, a fourth distinct
+     property-naming convention
+
+  Another dump with no crane name attached, and this one's property
+  names didn't match any of the four already done (no "Состав стрелы"/
+  "видимость" anywhere) - asked directly rather than guess from the
+  boom length catalog alone this time, since nothing about it screamed
+  a specific crane the way the 1110's near-match did. Confirmed LTM
+  1130-5.1.
+
+  Real property names for this crane:
+  - "Тип стрелы" ("boom TYPE" - not "Состав стрелы"/"Состав" like every
+    other crane checked so far) - boom-only value "T". Other allowed
+    values (T+R, TK 2.9 м, TK, TVK) are jib/attachment configs.
+  - "Visibility1" - mirrors the same allowed-value list, same "set both
+    defensively" treatment as every other crane's twin property.
+  - "Основная стрела" ("MAIN boom" - matches the LTM 1300's own property
+    name exactly, coincidentally, not "Стрела T" like 1250/1220/1110) -
+    18 real catalog lengths, 12.7-60.0 m, bare "12.7 м" format.
+  - "Наклон стрелы" (no "T" suffix, unlike every other crane's "Наклон
+    [основной/стрелы] T") - continuous/radians, no discrete list.
+
+  Four cranes into this batch, four different spellings for what's
+  functionally the same config-selector/length/angle triple - confirms
+  the "never assume, always dump" rule earning its keep, not just
+  theoretical caution.
+
+  TESTSWEEP-LTM1130 (4 poses) / EXPORTSWEEP-LTM1130 (162 poses, 18
+  lengths x 9 angles) - not yet run.
+
+  No CACHE_VERSION/app-version bump - same as 163-166.
