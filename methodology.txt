@@ -15592,3 +15592,57 @@ spot-check built on non-round test values.
   a stable connection.
 
   CACHE_VERSION v329 -> v330, app version v9.10 -> v9.11.
+
+171. Boom Clearance: the REAL bug behind "every crane shows the 1650
+     model" - all 5 new all_poses.json files were missing their outer
+     {"boom": ...} wrapper
+
+  170's filename-collision theory didn't hold up - the person confirmed
+  they were genuinely on v9.11 and every crane still rendered as the
+  1650. That ruled out staleness/caching for good and meant a real
+  client-side bug, not a network artifact.
+
+  Root cause: setRigAxis() reads `const section = data[axis]` (index.html
+  ~line 4522), i.e. it expects the fetched JSON to be shaped
+  `{"boom": {angles, palette, offx, offy, scale, pivot, lengths, ...}}`
+  - confirmed by pulling LTM1650's own t3_poses.json and LTM1300's own
+  t_poses.json fresh from Nextcloud just now: both have exactly one
+  top-level key, "boom", wrapping that exact flat structure.
+  extract_all_poses.py (used to build all 5 of this batch's files, see
+  169) writes that flat structure directly at the TOP level, no "boom"
+  wrapper - a real, structural mismatch between the extraction script's
+  own output format and what the app's renderer actually expects, that
+  169 shipped without ever exercising in a browser.
+
+  Effect: `data.boom` was undefined for all 5 new cranes, so
+  `section.angles` a few lines later threw inside onRigDataReady() ->
+  setRigAxis(). That throw happens inside a fetch().then() chain with a
+  .catch() at the end, so nothing visibly crashed - the .catch() just
+  set an error message into the #rig-loading element, which had
+  ALREADY been hidden (display:none) two lines earlier in the same
+  function, right before #rig-stage-wrap was made visible again. Net
+  effect: the boom-length dropdown still populated correctly (it reads
+  cfg.boomLengths from RIG_CONFIGS directly, never touches the broken
+  `section`), but the actual SVG crane render was whatever the LAST
+  successfully-loaded config had drawn into that same DOM node - the
+  1650 default the tab loads on first open - now revealed again with
+  no visible error and a length dropdown that looked crane-correct.
+  Exactly matches every symptom reported: right crane name, right boom
+  lengths, wrong drawing, no visible error.
+
+  Fix: wrapped all 5 files' existing (correct, already-calibrated)
+  content as {"boom": <existing content>} and overwrote them in place
+  on Nextcloud (same filenames from 170, sizes/byte-counts verified
+  against the local wrapped copies before AND after upload). No
+  re-extraction or re-calibration needed - this was purely a wire-
+  format mismatch on the way out, not a data or color problem.
+  RIG_CONFIGS/index.html itself needed no change this time.
+
+  Lesson for next time: verify a NEW config's file structure against an
+  EXISTING working config's own file before considering the pipeline
+  finished, not just "does it parse as JSON and does the geometry look
+  right in a throwaway Python renderer" - 169's verification never
+  actually loaded a file through the real app's own JS.
+
+  No CACHE_VERSION/app-version bump - Nextcloud data fix only, nothing
+  in index.html or sw.js changed.
