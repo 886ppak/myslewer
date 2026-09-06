@@ -15542,3 +15542,53 @@ spot-check built on non-round test values.
   LTM1300 pattern exactly (single boom-only "T" config each, no jib).
 
   CACHE_VERSION v328 -> v329, app version v9.9 -> v9.10.
+
+170. Boom Clearance: gave each new crane's rig-data file a unique
+     filename, after the person reported LTR 1220 rendering as a
+     different (wheeled) crane on first try
+
+  Immediately after 169 shipped, the person tried LTR 1220 on their
+  phone and got a fully-rendered but WRONG crane back (a wheeled
+  AT-crane silhouette, not LTR1220's own crawler/tracked one) - no
+  error, just the wrong data. A near-simultaneous screenshot of LTM
+  1110 showed a genuine "Failed to fetch" for the same tab, pointing at
+  something unstable on the network side of this test, not a server or
+  app-shell problem.
+
+  Re-verified everything server-side and found no fault there: the
+  live index.html's '1220:T' entry pointed at the right URL, a fresh
+  curl of that exact public URL returned the correct crawler geometry
+  (bbox/pivot/palette all matching what was calibrated), and the
+  response headers confirmed CORS/etag were fine, no reverse-proxy
+  cache hit (no age/x-cache header) - and this app's own service
+  worker explicitly sends every cross-origin (Nextcloud) request
+  straight to the network, never through its own CONTENT_CACHE, so it
+  isn't the cause either.
+
+  What WAS a real, if unconfirmed-as-the-actual-cause, latent bug: this
+  batch's 5 new cranes all reused the exact filename "t_poses.json" -
+  the same literal filename LTM 1300's own "T" config was already
+  using, in a different folder. Six different cranes' data sitting
+  behind an identically-named file, differing only by folder path, is
+  exactly the shape of bug that a filename-keyed cache (a mobile
+  carrier's data-saving/compression proxy, some corporate content
+  filters) can get wrong even though this app's own code and Nextcloud
+  never gave any of them cause for confusion - and it's a real, if
+  narrow, category of failure that didn't exist before this batch (LTM
+  1300 was the only "t_poses.json" in the whole app until today). Fixed
+  regardless of whether it's actually what the person hit: server-side
+  WebDAV MOVE (no re-upload needed) renamed each crane's file to
+  something globally unique - ltm1110_t_poses.json, ltm1130_t_poses.json,
+  ltm1160_t_poses.json, ltm1250_t_poses.json, ltr1220_t_poses.json -
+  and RIG_CONFIGS' file: fields updated to match. Re-verified all 5 new
+  URLs are still publicly fetchable (200) through the same share after
+  the rename.
+
+  The LTM1110 "Failed to fetch" itself wasn't chased further - nothing
+  server-side reproduces it (the file fetches cleanly from here), and a
+  22MB fetch failing outright on a mobile connection with a live phone
+  call in progress (per the screenshot's own status bar) needs no
+  application-level explanation. Worth revisiting only if it recurs on
+  a stable connection.
+
+  CACHE_VERSION v329 -> v330, app version v9.10 -> v9.11.
