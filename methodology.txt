@@ -15751,3 +15751,92 @@ spot-check built on non-round test values.
 
   No CACHE_VERSION/app-version bump - Nextcloud data + pipeline-script
   fix only, index.html/sw.js untouched this round.
+
+173. Boom Clearance colors: LTR 1220 fixed for real - 172's "exhaustive"
+     search missed the actual bug because the file it was testing
+     against was stale
+
+  Person said "yes dig" rather than accept 172's "genuinely broken,
+  needs real AutoCAD access" conclusion. Correct call - that conclusion
+  was wrong. Re-ran extract_all_poses.py's MAX_POINTS_PER_PATH=1000 fix
+  for LTR1220 specifically (172 raised the cap but never actually
+  re-ran LTR1220's own extraction afterward - it stayed on the stale
+  20-point all_poses_wrapped.json the whole time, which is why every
+  search in 172 came up empty: the 216-point boom panel that fix was
+  meant to rescue didn't exist yet in the file being searched).
+
+  Freshly re-extracted, then found something worse: ezdxf's Frontend/
+  Recorder color resolution is NOT deterministic run-to-run for this
+  file - two back-to-back `python3 extract.py` invocations, same code,
+  same DXFs, gave the same boom panel (idx 312, L=17.6) two different
+  colors (amber one run, white the next). Root cause not chased down
+  further (likely PYTHONHASHSEED-dependent iteration order somewhere
+  in ezdxf's internal property/hash bookkeeping) - noting it here as a
+  real, previously-unknown pipeline hazard: this pipeline should
+  re-verify a fresh extraction's key colors before trusting it, not
+  just check the file exists. Re-ran until a run's own live re-check
+  (recomputing extract_pose_raw for idx 312 in the same process)
+  confirmed amber before moving on.
+
+  With a genuinely fresh, correct extraction in hand, ran calibration
+  (172's F-kind fallback-trust fix in place) and the SAME symptom came
+  back anyway - boom panel recolored to white again, this time from a
+  clean, non-fallback, 79%-confidence sample, so the 172 guard
+  correctly didn't block it (nothing wrong with that fix; this was a
+  different bug). Traced it by rendering the panel's own polygon
+  directly onto the reference photo: it landed in blank white space
+  well clear of the visible boom, confirming the sample was reading
+  real (correct) white, not misfiring. Same for several other
+  "phantom" shapes checked the same way (a duplicate outline of the
+  "LTR 1220" boom decal, an annotation ellipse) - all genuinely
+  off in blank space, not bugs.
+
+  ROOT CAUSE (real, fixed): the crane's calibration transform
+  (chassis_transform.json) was fit using ONLY the chassis's own fixed-
+  position shapes (chassis_calib.py's documented method), which pins
+  down the transform beautifully near the chassis but leaves scale
+  under-constrained over the ~15-60m the boom actually spans - a small
+  scale error invisible at the chassis compounds hugely by the boom
+  tip. Measured directly: many boom-tip WIPEOUT masks' sample points
+  landed 300-2400px past the edge of the 9934x14042 reference photo
+  (calibration correctly refused to guess there - "out_of_bounds" -
+  which is what was silently rotting half the boom's WIPEOUT-derived
+  panels), and the one legitimate large boom-body HATCH panel got
+  sampled at a position measurably drifted off the real boom band.
+  Fixed by refitting sx/sy/ox/oy against ALL stroke vertices of the
+  FULL drawing at the single reference pose (chassis + boom + jib +
+  hook, 25692 points) instead of chassis-only landmarks, same distance-
+  transform-to-reference-raster method as chassis_calib.py, just fed a
+  much bigger, better-conditioned point set. Fit cost (mean distance to
+  nearest ink pixel, downsampled) dropped from 5.92px to 1.05px; sx
+  moved from 0.455357 to 0.410614 (~10% - confirms it was a genuine
+  scale error, not noise). Re-ran calibration with the new transform:
+  P-kind unresolved dropped from 94 to 0, F-kind unresolved from a
+  double-digit list to 2 (both are real, correctly-flagged ambiguous
+  track-shoe shapes genuinely straddling the amber/grey boundary in
+  the photo - left alone, exactly as designed).
+
+  Verified visually at three very different poses (17.6m/30°, matching
+  the calibration photo; 60.0m/70°, full extension; 13.3m/0°, fully
+  retracted) - boom, cab, and carrier all correctly amber across the
+  whole range, matching the reference photo including the "LTR 1220"
+  decal text rendering in the right place. One small residual: the
+  hook-block/pulley silhouette right at the boom tip still shows a bit
+  of unfilled white outline in spots - lower priority than the main
+  boom body that was the actual complaint, not chased further this
+  round.
+
+  Re-wrapped ({"boom": {...}}, per 171) and re-uploaded to Nextcloud
+  (PWA/Myslewer/Cad_blocks/LTR1220/rig-data/ltr1220_t_poses.json,
+  27.61MB). The public read-share token used for every other crane's
+  upload this session (nrGXiwRDiYSKnq7) turned out to be read-only -
+  PUT returned 403 even for a brand-new filename, not just an
+  overwrite. Asked the person rather than guess around it; they
+  provided a fresh Nextcloud app password (account 15buzza) with real
+  write access via the authenticated WebDAV root
+  (remote.php/dav/files/15buzza/PWA/Myslewer/Cad_blocks/...), confirmed
+  it maps to the exact same file the public share serves (matching
+  etag before upload), uploaded (204), and confirmed the public share
+  now serves the new 27.61MB file.
+
+  CACHE_VERSION v330->v331, app version v9.11->v9.12.
