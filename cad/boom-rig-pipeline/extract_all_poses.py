@@ -5,7 +5,31 @@ from ezdxf.addons.drawing import RenderContext, Frontend
 
 LENGTHS = ["16.6","22.4","28.2","33.9","39.7","45.3","51.0","52.0","53.0","54.0"]
 ANGLES = [0, 10, 20, 30, 40, 50, 60, 70, 80]
-MAX_POINTS_PER_PATH = 20
+
+# A path whose natural point count EXCEEDS this always gets arc-length
+# resampled down to it - regardless of whether the 9 angle frames actually
+# disagree on count (see the resample branch below: `max_natural <=
+# MAX_POINTS_PER_PATH` is required even when `len(counts) == 1`). This was
+# 20 for a long time and worked fine for simple panel outlines, but on a
+# batch of 5 new cranes it silently wrecked any boom-body panel whose real
+# outline carries a lot of edge detail baked into the same closed path
+# (rivet lines, bolt tabs, small notches - LTR1220's main boom section
+# alone naturally needs 216 points to trace its true edge). Naive
+# arc-length resampling picks evenly-spaced-by-DISTANCE points along the
+# perimeter, not shape-preserving ones - collapsing 216 detailed points
+# down to 20 scatters them almost arbitrarily around the boundary and can
+# produce a polygon whose enclosed area barely resembles the original
+# panel, even though it stays technically non-self-intersecting. The
+# practical symptom: that panel's real (correct) DXF color sampled fine at
+# the RAW 216-point geometry, but every color-calibration pass sampling the
+# stored (resampled) 20-point version confidently read background/white
+# instead, because the simplified polygon's true footprint had drifted off
+# the real panel entirely. Checked all 5 of that batch's cranes directly
+# (extract_pose_raw + natural_points, not the packed output) and found
+# natural counts up to ~800 - 700-1000 gives real headroom; the resulting
+# per-path point cap only actually applies to paths that need it, so total
+# file-size impact is a few hundred KB, not a multiplier on the whole file.
+MAX_POINTS_PER_PATH = 1000
 
 
 def get_records(fname):
