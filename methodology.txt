@@ -15840,3 +15840,69 @@ spot-check built on non-round test values.
   now serves the new 27.61MB file.
 
   CACHE_VERSION v330->v331, app version v9.11->v9.12.
+
+174. Offline Content: Boom Clearance rig models never actually worked
+     offline - added a narrow cross-origin allowlist to fix it
+
+  Person asked (after mishearing/autocorrect turned "cache chest icon"
+  into something unrecognizable at first, clarified via question) how
+  hard it'd be to add Boom Clearance to the "Cache All Offline Content"
+  feature (the Offline Content panel, opened via the cache-btn icon in
+  the header). Checked first rather than assuming it'd be a simple
+  additive change: sw.js's fetch handler has an explicit rule that
+  cross-origin requests always bypass CONTENT_CACHE entirely, added
+  for Lift Plan Library photos (methodology.txt, see sw.js's own
+  comment on that rule). Boom Clearance rig-data (RIG_CONFIGS) is
+  ALSO cross-origin - hosted on Nextcloud, not this repo, specifically
+  to avoid a 12-40MB-per-crane git commit for every new crane added
+  (RIG_CONFIGS' own comment) - so that same blanket rule was silently
+  catching it too. Confirmed this matters: Boom Clearance has never
+  actually worked offline, not even right after running "Cache All" -
+  every rig-data fetch went straight to the network with nothing ever
+  persisted, the exact opposite of what the panel's own copy claimed.
+
+  Presented two options rather than assuming: (1) mirror the 8 rig-data
+  JSONs into this repo, matching how load charts/reeving SVGs already
+  work, or (2) narrowly allowlist just the Nextcloud rig-data URL shape
+  in the existing cross-origin bypass rule. Person picked (2) - avoids
+  a ~190MB repo-size hit (checked real sizes: 11.7-41.4MB per file
+  across the 8 configs) and doesn't require re-plumbing how new cranes
+  get wired up.
+
+  Implementation: sw.js's fetch handler now computes `isRigData` -
+  request hostname is exactly local.idull.au AND the path ends in
+  `/rig-data/<name>.json` - and only bypasses CONTENT_CACHE for
+  cross-origin requests that DON'T match it. Deliberately shaped
+  tight enough to not accidentally net Lift Plan Library's Nextcloud
+  traffic: those are server-issued share-download links
+  (index.php/s/<token>/download, from functions/index.js's
+  createPublicShare + backupLiftLibraryPhotosToNextcloud/
+  migrateLiftLibraryVideoToNextcloud), a completely different URL
+  shape with no /rig-data/ segment - verified by reading how those
+  URLs actually get built, not just assumed disjoint. index.html's
+  allOfflineContentUrls() now includes all 9 RIG_CONFIGS' resolved
+  URLs (nextcloudBase + file) so "Cache All" actually requests them
+  and checkOfflineContentStatus() correctly counts them - no separate
+  viewer-bundle entries needed alongside them the way cwt3d.js/
+  carrier3d.js need for GLB models, since Boom Clearance renders its
+  own poses with plain canvas drawing, not three.js. Updated the
+  panel's own description text (4 duplicate spots) to mention Boom
+  Clearance rig models alongside reeving diagrams and 3D counterweight
+  models, so it stops promising something it doesn't do.
+
+  Verification: this sandbox's browser can't reach local.idull.au at
+  all (network policy) and Playwright's route-interception doesn't
+  reach into a service worker's own internal fetch() calls, so a true
+  live round-trip against the real host isn't testable here. Verified
+  what could be: the new isRigData regex against the real rig-data
+  URLs (all 8 match) and representative non-matches (a Lift Plan
+  share-download URL, an unrelated cross-origin URL - neither match);
+  a real page load's allOfflineContentUrls() returning all 218 URLs
+  including exactly the 9 rig-data ones; both sw.js and index.html's
+  script block passing a syntax check. The cache-first-then-persist
+  code the new branch falls through into is unchanged, already-proven
+  logic (same path reeving diagrams and 3D models have used for a long
+  time) - the only new code is the allowlist gate itself, which is
+  what got directly tested.
+
+  CACHE_VERSION v331->v332, app version v9.12->v9.13.

@@ -4,7 +4,7 @@
 // reeving diagrams (see CONTENT_CACHE below) — those persist across updates
 // so a crew doesn't lose offline access to plans they've already viewed just
 // because an app update shipped.
-const CACHE_VERSION = 'myslewer-v331';
+const CACHE_VERSION = 'myslewer-v332';
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 
 // Fetched-on-demand content (reeving diagrams, etc). Fixed name, never
@@ -207,31 +207,52 @@ self.addEventListener('fetch', (event) => {
       if (shellHit) return shellHit;
 
       // Cross-origin requests always go straight to the network, never
-      // through CONTENT_CACHE. In practice this is entirely Lift Plan
-      // Library photos (Firebase Storage, and Nextcloud once a photo's
-      // been backed up there) - nothing else in this app fetches
-      // cross-origin at runtime. This wasn't fixing a live bug found by
-      // testing real devices - a plain <img src> without a crossorigin
-      // attribute (which these have never had) makes a no-cors request,
-      // and the SW's own `if (response && response.ok)` check below
-      // already treats an opaque no-cors response as not-ok, so these
-      // photos were never actually landing in CONTENT_CACHE to begin
-      // with. Made it an explicit rule instead of an accidental side
-      // effect of that response.ok quirk, for two real reasons: it's
-      // what this file's own persistentLocalCache comment already
-      // SAID the intent was ("Storage's ... photos are meant to always
-      // come from the network ... same as any other image") without
-      // actually being guaranteed by anything nearby it, and relying on
-      // the opaque-response accident is fragile - anyone who ever added
-      // crossorigin="anonymous" to one of these <img> tags for an
-      // unrelated reason (canvas access, better error detail) would
-      // silently flip the response to non-opaque and start caching
+      // through CONTENT_CACHE, WITH ONE NAMED EXCEPTION below (boom-rig
+      // JSON). In practice the rest of this app's cross-origin traffic is
+      // entirely Lift Plan Library photos (Firebase Storage, and Nextcloud
+      // once a photo's been backed up there) - nothing else fetches
+      // cross-origin at runtime besides those and rig-data. This wasn't
+      // fixing a live bug found by testing real devices - a plain <img
+      // src> without a crossorigin attribute (which these have never had)
+      // makes a no-cors request, and the SW's own `if (response &&
+      // response.ok)` check below already treats an opaque no-cors
+      // response as not-ok, so these photos were never actually landing
+      // in CONTENT_CACHE to begin with. Made it an explicit rule instead
+      // of an accidental side effect of that response.ok quirk, for two
+      // real reasons: it's what this file's own persistentLocalCache
+      // comment already SAID the intent was ("Storage's ... photos are
+      // meant to always come from the network ... same as any other
+      // image") without actually being guaranteed by anything nearby it,
+      // and relying on the opaque-response accident is fragile - anyone
+      // who ever added crossorigin="anonymous" to one of these <img> tags
+      // for an unrelated reason (canvas access, better error detail)
+      // would silently flip the response to non-opaque and start caching
       // these permanently again, with nothing here to catch it. The
       // browser's own ordinary HTTP cache still sits underneath this
       // fetch() regardless (governed by whatever Cache-Control the
       // photo's own host sends, same as any other image on the web) -
       // this only concerns this app's OWN permanent, self-managed layer.
-      if (new URL(event.request.url).origin !== self.location.origin) {
+      //
+      // EXCEPTION: Boom Clearance rig-data (RIG_CONFIGS in index.html) is
+      // deliberately hosted on Nextcloud rather than committed to this
+      // repo - each file is 12-40MB of per-crane CAD-derived pose data,
+      // and the whole point of nextcloudBase is that adding a new crane
+      // doesn't mean a 20-40MB commit (see index.html's own comment near
+      // RIG_CONFIGS). But that means the blanket cross-origin bypass
+      // above was also silently blocking rig-data from ever reaching
+      // CONTENT_CACHE - Boom Clearance has never actually worked offline,
+      // even after "Cache All Offline Content", because this rule sent
+      // every rig-data fetch straight to the network with nothing
+      // persisted. Narrow, path-shaped allowlist (Nextcloud's own host,
+      // a literal /rig-data/ segment, .json extension) rather than a
+      // blanket "cache all cross-origin" - Lift Plan Library's Nextcloud
+      // URLs are share-download links (index.php/s/<token>/download,
+      // issued server-side by functions/index.js) with a completely
+      // different shape and are unaffected by this.
+      const reqUrl = new URL(event.request.url);
+      const isRigData = reqUrl.hostname === 'local.idull.au' &&
+        /\/rig-data\/[^/]+\.json$/.test(reqUrl.pathname);
+      if (reqUrl.origin !== self.location.origin && !isRigData) {
         return fetch(event.request).catch(() => undefined);
       }
 
