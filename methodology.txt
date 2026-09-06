@@ -15906,3 +15906,52 @@ spot-check built on non-round test values.
   what got directly tested.
 
   CACHE_VERSION v331->v332, app version v9.12->v9.13.
+
+175. Offline Content: made Boom Clearance rig models opt-in, not bundled
+     into "Cache All" by default
+
+  Person's immediate follow-up to 174: "no I want it on a toggle under
+  the cache chest so users can opt in or not as they are quite big" -
+  174 shipped rig-data as an unconditional addition to "Cache All",
+  which in hindsight was the wrong default given the real number
+  (~190MB total, checked in 174) is far bigger than everything else
+  this panel caches combined.
+
+  Added a per-device checkbox ("Include Boom Clearance rig models
+  (~190MB total, all cranes)"), defaulting OFF, to all 5 Offline
+  Availability card instances (the header's cache-panel plus the 4
+  tab-embedded cards on Reeving Plans/CWT Combos/Driving w/ Equipment/
+  Load Chart Finder - Load Chart Finder's card has its own custom
+  wording, so it got its own sentence appended rather than reusing the
+  other four's shared string). Persisted via localStorage
+  (myslewer_include_boom_rig_offline) rather than Firestore - this is
+  a "how much do you want to download onto THIS device" preference,
+  not account state, so it shouldn't follow a person to a different
+  phone/laptop the way profile settings do.
+
+  Gated at the single point both consumers already share -
+  allOfflineContentUrls() only includes the 9 rig-data URLs when
+  getIncludeBoomRigOffline() is true - so cacheAllOfflineContent() (what
+  actually downloads) and checkOfflineContentStatus() (what counts as
+  "fully downloaded") automatically stay in agreement without either
+  needing to know the toggle exists. Toggling calls
+  checkOfflineContentStatus() immediately (updates the missing-count
+  live) and syncs all 5 checkboxes to match whichever one was actually
+  clicked; checkOfflineContentStatus() itself also re-syncs every
+  checkbox on every call (first load, tab switches, panel re-open) so a
+  card the person hasn't visited yet still shows the right state the
+  first time they do. The toggle only changes what this page's own JS
+  requests - sw.js's cross-origin allowlist from 174 is unaffected and
+  still exists purely to let the fetch, once made, actually get
+  persisted.
+
+  Verified end to end with Playwright against a local server (same
+  network-sandbox limits as 174 applied, so this used the same real-
+  page/real-JS approach rather than a live Nextcloud round trip):
+  default state is unchecked with rig-data excluded (210 of the
+  expected 218 URLs); toggling one checkbox syncs all 5 to checked and
+  allOfflineContentUrls() immediately includes all 8 rig-data URLs;
+  the setting survives a full page reload. All three assertions passed
+  on the first real run.
+
+  CACHE_VERSION v332->v333, app version v9.13->v9.14.
