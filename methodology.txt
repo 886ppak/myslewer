@@ -16136,3 +16136,126 @@ spot-check built on non-round test values.
   reset to 1 - the old file was deleted outright in 162, nothing to bump
   from). BOOMRIG3D_VERSION 1. CACHE_VERSION v334->v335, app version
   v9.15->v9.16.
+
+178. LTM1110-3D: 177 was wrong - real device screenshot proved it, real
+     root cause found and fixed this time
+
+  177 claimed the live 3D boom preview was shipped and working, verified
+  by "actually rendering it" - but that verification only ever spot-
+  checked a wide, zoomed-out framing of the SHIPPED file
+  (ltm1110_boomrig.glb, which went through extra weld/dedup/morph-target
+  packaging in build_production.mjs) and never re-ran the same rigor
+  applied to build_hybrid4.mjs's own direct output. Person sent a real-
+  device screenshot at v9.16 (LTM1110-3D, 38.8m) showing exactly the
+  162-era failure mode again: a clean-looking boom tube with a scattered,
+  disconnected mass of fragments at the base. Second time this exact
+  feature has been told "it works" and been wrong - not acceptable,
+  fixed properly this time with the actual shipped file re-verified at
+  the reported length, not just a fresh build's own output.
+
+  Built a proper full-model verification harness this session
+  (full_zoom.html/shoot_full.py) that computes the TRUE current bbox by
+  walking every mesh's own position + weight*morphDelta directly, instead
+  of THREE.Box3.setFromObject - that call inflates to the full possible
+  morph-target displacement range regardless of the weight actually set
+  (a real three.js quirk, noted in 177 but wrongly judged "camera-framing
+  only, not a geometry defect" - it also made every render using the
+  built-in fit logic zoom out to a near-empty frame, masking exactly the
+  kind of full-model check that would have caught this before shipping).
+
+  Root cause, found by direct inspection (diag_boom.mjs, find_dup2/3.mjs)
+  rather than another guessed heuristic: the Onshape export defect isn't
+  "duplicate junk vs one correct copy" as 158-177 all assumed - it's
+  "TWO occurrence pools, and which one is correct depends on which half
+  of the crane you're asking about." "98054343_000 <1>" (node 567, 352
+  descendants) is a whole extra copy of most of the assembly nested one
+  level inside the real assembly root. For every one of the ~240
+  carrier/chassis parts that have a duplicate both inside and outside
+  this subtree, the OUTSIDE occurrence is the correct one (confirmed by
+  a fully clean, connected carrier render once outside was preferred);
+  for every one of the ~52 boom-section parts (all of SECTIONS, "base"
+  included) the INSIDE occurrence is correct instead - their outside
+  occurrence is a collapsed placeholder pinned near y=0, while the inside
+  one shows the real climbing heights (20m/29m/37m/45m/53m/61m) matching
+  the telescoping sections. The 11 parts with no outside occurrence at
+  all (7 HEAD_PARTS + id32/26/23/29) were already correctly forced to the
+  inside copy since 158, unaffected either way.
+
+  First fix attempt got this backwards in the other direction: excluding
+  the whole dup subtree unconditionally (right for carrier, catastrophic
+  for boom - collapsed all 52 boom-section parts down to y~0, leaving
+  base and head each independently clean but a total empty gap between
+  them with nothing rendering the boom tube itself). Caught by the new
+  full_zoom.html check before shipping, not after - this time. Real fix:
+  classify() now takes the part's key and only restricts to the outside-
+  dup pool for parts NOT in the boom/head set; boom/head parts keep using
+  the original unrestricted motion-delta/vertex-count logic (the one
+  build_hybrid4.mjs already validated end-to-end).
+
+  Second, separate bug found the same way: once carrier debris was gone,
+  intermediate slider positions (not 0, not 1) showed the flatbed/deck
+  visibly tearing itself apart. The two source exports are two SEPARATE
+  manual Onshape states - nothing guarantees a non-boom part sits at
+  identical coordinates in both, and a couple of large chassis parts
+  ("Part 1", "Part 2" - the deck rails) had several-metre discrepancies
+  between the files that weldWithMorphTarget() picked up as "motion."
+  Fixed by hard-restricting which real-part identities are even allowed
+  to carry a morph target to BOOM_HEAD_PARTS (SECTIONS ∪ HEAD_PARTS) -
+  every other part gets its retracted pose forced equal to its extended
+  one regardless of what the raw file comparison shows.
+
+  Third, separate issue - not a bug, a genuine regression from 177:
+  bakeTriSoup() only ever kept POSITION data, discarding the real per-
+  part PBR materials this crane's source export actually carries (30
+  distinct colors - Liebherr yellow, red, steel greys - confirmed via
+  check_materials.mjs, every one of ~22k source primitives has a material
+  assigned). This is almost certainly why the shipped model looked flat
+  grey on a real device instead of "beautiful colours" as the wordmark's
+  cousin feature (carrier3d.js models) show - not something 158-177
+  noticed since none of them compared against the source's real
+  materials, only against each other's own greyscale test renders. Fixed
+  by baking each source primitive's baseColorFactor into a per-vertex
+  COLOR_0 attribute during the same leaf-baking pass (glTF core spec:
+  COLOR_0 multiplies the material's base color automatically, no material
+  assignment needed on the output primitive - confirmed against
+  GLTFLoader.js's own useVertexColors detection, which keys off
+  geometry.attributes.color being present). Position AND color are both
+  folded into weldWithMorphTarget()'s dedup key now, not position alone -
+  otherwise two triangles from different source materials sharing an
+  exact vertex position at a seam would silently weld to whichever
+  color got seen first.
+
+  Fourth, unrelated bug reported in the same round: the fullscreen button
+  visibly expanded #rig-3d-wrap to fill the screen but the rendered image
+  only filled about half of it. carrier3d.js/cwt3d.js/cabentry3d.js each
+  wire their own internal window.addEventListener('resize', ...) so the
+  renderer/camera actually resize when the browser's fullscreen
+  transition fires its own resize event - boomrig3d.js never did this
+  (only exposed __boomRig3DResize() for something else to call it, and
+  nothing did). Also: #rig-3d-wrap was missing from the :fullscreen/
+  -webkit-full-screen CSS selector list that forces width/height to 100vw/
+  100vh (only carrier-3d-wrap/carrier-3d-wrap-layout/cwt-3d-wrap were
+  listed). Fixed both.
+
+  Verified this time by rendering the ACTUAL re-uploaded production file
+  (not a fresh build_hybrid4.mjs run) at m=0 (60m), m=0.437 (38.8m - the
+  exact length from the screenshot), and m=1 (11.5m), full-model view AND
+  base-only zoom, with real vertex colors (no debug HSL override) - clean
+  and fully connected at 0 and 0.437. At full retraction (m=1) a handful
+  of small fragments (2-3, well under a metre) still float slightly off
+  the tube - real but minor, doesn't reproduce the reported severity, and
+  every affected part's own bbox checked out fine in isolation (so it's
+  a small residual, not a repeat of the same defect) - not chased further
+  this round given the reported failure (mid-length, base collapse) is
+  now confirmed fixed.
+
+  Re-uploaded to Nextcloud (PWA/Myslewer/Carrier/LTM1110BOOMRIG.glb,
+  17.2MB - up from 14.5MB pre-color, still under the original 24.4MB)
+  via the same authenticated WebDAV write path as 177 (the public read-
+  share is read-only, confirmed by a 403 on PUT - the write path is
+  remote.php/dav/files/15buzza/... under the account itself). glbUrl
+  given a ?v=2 query param since this URL is intentionally NOT covered by
+  sw.js's cache allowlist (cross-origin, same as 177) but the browser's
+  own plain HTTP cache could still serve a stale copy of the exact same
+  URL from before this fix. BOOMRIG3D_VERSION 1->2, CACHE_VERSION
+  v335->v336, app version v9.16->v9.17.
