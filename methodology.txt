@@ -16011,3 +16011,128 @@ spot-check built on non-round test values.
   already covered by 174's own verification of the allowlist itself.
 
   CACHE_VERSION v333->v334, app version v9.14->v9.15.
+
+177. LTM1110-3D: rebuilt from scratch with a real retracted-pose export -
+     working this time, verified by actually rendering it
+
+  Direct continuation of 158-162 (pulled after the export's own whole-
+  assembly-nested-inside-itself defect made the live 3D preview render
+  as a scattered heap of disconnected fragments) and this session's own
+  earlier "give me a retracted export to make it function" ask. Person
+  provided LTM1110FULLRETRACTED.glb (86.6MB, PWA/Myslewer/Carrier/,
+  manually retracted "by eye" in Onshape, all 6 sections at ~0%) instead
+  of asking for a corrected export - so this pass had to work with the
+  SAME underlying defect as before, just now with a second data point.
+
+  Real per-section stroke data came out clean and well-validated: ~8.0-
+  8.07m per section, 48.29m total vs this crane's real 48.5m OEM total
+  stroke (11.5-60.0m) - within 0.4%, remarkable given the retraction was
+  eyeballed, not measured. Getting there took three genuine wrong turns,
+  each caught by actually checking rather than assuming the fix from the
+  last one carried over:
+
+  1. World-matrix-transformed vertex positions collapsed the WHOLE model
+     to an ~8-unit span (should be ~64m) - traced to raw local vertex
+     data (ignoring every node's own transform entirely) actually being
+     the correct "world" frame here, confirmed by comparing a global
+     bbox computed both ways against this crane's known ~60m length.
+     This matches 158's own "wrapper transform is unreliable" finding,
+     just needed re-confirming against fresh code, not assumed to still
+     hold.
+  2. That finding then turned out to be TOO broad: comparing extended vs
+     retracted using raw local vertex data showed ZERO difference for
+     every boom section (both files' raw vertex data is identical - the
+     retraction is actually encoded in specific occurrence nodes' own
+     transforms, not baked into vertex data at all). Direct proof: Part
+     20's two occurrences' own translation components are byte-identical
+     between the two files for one occurrence, and diverge by ~40 units
+     for the other - only ONE of the two duplicate copies per part
+     actually moves with retraction, and it's not always the same one
+     "largest Z" picked before.
+  3. Built a classifier (pick whichever occurrence's own position
+     actually differs between the two exported poses) and it worked
+     perfectly for boom sections but left the head/hook assembly
+     rendering as a small disconnected blob positioned near the BASE,
+     not the tip. Root cause: the classifier compared raw translation
+     components (wm[12..14]) between poses, which is only a valid proxy
+     for real position change when rotation is near-identity - true for
+     boom sections, false for the head sub-assembly (its moving branch
+     carries a genuine ~90° rotation). Fixed by comparing actual full
+     vertex-transformed world bounding-box centers instead of raw
+     translation - confirmed directly first (all 7 head parts' true tip-
+     positioned occurrence sits at world Y~61.6-62.1, right at section
+     6's own tip, in BOTH branches for some parts) before trusting it.
+  4. A second, separate bug in the SAME classifier: it used the
+     OCCURRENCE ancestor node's own world matrix for positioning, not
+     the actual mesh-bearing LEAF node's world matrix further down the
+     hierarchy - identical by coincidence for boom-section parts (near-
+     trivial transform in between), wrong for head parts, which is why
+     the head kept rendering disconnected across two separate "fixes."
+     Rebuilt to bake every mesh leaf's own vertex data into world space
+     directly at read time (its own getWorldMatrix(), no ambiguity about
+     which node's matrix to trust), which is what actually produced a
+     single continuous, correctly-connected boom - proven by rendering
+     it (see below), not asserted.
+
+  Detail vs. position is still split across the two duplicate copies for
+  most parts (same underlying defect as 162), but picking whichever
+  occurrence has the most geometry for shape and whichever moves
+  correctly for position - independently, per part - recovers both at
+  once instead of forcing one tradeoff. Applied to all ~300 real parts
+  in the file (not just the ~59 boom+head ones tracked for stroke data) -
+  the carrier/chassis doesn't move with retraction, so a small motion
+  threshold (0.5 world units) falls back to the higher-detail occurrence
+  for those ~250 parts rather than trusting a meaningless "biggest
+  delta" pick between two occurrences that both sit almost exactly where
+  they started.
+
+  Packed as ONE glTF (ltm1110_boomrig.glb, 24.4MB) - the extended pose as
+  each part's base geometry, the retracted pose as a single glTF morph
+  target (indexed/deduped, not the ~48-101MB unindexed triangle-soup
+  dumps used while iterating) - so vendor/boomrig3d.js just sets one
+  morphTargetInfluences[0] weight per mesh and the GPU interpolates for
+  free; no per-frame JS array rewriting. Length slider maps a selected
+  real OEM catalog length (HOOK_BOOM_LENGTHS) linearly onto this crane's
+  real min/max span (11.5-60.0m) to get that weight - continuous, not
+  the old per-length-only static poses.
+
+  Verification, learning directly from 162's own lesson ("this should
+  have been caught before being told twice it worked"): rendered every
+  claim before writing it down. A real headless Chromium + WebGL
+  (swiftshader) harness loaded each build directly (not the app) and
+  screenshots were actually looked at, at every stage - a 3/4 angle that
+  looked plausible was replaced with a proper side elevation once Y was
+  confirmed as the real boom axis; the fully-connected boom+head+carrier
+  result (base through section 6 through the head, one continuous
+  silhouette, both extended and retracted) was confirmed visually before
+  moving on, not just from a bounding-box number looking right. The
+  production glTF's morph targets were verified working at weight 0
+  (matches extended), 1 (matches retracted, boom visibly short) and 0.5
+  (a real intermediate length) via the same harness. App-side wiring
+  (RIG_CONFIGS['1110:3D'], crane/config dropdowns, activateRig3D, the
+  length select populating from real HOOK_BOOM_LENGTHS, switching back
+  to a 2D config cleanly hiding the 3D UI again) was verified against a
+  local copy of the real app via Playwright, mirroring 158's own
+  approach: the actual cross-origin GLB fetch itself can't be exercised
+  end-to-end in this sandbox (blocked at the network level, and - unlike
+  the boom-rig JSON allowlist added in 174 - Playwright's route
+  interception can't reach a service worker's own internal fetch() to
+  fake it either), so that specific leg was validated separately via the
+  standalone render harness above instead, which loads the exact same
+  file directly.
+
+  A handful (2-3 out of ~300) of small carrier parts still render
+  slightly detached/floating - minor, doesn't affect the crane's
+  recognizability, and not chased further this round. No luffing-angle
+  slider - both source exports share the same elevation, so this only
+  animates extend/retract for now, same real limitation the first
+  attempt had (no OEM angle for the exported pose).
+
+  Uploaded to Nextcloud (PWA/Myslewer/Carrier/LTM1110BOOMRIG.glb) via the
+  authenticated WebDAV write path (the public read-share used elsewhere
+  in RIG_CONFIGS turned out to already cover this folder too - confirmed
+  by fetching it back through that exact share before wiring the app up
+  to it). vendor/boomrig3d.js rewritten from scratch (BOOMRIG3D_VERSION
+  reset to 1 - the old file was deleted outright in 162, nothing to bump
+  from). BOOMRIG3D_VERSION 1. CACHE_VERSION v334->v335, app version
+  v9.15->v9.16.
