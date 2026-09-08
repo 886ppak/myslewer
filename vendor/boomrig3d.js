@@ -97,13 +97,56 @@ function onFrame() {
 // found in the first attempt: fitting the camera to the newly-resized
 // model cancels out the resize itself, so the slider visually appeared
 // to do nothing.
+//
+// Rewritten this session (methodology.txt 179) - the previous version
+// used THREE.Box3.setFromObject (inflates to the full possible morph-
+// target displacement range regardless of weight, a real three.js
+// quirk) feeding a fixed "dist = maxDim * 0.75" distance with a fixed
+// oblique offset, which never actually fit the camera frustum to the
+// model at all. Harmless-looking for a compact, cube-ish model like
+// carrier3d.js's carrier (where this formula seems to have been copied
+// from), but this crane is ~60m tall and ~10m wide - badly underframed
+// by that formula, which went unnoticed while the fullscreen canvas
+// wasn't actually resizing (see the resize fix above) and so stayed
+// small and hard to read. Once fullscreen started rendering at full
+// size the bad framing became obvious: the head filled most of the
+// frame with the base barely in view. Now computes the model's real
+// current bbox (position + weight*morphDelta, walked directly - same
+// technique validated against this exact file earlier this session) and
+// a proper frustum-fit distance from the camera's actual fov/aspect,
+// same formula already confirmed to frame this model correctly in
+// standalone testing.
 function frameCameraOn(root) {
-  const box = new THREE.Box3().setFromObject(root);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
-  const dist = maxDim * 0.75;
-  camera.position.set(center.x + dist * 0.7, center.y + dist * 0.25, center.z + dist * 0.7);
+  const lo = new THREE.Vector3(Infinity, Infinity, Infinity);
+  const hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+  const v = new THREE.Vector3();
+  root.updateWorldMatrix(true, true);
+  root.traverse((obj) => {
+    if (!obj.isMesh) return;
+    const pos = obj.geometry.attributes.position;
+    if (!pos) return;
+    const morphPos = obj.geometry.morphAttributes.position && obj.geometry.morphAttributes.position[0];
+    const w = (obj.morphTargetInfluences && obj.morphTargetInfluences.length) ? obj.morphTargetInfluences[0] : 0;
+    for (let i = 0; i < pos.count; i++) {
+      v.set(pos.getX(i), pos.getY(i), pos.getZ(i));
+      if (morphPos && w) {
+        v.x += morphPos.getX(i) * w;
+        v.y += morphPos.getY(i) * w;
+        v.z += morphPos.getZ(i) * w;
+      }
+      v.applyMatrix4(obj.matrixWorld);
+      lo.min(v);
+      hi.max(v);
+    }
+  });
+  const size = new THREE.Vector3().subVectors(hi, lo);
+  const center = new THREE.Vector3().addVectors(lo, hi).multiplyScalar(0.5);
+
+  const vFovRad = camera.fov * Math.PI / 180;
+  const distForHeight = (size.y / 2) / Math.tan(vFovRad / 2);
+  const distForWidth = (size.z / 2) / (Math.tan(vFovRad / 2) * camera.aspect);
+  const dist = Math.max(distForHeight, distForWidth) * 1.15; // 15% padding
+  camera.position.set(center.x, center.y, center.z + dist);
   camera.lookAt(center);
   controls.target.copy(center);
   controls.update();

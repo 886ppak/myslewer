@@ -16259,3 +16259,44 @@ spot-check built on non-round test values.
   own plain HTTP cache could still serve a stale copy of the exact same
   URL from before this fix. BOOMRIG3D_VERSION 1->2, CACHE_VERSION
   v335->v336, app version v9.16->v9.17.
+
+179. LTM1110-3D: camera framing was never actually fitting the model -
+     exposed by the fullscreen resize fix landing
+
+  Immediate follow-up to 178, same round. Person's next screenshot (now
+  correctly full-screened per 178's resize fix, colors correct, geometry
+  clean - no fragmentation) showed the head filling most of the frame
+  with the base barely visible: "missing the whole crane." Root cause
+  was in frameCameraOn(), untouched by 178 and apparently never actually
+  correct: `dist = maxDim * 0.75` with a fixed oblique offset (0.7, 0.25,
+  0.7) is not a frustum-fit calculation at all - it doesn't reference the
+  camera's fov or aspect, just a flat multiple of the model's largest
+  dimension. For a compact, cube-ish model (carrier3d.js's carrier,
+  which this was evidently copied from) that's forgiving enough to look
+  fine; for this crane (~60m tall, ~10m wide) it badly underframes - a
+  45deg-fov camera fitting a 60m height straight-on needs distance ≈
+  60*1.2, not 60*0.75, before even accounting for the oblique angle
+  making it worse. This was already true before 178 - it just wasn't
+  visible because the fullscreen canvas wasn't actually resizing to a
+  large, legible size yet (that was 178's whole fix), so the same bad
+  framing was easy to miss at the old small pinned-corner size.
+
+  Rewrote frameCameraOn() to match the exact fit technique already
+  proven against this file earlier in today's session (full_zoom.html):
+  walk every mesh's real vertex data (base position + current
+  morphTargetInfluences[0] * morph delta, world-matrix applied) directly
+  for an accurate bbox instead of THREE.Box3.setFromObject (same morph-
+  range-inflation quirk noted in 177/178), then a proper
+  distForHeight/distForWidth-vs-camera.fov/aspect fit with 15% padding,
+  camera on the +Z axis looking straight back at center. Verified at
+  three lengths (60m/38.8m/11.5m) and two viewport shapes (390x420,
+  matching the non-fullscreen wrap's own CSS; 390x844, a fullscreen
+  phone) via real_module_test.html driving the actual production module
+  - whole crane in frame with no cropping at every combination tested.
+  At full retraction the crane appears smaller within the frame (the
+  fixed-width outriggers force distance for width, leaving headroom
+  above the now-short boom) - correct fit-to-frustum behavior, not a
+  bug, just not the tightest possible crop in that one case.
+
+  BOOMRIG3D_VERSION 2->3, CACHE_VERSION v336->v337, app version
+  v9.17->v9.18.
