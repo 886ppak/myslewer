@@ -16300,3 +16300,76 @@ spot-check built on non-round test values.
 
   BOOMRIG3D_VERSION 2->3, CACHE_VERSION v336->v337, app version
   v9.17->v9.18.
+
+180. LTM1110-3D: systematic per-part audit finds the operator's cab (and
+     72 other parts) rendering as degraded stubs - fixed generally, not
+     part-by-part
+
+  Person noticed the model's operator cab still didn't look right and
+  asked directly: how does a "complete" source model turn into one with
+  missing/degraded parts? Answer, given plainly: build_production.mjs
+  doesn't copy the source - it has to GUESS, per part, which of that
+  part's 1-2 duplicate occurrences (the 158-era nested-assembly defect)
+  is real, using proxies (vertex count, motion between poses, which side
+  of the duplicate subtree). Those proxies are good for big, obvious
+  parts and can be confidently wrong for small/ambiguous ones, and nothing
+  in the pipeline flags a wrong pick - it just silently ships a worse
+  shape. 178's fix ("prefer outside the dup subtree for every carrier
+  part") was exactly this kind of confident-but-wrong guess for an entire
+  sub-assembly.
+
+  Rather than fix the cab as a one-off (as flagged in the previous
+  round), built audit_parts.mjs: for every one of the 300 real parts,
+  compare the vertex count of whichever occurrence classify() actually
+  picked against the best vertex count among ALL its occurrences
+  (including ones excluded by the dup-subtree pool restriction) - flag
+  any part where an excluded alternative has more than double the
+  vertices AND at least 50 more of them (a stub vs a real part, not just
+  natural LOD variance). Result: 73 of 300 parts flagged, essentially
+  all of them Part 82-153ish - very likely the whole cab sub-assembly.
+  Spot-checked several (Part 85: "outside" is an 18-vertex, 4cm-across
+  point-like stub at one location; "inside" is a proper ~1.9x1.9x4.8m
+  box at a completely different location, sized and height-positioned
+  like an actual cab shell) - confirms the audit's read, not a false
+  positive.
+
+  Generalized the fix instead of listing 73 part numbers by hand:
+  classify()'s "prefer outside the dup subtree" rule (178) now only
+  applies when outside isn't dramatically smaller than what's available
+  inside (same 2x/+50-vertex test the audit itself uses, so the code and
+  the audit can never silently drift apart). Re-ran the audit after
+  rebuilding: 0 parts flagged.
+
+  That surfaced a second, narrower problem on inspection of the rebuilt
+  file: 6 small hardware parts (Part 145/146/148/149/150/153) now also
+  picked "inside" by the same rule, but their inside-dup copy sits at
+  literal boom-section heights (20-53m, matching the telescoping
+  sections' own real heights almost exactly) despite not being part of
+  BOOM_HEAD_PARTS - i.e. that specific occurrence is ALSO corrupted by
+  the nesting defect, just corrupted in a way that happens to carry real
+  vertices. Left alone, these would render as small fragments frozen at
+  boom height regardless of retraction, which is likely exactly the
+  handful of small stray fragments noted (and left un-chased) in 178's
+  full-retraction check. Added a plausibility ceiling: an "inside"
+  candidate for a non-boom/head part is only trusted if it sits below
+  15m (real carrier parts top out around 8m in this audit; the lowest
+  real boom-section height is ~20m, so 15m cleanly separates the two
+  without needing per-part exceptions). Rebuilt again - find_high_carrier.mjs
+  confirms no static part now sits above ~12.5m, and the full-model bbox
+  at m=0/0.437/1 (62m/40.9m/13.8m) matches real expected lengths again
+  (it had briefly gone wrong mid-fix, both 0.437 and 1 collapsing to an
+  identical 53m bbox, from Part 148-150 being frozen at that height -
+  caught by re-running the same full-model bbox check from 179 before
+  shipping, not after).
+
+  Visual result: the turntable/superstructure area, previously an
+  unrecognizable low-vertex fleck, now shows real detail - visible
+  access door, vents, a ladder/handrail, hydraulic hardware - a genuine
+  improvement toward matching the source model, not just "less wrong."
+  Re-verified base region still clean (no new debris introduced by
+  trusting "inside" more broadly) and top-down view shows a plausible
+  mechanical shape where before there was a blob.
+
+  Re-uploaded to Nextcloud (PWA/Myslewer/Carrier/LTM1110BOOMRIG.glb,
+  20.6MB - up from 17.2MB, the added cab detail). glbUrl bumped to ?v=3.
+  CACHE_VERSION v337->v338, app version v9.18->v9.19.
