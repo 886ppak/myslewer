@@ -16410,3 +16410,17 @@ spot-check built on non-round test values.
   place, same as 162 left its own working notes - the stroke-length data
   and the classify()/audit_parts.mjs approach are still real, useful
   findings if a corrected export ever arrives.
+
+182. Boom Clearance: crane dropdown sorted smallest to largest
+
+  initBoomRigTab()'s crane list was built by dedup-in-insertion-order
+  over RIG_CONFIGS (Object.values(...).map(craneKey), Set-deduped) - so
+  the dropdown's order was really just "whichever order each crane
+  happened to get added to the file," not a deliberate one. Person
+  asked for smallest-to-largest by tonnage. This fleet's model numbers
+  already track tonnage directly (1110=110t ... 1650=650t), so a plain
+  ascending numeric sort on the crane key gives the right order with no
+  hardcoded list to maintain as more cranes get added: 1110, 1130, 1160,
+  1220, 1250, 1300, 1650.
+
+  CACHE_VERSION v339->v340, app version v9.20->v9.21.
