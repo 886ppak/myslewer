@@ -16373,3 +16373,40 @@ spot-check built on non-round test values.
   Re-uploaded to Nextcloud (PWA/Myslewer/Carrier/LTM1110BOOMRIG.glb,
   20.6MB - up from 17.2MB, the added cab detail). glbUrl bumped to ?v=3.
   CACHE_VERSION v337->v338, app version v9.18->v9.19.
+
+181. Pulled LTM1110-3D off Boom Clearance entirely (second time)
+
+  Same call as 162, for the same underlying reason. Three rounds this
+  session (178 fragmentation, 179 camera framing, 180 the cab/detail
+  audit) each found and fixed a real, confirmed bug - but person's
+  verdict after all three landed was still "looks rubbish," and asked
+  to pull it. Right call: three separate genuine defects surfacing one
+  after another off a single source export is itself the signal 162
+  already named - this file needs a corrected Onshape export, not
+  another round of downstream reconstruction heuristics. Continuing to
+  ship "fixed" on the same broken source and letting the person be the
+  one to find the next gap isn't an acceptable pattern to keep repeating.
+
+  Removed cleanly, matching 162's own approach (not just hidden):
+  RIG_CONFIGS['1110:3D'] deleted - RIG_CRANE_LABELS['1110'] and
+  RIG_CONFIGS['1110:T'] both kept this time, since (unlike 162) a real
+  2D Boom Clearance config for LTM 1110-5.1 exists independently of the
+  3D attempt and isn't affected by this at all. Removed the #rig-3d-*
+  HTML block, the now-3-wrap-only fullscreen CSS selector (was 4),
+  activateRig3D/onRig3DLengthChange and the renderMode==='3d' branch in
+  onRigConfigChange, BOOMRIG3D_VERSION. vendor/boomrig3d.js deleted
+  outright. Verified by grepping the whole codebase for every removed
+  identifier (rig-3d, boomrig3d, activateRig3D, onRig3DLengthChange,
+  BOOMRIG3D_VERSION, __boomRig3D, glbUrl, renderMode) - zero remaining
+  references anywhere - and syntax-checking the page's extracted inline
+  scripts with node --check. Could not exercise the live page end-to-end
+  this round (this session's sandbox has no path past the app's real
+  Firebase sign-in gate), so this is a static verification, not a
+  rendered one - flagged here rather than silently treated as equivalent
+  to 162's own Playwright-driven check.
+
+  The Nextcloud files (LTM1110COMP.glb, LTM1110FULLRETRACTED.glb,
+  LTM1110BOOMRIG.glb) and this session's build/audit scripts are left in
+  place, same as 162 left its own working notes - the stroke-length data
+  and the classify()/audit_parts.mjs approach are still real, useful
+  findings if a corrected export ever arrives.
